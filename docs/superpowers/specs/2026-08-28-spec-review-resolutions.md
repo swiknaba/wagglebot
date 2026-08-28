@@ -3,6 +3,9 @@
 > Dispositions for the 36 findings in
 > [2026-08-28-spec-review.md](2026-08-28-spec-review.md).
 >
+> **Follow-up:** Implementation agents must also read
+> [2026-08-28-spec-review-follow-up.md](2026-08-28-spec-review-follow-up.md).
+>
 > **Resolved** = the specs now state the required behavior.
 > **Deferred** = accepted, and assigned to a named pre-implementation
 > deliverable. **Partial** = the decision is resolved, and the detail is
