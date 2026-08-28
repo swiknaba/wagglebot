@@ -1,14 +1,15 @@
 # Workstation Provisioning
 
 > Companion to the [agentframe design spec](2026-08-28-agentframe-design.md).
-> One team shares one curated agent environment: the same skills, the
+> One team shares one curated agent environment: the same skills and the
 > same base instructions, on every workstation and in every agent
-> harness. Ships under `provisioning/`.
+> harness. This tooling ships under `provisioning/`.
 
 ## Curated Skills List
 
-`provisioning/skills.list` — a versioned, comment-friendly list of skill
-packages, one `owner/repo` per line. Seed content:
+`provisioning/skills.list` is a versioned list of skill packages. The
+format is one `owner/repo` per line, with comments allowed. Seed
+content:
 
 ```
 obra/superpowers
@@ -17,26 +18,26 @@ ayghri/i-have-adhd
 
 ## Skills Installer
 
-`provisioning/bin/install-skills` — idempotent:
+`provisioning/bin/install-skills` is idempotent:
 
-1. Install the `skills` npm CLI globally when missing
+1. Install the `skills` npm CLI globally when it is missing
    (`npm install -g skills`).
-2. `skills add <entry> -g -y` for every line in `skills.list`.
-3. `skills update -g -y` to bring everything current.
+2. Run `skills add <entry> -g -y` for every line in `skills.list`.
+3. Run `skills update -g -y` to bring everything current.
 
-Behavior: colored section output, installed/updated/ok/failed counters,
-warn-and-continue when a dependency (npm, skills) is absent, non-zero
-exit on failures.
+Behavior: colored section output, and counters for installed, updated,
+ok, and failed items. When a dependency (npm, skills) is absent, the
+script warns and continues. The script exits non-zero on failures.
 
 ## Agent Base Template + Distribution
 
-`provisioning/templates/AGENTS.base.md` — the **shared agent base
+`provisioning/templates/AGENTS.base.md` is the **shared agent base
 template**. It contains harness-independent baseline instructions plus
-an agentframe connection block (how to reach the hub, the
-propose-not-write memory rule, coordination etiquette). Teams append
-overlays; composition is plain concatenation
-(`AGENTS.base.md` + `overlays/*.md` → rendered template). YAGNI: no
-templating engine.
+an agentframe connection block. The connection block covers three
+topics: how to reach the hub, the propose-not-write memory rule, and
+coordination etiquette. Teams append overlays. Composition is plain
+concatenation: `AGENTS.base.md` + `overlays/*.md` → the rendered
+template. YAGNI: no templating engine.
 
 ### Seed content for `AGENTS.base.md`
 
@@ -128,8 +129,10 @@ Before delivery, silently check the applicable sentence lengths, terminology, ve
 Claim full STE compliance only after a validator checks the vocabulary against the Issue 9 dictionary.
 ```
 
-`provisioning/bin/sync-agents` — renders the template and writes it to
-every agent harness location, so one file governs all agents:
+### Distribution
+
+`provisioning/bin/sync-agents` renders the template and writes it to
+every agent harness location. One file then governs all agents:
 
 | Harness | Target |
 |---|---|
@@ -140,27 +143,27 @@ every agent harness location, so one file governs all agents:
 | Universal standard | `~/.agents/AGENTS.md` |
 | Gemini / Antigravity | `~/.gemini/config/GEMINI.md`, `~/.gemini/config/rules/global.md` |
 
-Behavior: create missing directories, diff before copy (report `synced`
-vs `already ok`), `chmod 600`, summary counts, non-zero exit on failure.
-The target list lives in one place — the script.
+Behavior: create missing directories. Diff before copy, and report
+`synced` or `already ok`. Apply `chmod 600`. Print summary counts. Exit
+non-zero on failure. The target list lives in one place: the script.
 
 ## Local LLM Provisioning
 
-No script needed — the facts inform the stack: `llama-server` is
-OpenAI-compatible out of the box, models auto-download by `-hf` ref on
-first run, and a small Qwen instruct model runs on CPU. The compose
-stack applies this directly
-(D2). The README documents model cache paths and how to point
-`EXTRACTOR_API_BASE` at an existing local server (llama.cpp :8080,
-Ollama :11434, LM Studio :1234) instead of the bundled container.
+Local LLM provisioning needs no script. Three facts shape the stack. The
+`llama-server` API is OpenAI-compatible out of the box. Models download
+automatically by `-hf` reference on the first run. A small Qwen instruct
+model runs on a CPU. The compose stack applies these facts directly
+(D2). The README documents the model cache paths. It also documents how
+to point `EXTRACTOR_API_BASE` at an existing local server (llama.cpp
+:8080, Ollama :11434, LM Studio :1234) instead of the bundled container.
 
 ## Success Criteria
 
 1. `provisioning/bin/install-skills` installs the `skills` CLI and every
-   entry in `skills.list` on a clean machine, and a second run reports
-   everything as already installed.
+   entry in `skills.list` on a clean machine. A second run reports every
+   item as already installed.
 2. `provisioning/bin/sync-agents` writes one rendered template to every
-   harness target, creates missing directories, and reports
-   synced/already-ok/failed counts.
-3. Editing `AGENTS.base.md` and re-running `sync-agents` updates every
-   target to the new content.
+   harness target. It creates missing directories. It reports the
+   synced, already-ok, and failed counts.
+3. Edit `AGENTS.base.md` and run `sync-agents` again. Every target then
+   has the new content.

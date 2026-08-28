@@ -1,59 +1,59 @@
 # Agentframe Design Spec
 
 > **Related specs:**
-> - [Service contracts](2026-08-28-service-contracts.md) — normative
->   behavior contracts for the hub, memory worker, and channels, plus
->   the pitfall register (P-numbers referenced below).
+> - [Service contracts](2026-08-28-service-contracts.md) — behavior
+>   contracts for the hub, the memory worker, and the channels. The
+>   pitfall register (P-numbers) is also there.
 > - [Cross-machine collaboration](2026-08-28-cross-machine-collaboration-design.md)
->   — Phase 2 coordination service.
+>   — the Phase 2 coordination service.
 > - [Workstation provisioning](2026-08-28-provisioning-design.md) —
->   curated skills + shared agent base template.
+>   the curated skill list and the shared agent base template.
 
 ## Problem
 
-Building an AI agent that connects to company tools requires the same
-infrastructure every time: an MCP aggregation layer, durable memory,
-ingress channels, and a way to compose them. Teams typically build that
-wiring inside company-specific monorepos, with vendor services hardcoded
-into the config layer.
+Each AI agent that connects to company tools needs the same
+infrastructure. This infrastructure includes an MCP aggregation layer,
+durable memory, ingress channels, and a composition layer. Teams usually
+build this wiring in company-specific monorepos. Vendor services are
+hardcoded into the config layer of those monorepos.
 
-We want a **reusable framework** that any team can clone, configure, and
-deploy — without forking anyone's internals.
+We want a **reusable framework** that each team can clone, configure,
+and deploy. No team must fork the internals of a different company.
 
 ## Goals
 
-1. **MCP Hub** — A single `/mcp` endpoint that proxies requests to any
-   number of upstream MCP servers. Zero hardcoded upstreams; the entire
-   surface comes from a user-supplied JSON config.
-2. **Durable Memory** — An async pipeline that accepts memory proposals,
-   extracts structured facts via an LLM, and stores them as vector
-   embeddings for later retrieval.
-3. **Pluggable Ingress Channels** — A channel adapter interface so new
+1. **MCP Hub** — One `/mcp` endpoint that proxies requests to any number
+   of upstream MCP servers. The hub has zero hardcoded upstreams. A
+   user-supplied JSON config defines the full surface.
+2. **Durable Memory** — An async pipeline that accepts memory proposals.
+   An LLM extracts structured facts from each proposal. The pipeline
+   stores the facts as vector embeddings for later retrieval.
+3. **Pluggable Ingress Channels** — A channel adapter interface. New
    event sources (Slack, GitHub, HTTP webhooks, email, SMS) plug in
-   without touching the core.
-4. **Cross-Machine Collaboration** — A coordination layer that lets
-   agents on different machines discover each other, share memory, and
-   hand off tasks — scoped to the project and branch their humans work on.
+   without changes to the core.
+4. **Cross-Machine Collaboration** — A coordination layer for agents on
+   different machines. Agents discover each other, share memory, and
+   hand off tasks. The scope is the project and branch of their humans.
 5. **Agent Environment Provisioning** — Shared tooling that installs a
-   curated skill set and distributes one base instruction template across
-   every agent harness on a workstation.
+   curated skill set. The same tooling distributes one base instruction
+   template across every agent harness on a workstation.
 6. **Runtime-Agnostic** — The framework services (hub, memory, channels,
    coordination) run as standalone Docker containers. Any agent runtime
    (LangGraph, raw LLM loops, Claude Code) connects over HTTP/MCP.
 7. **Deployment-Agnostic** — Agentframe ships Docker images and a
-   compose file, nothing else. It runs the same on a laptop, a
-   self-hosted box, or any container platform. No cloud accounts
-   required for development. The extraction LLM runs on CPU.
+   compose file, nothing else. The stack runs the same on a laptop, a
+   self-hosted box, or any container platform. Development needs no
+   cloud accounts. The extraction LLM runs on a CPU.
 
 ## Non-Goals
 
-- Shipping a specific agent runtime or LLM wrapper.
-- Hardcoded support for any SaaS vendor. Those become user-supplied
-  upstream MCP configs.
-- A managed cloud platform or billing layer.
+- A specific agent runtime or LLM wrapper.
+- Hardcoded support for any SaaS vendor. Users supply those as upstream
+  MCP configs.
+- A managed cloud platform or a billing layer.
 - **Deployment tooling** (Terraform, Helm, cloud-specific IaC). The
-  contract ends at "everything is a container with documented env vars
-  and health endpoints." Where to run them is the operator's choice.
+  contract ends at containers with documented env vars and health
+  endpoints. The operator selects where to run them.
 
 ---
 
@@ -61,14 +61,14 @@ deploy — without forking anyone's internals.
 
 | # | Decision |
 |---|---|
-| D1 | The whole stack is **TypeScript (Bun)**. The hub is built on `@modelcontextprotocol/sdk`. |
-| D2 | The memory extractor speaks **OpenAI-compatible HTTP only** — no in-process model loading. The compose stack ships a `llama.cpp` server container with a small Qwen GGUF (~1.1 GB, CPU-friendly). Pointing `EXTRACTOR_API_BASE` at any remote endpoint needs no code change. |
-| D3 | There is **no MCP wrapper service in front of Chroma**. The memory worker talks to Chroma through the official Chroma JS client. Memory search/propose is exposed to agents as a first-party MCP surface on the memory worker, registered in the hub like any upstream (guards P17). |
-| D4 | Coordination runs as a **standalone container**, registered in the hub via `config.json` like any other upstream. It never embeds in the hub. |
-| D5 | Task board: **FIFO claiming with an optional integer `priority`** (default 0, order `priority DESC, created_at ASC`). No deadlines, no scheduler. Claims carry a **lease with heartbeat**; an expired lease returns the task to the board. |
-| D6 | Messages are **persistent with replay**: append-only log, cursor-based replay over SSE (`Last-Event-ID`), 7-day TTL, SQLite store. |
-| D7 | **Auth is fail-closed everywhere.** Every service requires a bearer token when one is configured and refuses to start in network-exposed mode without one. One env name pattern: `<SERVICE>_BEARER_TOKEN` on the server, and the same name on clients (guards P2, P3, P11). |
-| D8 | **One health convention:** `GET /readyz` is shallow, always 200, auth-exempt (the load-balancer target). `GET /health` is deep and returns 503 when not ready. |
+| D1 | The full stack is **TypeScript (Bun)**. The hub is built on `@modelcontextprotocol/sdk`. |
+| D2 | The memory extractor uses **OpenAI-compatible HTTP only**. It does not load models in-process. The compose stack ships a `llama.cpp` server container with a small Qwen GGUF (~1.1 GB, CPU-friendly). A remote endpoint needs only a different `EXTRACTOR_API_BASE` value, no code change. |
+| D3 | There is **no MCP wrapper service in front of Chroma**. The memory worker uses the official Chroma JS client. The memory worker also exposes a first-party MCP surface for search and proposals. The hub registers that surface like any upstream (guards P17). |
+| D4 | Coordination runs as a **standalone container**. The hub registers it via `config.json` like any other upstream. It never embeds in the hub. |
+| D5 | Task board: **FIFO claiming with an optional integer `priority`** (default 0, order `priority DESC, created_at ASC`). No deadlines, no scheduler. Each claim carries a **lease with a heartbeat**. An expired lease returns the task to the board. |
+| D6 | Messages are **persistent with replay**: an append-only log, cursor-based replay over SSE (`Last-Event-ID`), a 7-day TTL, and a SQLite store. |
+| D7 | **Auth is fail-closed everywhere.** Each service requires a bearer token when one is configured. A network-exposed service refuses to start without one. One env name pattern applies: `<SERVICE>_BEARER_TOKEN` on the server, and the same name on clients (guards P2, P3, P11). |
+| D8 | **One health convention:** `GET /readyz` is shallow, always 200, and auth-exempt (the load-balancer target). `GET /health` is deep and returns 503 when the service is not ready. |
 
 ---
 
@@ -108,64 +108,71 @@ deploy — without forking anyone's internals.
 
 ### 1. MCP Hub
 
-A TypeScript service on `@modelcontextprotocol/sdk`. It implements these
-behaviors (details in the
-[service contracts](2026-08-28-service-contracts.md)):
+A TypeScript service on `@modelcontextprotocol/sdk`. It implements the
+behaviors below. The [service contracts](2026-08-28-service-contracts.md)
+give the details.
 
-- Four proxy modes: `remote_http`, `remote_sse`, `stdio_npx`, `stdio_cmd`.
-- Config comes only from `MCP_HUB_CONFIG_PATH` (JSON `proxies` array).
+- Four proxy modes: `remote_http`, `remote_sse`, `stdio_npx`,
+  `stdio_cmd`.
+- Config comes only from `MCP_HUB_CONFIG_PATH` (a JSON `proxies` array).
   There are no env-derived vendor defaults and no unconditional proxies.
-- Per-proxy bearer injection with **inbound `Authorization` stripping**
-  so client credentials never leak downstream.
-- Tool cache with warmup, adaptive background refresh, and
-  keep-last-good-cache on fetch failure.
-- A CodeMode-style transform: the client sees only `search`,
-  `get_schema`, `execute`, plus the introspection tools — never the full
-  downstream tool surface. This is the load-bearing scalability decision.
+- The hub injects a per-proxy bearer token. It **strips the inbound
+  `Authorization` header** first. Client credentials never leak
+  downstream.
+- A tool cache with warmup and adaptive background refresh. A failed
+  fetch keeps the last good cache.
+- A CodeMode-style transform. The client sees only `search`,
+  `get_schema`, `execute`, and the introspection tools. The client never
+  sees the full downstream tool surface. This transform is the decision
+  that makes the hub scale.
 - Introspection tools: `list_available_mcps`, `get_tool_catalog`,
-  `recommend_tool_families`, `get_usage_guide`. The catalog file is
-  operator-supplied (`MCP_HUB_TOOL_CATALOG_PATH`); agentframe ships an
+  `recommend_tool_families`, `get_usage_guide`. The operator supplies
+  the catalog file (`MCP_HUB_TOOL_CATALOG_PATH`). Agentframe ships an
   empty example, never vendor content.
-- Startup gating: unreachable remote upstreams are registered anyway and
-  healed by background refresh; missing stdio binaries abort startup.
-  `MCP_HUB_STARTUP_STRICT=1` also aborts on unreachable remotes.
-- Redaction discipline in logs: token fingerprints (12-char SHA-256),
-  sanitized endpoints, argument key names only — never values.
+- Startup gating: the hub registers unreachable remote upstreams and
+  heals them with background refresh. A missing stdio binary aborts
+  startup. `MCP_HUB_STARTUP_STRICT=1` also aborts on unreachable
+  remotes.
+- Log redaction: token fingerprints (12-char SHA-256), sanitized
+  endpoints, and argument key names only. Values are never logged.
 
-Hairiest part: the CodeMode transform. Budget for it explicitly.
+The CodeMode transform is the most difficult part. Plan its
+implementation explicitly.
 
 ### 2. Memory Worker
 
 TypeScript/Bun:
 
-- **Extractor:** OpenAI-compatible HTTP client (D2). Env:
-  `EXTRACTOR_API_BASE`, `EXTRACTOR_API_KEY` (optional), `EXTRACTOR_MODEL`.
-  Extraction prompt, taxonomy, and 120 s timeout per contracts §C3. The
-  completion is parsed defensively; a non-JSON completion fails the job
-  into the normal retry path.
+- **Extractor:** an OpenAI-compatible HTTP client (D2). Env:
+  `EXTRACTOR_API_BASE`, `EXTRACTOR_API_KEY` (optional),
+  `EXTRACTOR_MODEL`. The extraction prompt, the taxonomy, and the 120 s
+  timeout follow contracts §C3. The worker parses each completion
+  defensively. A non-JSON completion fails the job into the normal retry
+  path.
 - **Storage:** Chroma via the official JS client (D3). Collection
-  routing, tombstone/supersede conventions, and preflight dedup per
-  contracts §C3.
-- **Auth:** bearer token required (D7).
+  routing, tombstone and supersede conventions, and preflight dedup
+  follow contracts §C3.
+- **Auth:** a bearer token is required (D7).
 - **API:** `POST /memory/proposals`, `POST /memories/upsert`,
-  `POST /memories/invalidate`, `POST /run-once`, `GET /readyz`,
-  `GET /health` — plus an MCP surface exposing `memory_search`,
-  `memory_query`, and `propose_memory`, so agents reach memory through
-  the hub.
+  `POST /memories/invalidate`, `POST /run-once`, `GET /readyz`, and
+  `GET /health`. An MCP surface adds `memory_search`, `memory_query`,
+  and `propose_memory`. Agents reach memory through the hub.
 - **Queue:** a filesystem state machine (atomic rename claim,
-  `queued/running/done/failed`, 3 attempts) with garbage collection for
-  `done/` and `failed/`.
+  `queued/running/done/failed`, 3 attempts). Garbage collection removes
+  old entries from `done/` and `failed/`.
 - **Concurrency:** exactly one worker instance per storage root. The
   manifest files are read-modify-write under an in-process lock (P4).
-  Document this. Move manifests to SQLite only when scaling demands it.
-- **Policy:** one Markdown policy file, one default path, mounted at
-  `/policy/MEMORY.md`. A missing file is a startup warning, not a silent
-  empty policy (P6).
+  Document this limit. Move the manifests to SQLite only when scale
+  demands it.
+- **Policy:** one Markdown policy file with one default path, mounted at
+  `/policy/MEMORY.md`. A missing file causes a startup warning, not a
+  silent empty policy (P6).
 
 ### 3. Ingress Channels
 
-Standalone HTTP service. Adapters normalize provider payloads into a
-common envelope and POST it to the agent's configured callback URL.
+A standalone HTTP service. Adapters normalize provider payloads into a
+common envelope. The service POSTs the envelope to the configured agent
+callback URL.
 
 ```typescript
 type ChannelEvent = {
@@ -179,17 +186,18 @@ type ChannelEvent = {
 ```
 
 Built-in adapters: `webhook` (shared-secret header, **fail-closed**),
-`slack` (Events API, signing-secret verification), `github` (HMAC
+`slack` (Events API, signing-secret verification), and `github` (HMAC
 verification). The `conversationKey` formats and the session-bound tool
 pattern follow the service contracts (§C4). An event without
-`id`/`eventId`/`deliveryId` gets a random fallback key so events never
-collapse into one conversation (P13).
+`id`/`eventId`/`deliveryId` gets a random fallback key. Events therefore
+never collapse into one conversation (P13).
 
 ### 4. Coordination (Phase 2)
 
-A standalone MCP + SSE service that gives agents presence, messaging,
-and a task board, scoped by project and branch. Full design:
-[cross-machine collaboration spec](2026-08-28-cross-machine-collaboration-design.md).
+A standalone MCP + SSE service. It gives agents presence, messaging, and
+a task board, scoped by project and branch. The
+[cross-machine collaboration spec](2026-08-28-cross-machine-collaboration-design.md)
+has the full design.
 
 ---
 
@@ -286,31 +294,32 @@ volumes:
   coord_data:
 ```
 
-No vendor-specific services. Users add upstreams via `config.json` and
-extend via `docker-compose.override.yml`.
+There are no vendor-specific services. Users add upstreams via
+`config.json`. Users extend the stack via
+`docker-compose.override.yml`.
 
 ---
 
 ## Success Criteria
 
-1. `docker compose up` starts a working stack with zero configuration
-   beyond an empty `config.json`. The extractor runs on CPU with no
-   model pre-download step.
-2. A user adds an upstream MCP server to `config.json`, restarts the
-   hub, and the new tools appear in `list_available_mcps`.
+1. `docker compose up` starts a working stack. The only required
+   configuration is an empty `config.json`. The extractor runs on a CPU
+   without a model pre-download step.
+2. A user adds an upstream MCP server to `config.json` and restarts the
+   hub. The new tools appear in `list_available_mcps`.
 3. A `POST /memory/proposals` with a fact reaches Chroma after the
-   extraction pipeline runs — with the extractor pointed at the bundled
-   llama.cpp container, and again when pointed at a remote
-   OpenAI-compatible endpoint, with no code change.
-4. A webhook event hits the ingress service and arrives at the user's
+   extraction pipeline runs. This works with the bundled llama.cpp
+   container. It also works with a remote OpenAI-compatible endpoint,
+   with no code change.
+4. A webhook event hits the ingress service. The event arrives at the
    agent callback URL as a `ChannelEvent`.
 5. `provisioning/bin/sync-agents` writes one rendered template to every
-   harness target, and `install-skills` installs the curated list on a
-   clean machine (see provisioning spec).
-6. (Phase 2) The scenarios in the collaboration spec's success criteria
-   pass: same-project/same-branch agents collaborate, other-branch
-   agents are discoverable only, and expired claim leases return tasks
-   to the board.
+   harness target. `install-skills` installs the curated list on a clean
+   machine (see the provisioning spec).
+6. (Phase 2) The success criteria in the collaboration spec pass:
+   same-project and same-branch agents collaborate, other-branch agents
+   are discoverable only, and an expired claim lease returns its task to
+   the board.
 
 ---
 
@@ -320,7 +329,8 @@ extend via `docker-compose.override.yml`.
   array-valued metadata (`scope_id_0..5`, `$or` caps — P16)? Verify
   during implementation.
 - Which embedding function does the memory worker use with the Chroma JS
-  client (Chroma default vs. the extractor endpoint's embeddings API)?
+  client: the Chroma default, or the embeddings API of the extractor
+  endpoint?
 
 ## Parking Lot — Ideas to Discuss
 
