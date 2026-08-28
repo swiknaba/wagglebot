@@ -46,6 +46,12 @@ type ProxyConfig = {
 ```
 
 - `stdio_npx` is sugar for `command="npx", args=("-y", package, *args)`.
+  **The package must carry an exact version**, for example
+  `@example/mcp@1.4.2`. The hub rejects an unpinned package, a `latest`
+  tag, and a version range. An unpinned entry is a supply-chain risk:
+  `npx` would then execute whatever the registry publishes next.
+- Prefer `stdio_cmd` with a pre-installed, version-managed binary over
+  `stdio_npx`. Reserve `stdio_npx` for pinned, audited packages.
 - Validation: absolute http(s) URLs, and unique namespaces without
   whitespace. Args and env are typed. A config error aborts startup.
 - Stdio subprocesses receive an explicit env allow-list plus
@@ -92,7 +98,8 @@ Example registry entry. It contains no secret:
 2. Skip a namespace when its credential is absent. Log one clear line.
    Set the namespace status to `error` with a `credential_missing`
    reason. Never abort startup for a missing credential.
-3. Never write a resolved value to a log. Log the 12-char fingerprint.
+3. Never write a resolved value to a log. Log the keyed fingerprint
+   (see the Logging contract in this section).
 4. Reject a `literal` source when the config came from
    `MCP_HUB_CONFIG_URL`. A shared registry must never carry a secret.
 
@@ -106,10 +113,39 @@ Use `{ kind: "env", map: { GITHUB_TOKEN: "$SOURCE" } }` for stdio
 upstreams. The hub resolves the source and injects the value into the
 subprocess environment.
 
-**A team-wide token needs no new mechanism.** A team token and a
-personal token both resolve from an environment variable. Only the
-distribution differs. The provisioning tooling distributes the team
-token to each workstation.
+**A team-wide token needs no new mechanism in the hub.** A team token
+and a personal token both resolve from an environment variable. Only the
+distribution differs. Distribution happens **out of band**: a secret
+manager, or the company password manager, into the gitignored
+`.env.credentials` file. The provisioning template sync never touches a
+secret (guards F23).
+
+**Registry trust policy.** A remote registry selects commands, endpoint
+targets, and credential names. A compromised registry is therefore a
+code-execution and exfiltration vector, not a config problem (P29).
+"Zero credentials on the shared layer" limits the damage of a shared
+layer compromise. It does not remove the need for local trust rules:
+
+1. The hub pins the registry origin. It requires HTTPS. It rejects any
+   other origin.
+2. A remote registry cannot introduce a `stdio_cmd` or `stdio_npx`
+   entry, a new command, a new package, a new credential name, or a new
+   endpoint origin without **local approval**. The hub records approved
+   privileged entries in a local file, `registry.trust.json`.
+3. On refresh, an unchanged entry needs no approval. A new or changed
+   privileged entry is skipped and logged until an engineer approves it
+   (`mcp-hub approve <namespace>`).
+4. The hub validates the complete candidate registry first. It then
+   swaps atomically. A validation failure keeps the last accepted
+   registry (guards F11).
+5. A removal on refresh drains the namespace: no new calls, subprocess
+   termination after the grace period, cache invalidation.
+
+**Redirects and private targets.** The hub never forwards a credential
+across an origin change. On a cross-origin redirect, it strips the
+credential and rejects the redirect unless the trust policy allows the
+target origin. Endpoint targets that resolve to private address ranges
+require an explicit trust entry. The same rules apply to probes.
 
 **Env surface:**
 
@@ -181,9 +217,12 @@ with background refresh. Abort startup on a missing stdio binary.
 **Endpoint probe:** a raw TCP connect with a 0.5 s timeout. The probe is
 cheap and passes for any listening port. That is good enough.
 
-**Logging:** token fingerprints (12-char SHA-256), sanitized endpoints
-(strip userinfo and query), and argument key names only. Values are
-never logged.
+**Logging:** token fingerprints, sanitized endpoints (strip userinfo and
+query), and argument key names only. Values are never logged. A
+fingerprint is a 12-char **keyed** hash: HMAC-SHA256 with the
+deployment-local `LOG_FINGERPRINT_KEY`. A plain hash prefix would allow
+cross-log correlation and offline checks of weak secrets (guards F28).
+Without the key, the service omits fingerprints.
 
 ## C3. Memory worker contract
 
@@ -270,7 +309,25 @@ documented, so runtimes can add richer sources later (P14).
 
 **Policy file contract:** one Markdown file that the operator writes.
 The worker injects it verbatim into the extraction prompt. That is the
-full format.
+full format. The worker ships a **built-in default policy**. A missing
+file selects the built-in policy and logs a warning. The extraction
+policy is therefore never empty and never undefined (guards F32).
+
+**Mutation principals.** `POST /memory/proposals` is the only mutation
+on the agent surface. `POST /memories/upsert` and
+`POST /memories/invalidate` require the **administrator principal**. The
+publication ingestion job is the intended caller (guards F07). Scope
+authorization follows the principal model of the
+[collaboration spec](2026-08-28-cross-machine-collaboration-design.md):
+the service derives allowed scopes from the principal, and it rejects a
+caller-supplied scope outside that set.
+
+**Extractor input disclosure.** Proposal text reaches the extractor
+before any banlist runs. The banlist filters the output, not the input.
+The default local extractor keeps everything inside the deployment. A
+remote `EXTRACTOR_API_BASE` outside the deployment requires the explicit
+flag `EXTRACTOR_ALLOW_EXTERNAL=1`. The operator thereby acknowledges
+that proposal content leaves the boundary (guards F17).
 
 **Scope model — exactly two scopes.** Resist a third.
 
@@ -355,16 +412,50 @@ lease gives exactly one responder per event.
 The direct-callback mode (`INGRESS_CALLBACK_URL`) stays available for a
 solo engineer. That mode gives no claim semantics.
 
-## C5. Delegated-job vocabulary
+## C5. Task envelope and delegated-job vocabulary
 
-The task board (collaboration spec) uses this type vocabulary. It does
-not invent new shapes:
+Every entry on the task board uses **one versioned envelope** with a
+discriminator (guards F06):
+
+```typescript
+type Task = {
+  taskId: string;
+  version: 1;
+  kind: "delegated_job" | "channel_event";
+  projectKey: string;
+  branch?: string;
+  priority: number;              // default 0
+  eligibility: "shared_responder" | "owner:<username>" | "any";
+  idempotencyKey: string;        // dedup key for external effects
+  payload: JobSpec | ChannelEvent;
+  result?: JobResult | ChannelReplyResult;
+  state: "queued" | "claimed" | "done" | "failed" | "cancelled";
+  fence: number;                 // monotonic, incremented per claim
+};
+```
+
+Rules:
+
+1. Ingress posts `channel_event` tasks with
+   `eligibility: "shared_responder"` by default. Routing to one engineer
+   sets `eligibility: "owner:<username>"`.
+2. A local agent cannot claim a task outside its eligibility.
+3. A claim increments `fence`. Heartbeat and completion must present the
+   current `fence`. A stale fence is rejected.
+4. Delivery is **at-least-once**. Every external effect (a Slack reply,
+   a comment) deduplicates on `idempotencyKey`.
+
+The `delegated_job` payload uses this vocabulary:
 
 `JobSpec {kind, source, prompt, repo, limits {timeoutMs, maxSteps,
 maxCostUsd, maxTokens}, model {tier, provider, model}, permissions
 {bash, edit, read, network: allow|deny|ask}, mcpBindings[], callbacks[]}`
 plus `JobResult`, `JobArtifact`, `JobFailure`, `JobRunRecord`, and a
 `JobRunner` interface (`submit/status/cancel/result`).
+
+The full state machine (lease duration, heartbeat interval, attempt
+limits, cancellation, poison tasks) is a pre-implementation deliverable.
+See the [review resolutions](2026-08-28-spec-review-resolutions.md).
 
 ## C6. Ops (Docker-only)
 
@@ -418,3 +509,6 @@ is stable. The decisions in the main spec reference these.
 | P26 | Channel events routed through the memory pipeline. The extractor drops them, adds up to 120 s of latency, and offers no claim semantics. | Ingress posts to the coordination task board (D11). Memory receives facts only. |
 | P27 | A secret committed to the shared registry | The registry declares credential *references* only. The hub rejects a `literal` source from a URL-loaded registry. |
 | P28 | Two names for two different files, both called "catalog" | `registry.json` lists upstreams. `tool_catalog.json` gives routing advice. |
+| P29 | A remote registry treated as plain config. It selects commands, endpoints, and credential names, so a compromise executes code and exfiltrates secrets. | The registry trust policy in §C2: pinned HTTPS origin, local approval for privileged entries, validate-then-swap, keep last accepted. |
+| P30 | A claim lease sold as exactly-once. A responder can finish after lease expiry, and a second responder replies again. | At-least-once contract: fencing tokens on claim/heartbeat/completion, idempotency keys on external effects. |
+| P31 | Unpinned executable dependencies: `npx` latest, `:latest` images, unpinned skills. The next publish executes on every workstation. | Exact versions everywhere: `stdio_npx` requires `pkg@x.y.z`, images pin digests, `skills.list` pins revisions. |

@@ -65,13 +65,16 @@ and deploy. No team must fork the internals of a different company.
 | D2 | The memory extractor uses **OpenAI-compatible HTTP only**. It does not load models in-process. The compose stack ships a `llama.cpp` server container with a small Qwen GGUF (~1.1 GB, CPU-friendly). A remote endpoint needs only a different `EXTRACTOR_API_BASE` value, no code change. |
 | D3 | There is **no MCP wrapper service in front of Chroma**. The memory worker uses the official Chroma JS client. The memory worker also exposes a first-party MCP surface for search and proposals. The hub registers that surface like any upstream (guards P17). |
 | D4 | Coordination runs as a **standalone container**. The hub registers it via `registry.json` like any other upstream. It never embeds in the hub. |
-| D5 | Task board: **FIFO claiming with an optional integer `priority`** (default 0, order `priority DESC, created_at ASC`). No deadlines, no scheduler. Each claim carries a **lease with a heartbeat**. An expired lease returns the task to the board. |
+| D5 | Task board: **FIFO claiming with an optional integer `priority`** (default 0, order `priority DESC, created_at ASC`). No deadlines, no scheduler. Each claim carries a **lease with a heartbeat and a monotonic fencing token**. An expired lease returns the task to the board. Delivery is **at-least-once**: completion requires the current fence, and external effects deduplicate on an idempotency key. |
 | D6 | Messages are **persistent with replay**: an append-only log, cursor-based replay over SSE (`Last-Event-ID`), a 7-day TTL, and a SQLite store. |
 | D7 | **Auth is fail-closed everywhere.** Each service requires a bearer token when one is configured. A network-exposed service refuses to start without one. One env name pattern applies: `<SERVICE>_BEARER_TOKEN` on the server, and the same name on clients (guards P2, P3, P11). |
-| D8 | **One health convention:** `GET /readyz` is shallow, always 200, and auth-exempt (the load-balancer target). `GET /health` is deep and returns 503 when the service is not ready. |
-| D9 | **The hub always runs local, on the engineer workstation.** The shared layer holds zero credentials and never calls an upstream server. Central curation therefore needs no central trust. |
+| D8 | **One health convention:** `GET /livez` is shallow, always 200, and auth-exempt (process liveness). `GET /readyz` reports dependency and startup state, and returns 503 when the service cannot serve. Point load balancers at `/readyz`. |
+| D9 | **The hub always runs local, on the engineer workstation.** The shared layer holds **no engineer credentials and no upstream MCP credentials**, and it never calls an upstream MCP server. It does hold its own service secrets: bot tokens on the responder, webhook signing secrets on ingress, and the service bearer tokens. Those need normal secret storage and rotation. |
 | D10 | **The config splits in two.** The shared registry declares each upstream and names its credential. It stores no secret. The local hub resolves each credential from the workstation. A team-wide token uses the same mechanism, with different distribution. |
-| D11 | **Ingress runs shared and posts to the coordination task board.** A `ChannelEvent` becomes a task, and one responder claims it. Memory is never the transport for an event. |
+| D11 | **Ingress runs shared and posts to the coordination task board.** A `ChannelEvent` becomes a task, and one live claim exists at a time. Memory is never the transport for an event. |
+| D12 | **People connect by username, never by address.** Each engineer registers with the company username (SSO name). All agent traffic flows outbound through the shared coordination service. A direct connection between two people requires an approval: the receiver sees who asks and accepts or rejects. No VPN, tunnel, or IP exchange exists in this design. |
+| D13 | **Every executable dependency is pinned.** `stdio_npx` packages carry exact versions, container images pin digests, and `skills.list` pins revisions. Nothing installs `latest`. |
+| D14 | **The task board core ships in Phase 1.** Queue, claim, lease, and fence move forward, because default ingress delivery depends on them. Presence, messaging, and cross-machine collaboration stay Phase 2. |
 
 ### Why D9 and D10 matter
 
@@ -91,7 +94,14 @@ container.
 
 D9 removes the whole problem. A local hub uses one identity: the
 identity of its engineer. Upstream audit logs then name a real person.
-Rate limits apply per person. No secret reaches the shared layer.
+Rate limits apply per person. No engineer secret reaches the shared
+layer.
+
+D9 limits the damage of a shared layer compromise. D9 does **not** make
+the registry harmless: a registry selects commands and credential names,
+so the hub applies a local trust policy to every remote registry
+([contracts §C2](2026-08-28-service-contracts.md#c2-mcp-hub-contract),
+P29).
 
 ---
 
@@ -197,9 +207,10 @@ it as an upstream, so agents reach memory through their own hub.
   routing, tombstone and supersede conventions, and preflight dedup
   follow contracts §C3.
 - **Auth:** a bearer token is required (D7).
-- **API:** `POST /memory/proposals`, `POST /memories/upsert`,
-  `POST /memories/invalidate`, `POST /run-once`, `GET /readyz`, and
-  `GET /health`. An MCP surface adds `memory_search`, `memory_query`,
+- **API:** `POST /memory/proposals` (agents), `POST /memories/upsert`
+  and `POST /memories/invalidate` (**administrator principal only** —
+  the publication job), `POST /run-once`, `GET /livez`, and
+  `GET /readyz`. An MCP surface adds `memory_search`, `memory_query`,
   and `propose_memory`. Agents reach memory through the hub.
 - **Queue:** a filesystem state machine (atomic rename claim,
   `queued/running/done/failed`, 3 attempts). Garbage collection removes
@@ -237,8 +248,9 @@ pattern follow the service contracts (§C4). An event without
 never collapse into one conversation (P13).
 
 **Delivery: ingress posts each `ChannelEvent` to the coordination task
-board** (D11). One responder claims the task. The claim lease guarantees
-exactly one responder.
+board** (D11). One live claim exists at a time. Delivery is
+at-least-once, so external effects deduplicate on an idempotency key
+(D5, P30).
 
 Ingress may also POST directly to one callback URL. That mode suits a
 solo engineer with no coordination service. It gives no claim semantics.
@@ -299,13 +311,18 @@ The hub re-pulls the registry on the interval
 `MCP_HUB_CONFIG_REFRESH_SECONDS`. Tool schemas refresh on the existing
 background cycle.
 
-### 6. Coordination (Phase 2)
+### 6. Coordination
 
-A standalone MCP + SSE service. It gives agents presence, messaging, and
-a task board, scoped by project and branch. The task board also carries
-the `ChannelEvent` queue from ingress. The
+A standalone MCP + SSE service, scoped by project and branch.
+
+| Part | Phase | Content |
+|---|---|---|
+| Task board core | **1** (D14) | Queue, claim, lease, fence, and the `ChannelEvent` tasks from ingress |
+| Collaboration | 2 | Presence, messaging, username connections with approval (D12) |
+
+The
 [cross-machine collaboration spec](2026-08-28-cross-machine-collaboration-design.md)
-has the full design.
+has the full design, including the principal model (`principals.json`).
 
 ---
 
@@ -317,7 +334,7 @@ agentframe/
 │   ├── mcp-hub/                 # MCP aggregation proxy (TypeScript/Bun)
 │   ├── memory-worker/           # Durable memory pipeline (TypeScript/Bun)
 │   ├── ingress/                 # Channel adapter service (TypeScript/Bun)
-│   └── coordination/            # Cross-machine collab (Phase 2)
+│   └── coordination/            # Task board (Ph. 1) + collab (Ph. 2)
 ├── packages/
 │   └── types/                   # Shared types (ChannelEvent, MemoryProvider, JobSpec, ...)
 ├── provisioning/
@@ -347,6 +364,11 @@ agentframe/
 One compose file carries both layers. The `local` profile runs on each
 workstation. The `shared` profile runs one time for the team. A solo
 engineer starts both profiles on one machine.
+
+NOTE: The block below is **schematic**. It omits the responder service,
+the registry serving, provider secrets on ingress, and bind-address
+hardening. The implemented compose file must start with documented
+inputs and must satisfy D7 and D8.
 
 ```yaml
 services:
@@ -406,7 +428,7 @@ services:
       INGRESS_CALLBACK_URL: ${AGENT_CALLBACK_URL:-}  # solo fallback
     ports: ["3030:3030"]
 
-  coordination:                    # Phase 2
+  coordination:                    # task board core in Phase 1 (D14)
     build: ./services/coordination
     profiles: [shared]
     environment:

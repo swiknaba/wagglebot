@@ -37,8 +37,9 @@ Agentframe uses two layers.
 * Durable memory for the whole team.
 * Agent collaboration, scoped by project and branch.
 
-The shared layer holds zero credentials. It never calls an upstream
-server. Central curation therefore needs no central trust.
+The shared layer holds no engineer credentials and no tool-server
+credentials. It never calls a tool server. It holds only its own
+service secrets, such as the chat bot token.
 
 ## What You Get
 

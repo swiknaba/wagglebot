@@ -8,22 +8,29 @@
 ## Curated Skills List
 
 `provisioning/skills.list` is a versioned list of skill packages. The
-format is one `owner/repo` per line, with comments allowed. Seed
-content:
+format is one **pinned** entry per line: `owner/repo@<ref>`, where the
+ref is a tag or a commit hash. Comments are allowed. Seed content:
 
 ```
-obra/superpowers
-ayghri/i-have-adhd
+obra/superpowers@<pinned-ref>
+ayghri/i-have-adhd@<pinned-ref>
 ```
+
+An unpinned entry is rejected. An unpinned entry would execute whatever
+the repository publishes next, on every workstation (P31, D13).
 
 ## Skills Installer
 
-`provisioning/bin/install-skills` is idempotent:
+`provisioning/bin/install-skills` is idempotent and reproducible:
 
-1. Install the `skills` npm CLI globally when it is missing
-   (`npm install -g skills`).
-2. Run `skills add <entry> -g -y` for every line in `skills.list`.
-3. Run `skills update -g -y` to bring everything current.
+1. Install the `skills` npm CLI at the **pinned version** from
+   `provisioning/versions.env` when it is missing or differs
+   (`npm install -g skills@<version>`).
+2. Run `skills add <entry> -g -y` for every pinned line in
+   `skills.list`.
+3. Never auto-update. Updates happen through one explicit command,
+   `install-skills --update`, which bumps the pins in `skills.list` for
+   review.
 
 Behavior: colored section output, and counters for installed, updated,
 ok, and failed items. When a dependency (npm, skills) is absent, the
@@ -152,6 +159,23 @@ every agent harness location. One file then governs all agents:
 Behavior: create missing directories. Diff before copy, and report
 `synced` or `already ok`. Apply `chmod 600`. Print summary counts. Exit
 non-zero on failure. The target list lives in one place: the script.
+
+The sync is **non-destructive** (guards F22):
+
+1. Write into a managed block
+   (`<!-- agentframe:begin -->` ... `<!-- agentframe:end -->`) where the
+   harness format permits. Content outside the block stays untouched.
+2. Merge hook fragments per entry. Never replace a `hooks` key that
+   contains entries this tool did not write.
+3. Back up each target file before the first mutation, under
+   `~/.agentframe/backups/<timestamp>/`.
+4. Provide `--dry-run` (show the diff, change nothing) and `--restore`
+   (write the newest backup back).
+
+Secret distribution is **out of scope for this tool**. Tokens travel
+through a secret manager or the company password manager, into the
+gitignored `.env.credentials` file. The template sync never writes a
+secret (guards F23).
 
 ## Harness Hooks
 
