@@ -370,33 +370,50 @@ outside the deployment **additionally** requires the explicit flag
 | `project:<projectKey>` | Agents, through `propose_memory` | Everyone working in that project |
 | `org` | Humans, through a published file | Every team |
 
-**A project is a logical unit, not a repository (D20).** A microservice
-project holds one service in each of several repositories. Facts learned
-in one service must stay visible in the sibling services. A repository
-scope would fragment the memory of one team across its services.
+**A project is a declared name, never a repository (D20).** Agentframe
+assumes no repository layout. One team runs a monorepository. Another
+team spreads one project across many service repositories. A third team
+owns several projects. All three must work, so the design derives
+nothing from the repository shape.
 
-Each repository therefore declares its project:
+Two declarations do the whole job:
 
 ```json
-// .agentframe/project.json
-{ "project": "payments-platform", "team": "payments" }
+// central: teams.json — which projects a team owns
+{ "teams": [
+  { "team": "payments", "manager": "bob",
+    "projects": ["payments-platform"] },
+  { "team": "platform", "manager": "carol",
+    "projects": ["platform-infra", "platform-devex"] }
+] }
 ```
 
-Resolution order for `projectKey`:
+```json
+// local: .agentframe/project.json — which project a subtree belongs to
+{ "project": "payments-platform" }
+```
 
-1. `.agentframe/project.json` in the repository. This is the normal
-   case, and it groups sibling services.
-2. `teams.json`, when the repository appears in a team project list.
-3. The normalized Git remote URL. This fallback serves an unconfigured
-   repository.
+Resolution for `projectKey`:
 
-`MEMORY_SCOPE_GRANULARITY` selects the granularity:
+1. Walk up from the working directory of the agent. The **nearest**
+   `.agentframe/project.json` wins.
+2. The normalized Git remote URL, when no declaration exists. This
+   fallback keeps an unconfigured repository working.
 
-| Value | Scope key | Use for |
+That rule covers every layout, because the declaration lives wherever
+the team puts it:
+
+| Team layout | Where the file goes | Result |
 |---|---|---|
-| `project` (default) | The declared project | A microservice project, several repositories |
-| `team` | The owning team | One memory pool for every project of a team |
-| `repo` | The normalized remote | Strict separation per repository |
+| One monorepository, one project | Repository root | One memory space |
+| Many service repositories, one project | Root of each repository, same `project` value | One shared memory space |
+| One monorepository, several projects | One file per subtree | One space per subtree |
+| Several repositories, several projects | Root of each repository, different values | One space per project |
+
+The memory worker rejects a `project` value that no team declares in
+`teams.json`. A typo would otherwise create an orphan memory space that
+nobody searches. The rejection is a correctness guard, not a permission
+check (D15).
 
 Rules:
 
@@ -603,5 +620,5 @@ is stable. The decisions in the main spec reference these.
 | P30 | A claim lease sold as exactly-once. A responder can finish after lease expiry, and a second responder replies again. | At-least-once contract: fencing tokens on claim/heartbeat/completion, idempotency keys on external effects. |
 | P31 | Unpinned executable dependencies: `npx` latest, `:latest` images, unpinned skills. The next publish executes on every workstation. | Exact versions everywhere: `stdio_npx` requires `pkg@x.y.z`, images pin digests, `skills.list` pins revisions. |
 | P32 | Upstream tool descriptions treated as trusted text. They reach the model, so a hostile upstream can attempt prompt injection. | Size caps, control-character stripping, provenance tags. The routing catalog stays first-party. |
-| P33 | Project or team identity derived from a Git remote. One microservice project spreads across several repositories, so a repository scope fragments the memory of one project. | `.agentframe/project.json` declares the project per repository. `teams.json` maps teams to projects. `MEMORY_SCOPE_GRANULARITY` selects project, team, or repo (D20). |
+| P33 | Any assumption about repository layout. A repo-per-project rule fragments a microservice team. A repo-as-project rule breaks a monorepository team, and a team that owns several projects. | Declare, never derive. `teams.json` lists the projects of a team. `.agentframe/project.json` maps a subtree to a project, nearest declaration wins (D20). |
 | P34 | A scope treated as a security boundary in a trusted-coworker deployment. It creates false confidence and blocks normal cross-team work. | Scopes select defaults and relevance. Git and the identity provider control code access. |

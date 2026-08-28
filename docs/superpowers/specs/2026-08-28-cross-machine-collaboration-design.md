@@ -47,7 +47,7 @@ repository. Repository write access is the only permission system.
 
 // teams.json
 { "teams": [
-  { "team": "payments", "manager": "bob", "projects": ["github.com/acme/pay-api"] }
+  { "team": "payments", "manager": "bob", "projects": ["payments-platform"] }
 ] }
 
 // channels.json  — see the routing section
@@ -76,22 +76,23 @@ remain restricted.
 
 ## Teams, Projects, And Agents Are Separate Identifiers
 
-A team owns several repositories. One microservice project spreads one
-service into each of several repositories. A repository can also hold
-software from more than one team. Therefore the design never derives a
-team or a project from a Git remote alone.
+Agentframe assumes no repository layout. One team runs a
+monorepository. Another team spreads one project across many service
+repositories. A third team owns several projects. Therefore the design
+declares projects, and never derives them from a Git remote.
 
 | Identifier | Source | Purpose |
 |---|---|---|
 | `team` | `teams.json` | Routing, registry selection, ownership |
-| `projectKey` | `.agentframe/project.json`, else `teams.json`, else the normalized Git remote | Working context, memory relevance |
+| `projectKey` | The nearest `.agentframe/project.json`, else the normalized Git remote | Working context, memory relevance |
 | `username` | `users.json` | Attribution, direct messages |
 | `agentId` | Generated per agent process | Presence, claims |
 
-Each repository declares its owning team and its project in
-`.agentframe/project.json`. That declaration wins over remote
-normalization. It groups the sibling services of one project, and it
-survives a rename or a move. A branch is context, never identity.
+`teams.json` lists the projects that each team owns.
+`.agentframe/project.json` maps a subtree to one of those projects, and
+the nearest declaration wins. A team therefore selects its own
+granularity, and the declaration survives a rename or a move. A branch
+is context, never identity.
 
 ## Connecting To A Person
 
@@ -123,10 +124,10 @@ Each agent registers with a **workspace identity**:
   heartbeatAt }
 ```
 
-- `projectKey` = the project of the repository, from
-  `.agentframe/project.json`. Several sibling service repositories share
-  one `projectKey`. The normalized Git remote is the fallback for an
-  unconfigured repository (D20).
+- `projectKey` = the project declared by the nearest
+  `.agentframe/project.json`, walking up from the working directory.
+  Repositories that declare the same value share one project. The
+  normalized Git remote is the fallback when no file exists (D20).
 - `branch` = the current git branch. Each heartbeat refreshes the
   branch. The agent therefore follows its human across checkouts.
 
@@ -153,7 +154,7 @@ carries the user identity. The humans stay in the loop.
 | **Presence registry** | Agents register with a workspace identity and a heartbeat. `list_agents` defaults to the `projectKey` of the caller. Filters exist for project and branch. Stale entries expire on missed heartbeats. |
 | **Message bus** | Channels are keyed `project/<key>` and `project/<key>/branch/<branch>`. Direct agent-to-agent messages are allowed within a project. The log is persistent and append-only. Delivery is SSE with `Last-Event-ID` replay, a 7-day TTL, and a SQLite store (D6). |
 | **Task board** | FIFO + optional integer priority (order `priority DESC, created_at ASC`). Each claim carries a lease with a heartbeat **and a monotonic fencing token**. A task returns to the board when the lease expires (D5). Completion and heartbeats must present the current fencing token. A stale token is rejected. Delivery is therefore **at-least-once**, and every external effect carries an idempotency key. The task shape uses the envelope from the [service contracts §C5](2026-08-28-service-contracts.md#c5-delegated-job-vocabulary). Each task is scoped to a `projectKey`, and optionally a branch. |
-| **Shared memory** | All participating agents point at the same memory-worker + Chroma. `scopeIds` carry the `projectKey`, so sibling service repositories share one memory pool (D20). |
+| **Shared memory** | All participating agents point at the same memory-worker + Chroma. `scopeIds` carry the `projectKey`, so every repository that declares the same project shares one memory pool (D20). |
 
 **Exposure:** the coordination service is itself an MCP server. Each
 local hub registers it via `registry.json` (D4). Agents gain these
