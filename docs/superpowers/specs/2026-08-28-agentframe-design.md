@@ -76,10 +76,11 @@ and deploy. No team must fork the internals of a different company.
 | D13 | **Every executable dependency is pinned.** `stdio_npx` packages carry exact versions, container images pin digests, and `skills.list` pins revisions. Nothing installs `latest`. |
 | D14 | **The task board core ships in Phase 1.** Queue, claim, lease, and fence move forward, because default ingress delivery depends on them. Presence, messaging, and cross-machine collaboration stay Phase 2. |
 | D15 | **Trusted coworkers.** Every registered engineer is trusted. Identity serves routing, context, and attribution. Teams and scopes never deny an operation between registered users. Git and the company identity provider control code access. Only impersonation protection and operator actions stay restricted (P34). |
-| D16 | **Team, project, and user are separate identifiers.** A team owns several repositories, and a monorepository holds several teams. `teams.json` maps teams to projects, and `.agentframe/project.json` may override remote normalization. A branch is context, never identity (P33). |
+| D16 | **Team, project, and user are separate identifiers.** A team owns several repositories. One microservice project spreads its services across several repositories. `teams.json` maps teams to projects, and each repository declares its project in `.agentframe/project.json`. A branch is context, never identity (P33). |
 | D17 | **Channel events route through `channels.json`.** Each ingress source maps to a team, a project, a responder, and a reply identity. An unrouted or ambiguous event is rejected, never guessed. |
 | D18 | **Phase 1 ships a minimal reference responder.** The success criteria need a working reply path. The reference responder claims tasks, heartbeats with its fence, submits effects, and proposes memory. It stays a reference, and any runtime may replace it. |
-| D19 | **Embedding provider — pending decision.** This decision blocks implementation. Store the provider, the model, the artifact revision, the dimension, the distance function, and a schema version with each collection. |
+| D19 | **Embeddings use the Chroma built-in default** (`all-MiniLM-L6-v2`, 384 dimensions, cosine distance). No second model service, no extra container, no GPU. Chroma persists the embedding function in the collection configuration, so every deployment stays consistent. Each collection still records the provider, the model, the dimension, the distance function, and a schema version, because a later model change needs a full re-embed. |
+| D20 | **Memory scope follows the project, not the repository.** A project is a logical unit that spans several repositories, which suits a microservice layout. Each repository declares its project in `.agentframe/project.json`. `MEMORY_SCOPE_GRANULARITY` (`project` by default, or `team`, or `repo`) selects the granularity. |
 
 ### Why D9 and D10 matter
 
@@ -666,9 +667,9 @@ Agentframe does not build it. Choose the second deployment instead.
 - Does the Chroma JS client require a scope fan-out workaround for
   array-valued metadata (`scope_id_0..5`, `$or` caps — P16)? Verify
   during implementation.
-- Which embedding function does the memory worker use with the Chroma JS
-  client: the Chroma default, or the embeddings API of the extractor
-  endpoint?
+- Does the pinned Chroma JS client resolve the persisted embedding
+  function on `getCollection`, or does it still require the function as
+  a parameter (D19)? Verify before the first write.
 
 ## Parking Lot — Ideas to Discuss
 

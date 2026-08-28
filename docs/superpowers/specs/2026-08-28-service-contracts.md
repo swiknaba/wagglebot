@@ -294,6 +294,18 @@ the normal retry path.
   out to `scope_id_0..5` and build `$or` queries. Test the clause cap,
   so extra scopes fail loudly instead of a silent drop (P16). Verify
   whether the Chroma JS client removes the need for this workaround.
+- **Embeddings use the Chroma built-in default** (D19). The worker sends
+  documents, and the server embeds them. Record the embedding metadata
+  on each collection at creation time:
+  `{provider: "chroma-default", model: "all-MiniLM-L6-v2", dimension:
+  384, distance: "cosine", schemaVersion: 1}`.
+- The worker compares that metadata at startup. A mismatch aborts
+  startup with a message that names the required re-embed. A silent
+  dimension change would corrupt every search result.
+- **Verify at implementation:** Chroma persists the embedding function
+  in the collection configuration since v1.1.13, but some JS client
+  versions still require the embedding function on `getCollection`.
+  Confirm the behavior of the pinned version before the first write.
 - Documents are line-prefixed plain text (`Kind:`, `Title:`, ...). A
   parser reads them back by prefix. This format is fragile but simple.
   It is acceptable.
@@ -355,18 +367,48 @@ outside the deployment **additionally** requires the explicit flag
 
 | Scope | Written by | Default visibility |
 |---|---|---|
-| `project:<projectKey>` | Agents, through `propose_memory` | The team of that project |
+| `project:<projectKey>` | Agents, through `propose_memory` | Everyone working in that project |
 | `org` | Humans, through a published file | Every team |
+
+**A project is a logical unit, not a repository (D20).** A microservice
+project holds one service in each of several repositories. Facts learned
+in one service must stay visible in the sibling services. A repository
+scope would fragment the memory of one team across its services.
+
+Each repository therefore declares its project:
+
+```json
+// .agentframe/project.json
+{ "project": "payments-platform", "team": "payments" }
+```
+
+Resolution order for `projectKey`:
+
+1. `.agentframe/project.json` in the repository. This is the normal
+   case, and it groups sibling services.
+2. `teams.json`, when the repository appears in a team project list.
+3. The normalized Git remote URL. This fallback serves an unconfigured
+   repository.
+
+`MEMORY_SCOPE_GRANULARITY` selects the granularity:
+
+| Value | Scope key | Use for |
+|---|---|---|
+| `project` (default) | The declared project | A microservice project, several repositories |
+| `team` | The owning team | One memory pool for every project of a team |
+| `repo` | The normalized remote | Strict separation per repository |
 
 Rules:
 
-1. A `memory_search` covers the caller own project scope plus `org`.
+1. A `memory_search` covers the caller current project scope plus `org`.
 2. An agent never writes to the `org` scope. Agents propose to their
    own project scope only.
-3. One team never reads the project scope of another team.
-4. `projectKey` uses the normalized git remote URL, as the
-   [collaboration spec](2026-08-28-cross-machine-collaboration-design.md)
-   defines it.
+3. A scope selects relevance, never permission (D15). A registered
+   engineer may query another project scope explicitly.
+4. The scope of a proposal comes from the **workspace** of the agent,
+   never from the team of the author. One engineer works across several
+   projects, so the workspace decides the scope. The author identity is
+   recorded as provenance.
 
 **Publication into the `org` scope.** Each team repository holds one
 file, `.agentframe/public.md`. An ingestion job reads each file and
@@ -561,5 +603,5 @@ is stable. The decisions in the main spec reference these.
 | P30 | A claim lease sold as exactly-once. A responder can finish after lease expiry, and a second responder replies again. | At-least-once contract: fencing tokens on claim/heartbeat/completion, idempotency keys on external effects. |
 | P31 | Unpinned executable dependencies: `npx` latest, `:latest` images, unpinned skills. The next publish executes on every workstation. | Exact versions everywhere: `stdio_npx` requires `pkg@x.y.z`, images pin digests, `skills.list` pins revisions. |
 | P32 | Upstream tool descriptions treated as trusted text. They reach the model, so a hostile upstream can attempt prompt injection. | Size caps, control-character stripping, provenance tags. The routing catalog stays first-party. |
-| P33 | Team identity derived from a Git remote. A team owns several repositories, and a monorepository holds several teams. | `teams.json` maps teams to projects. A repository may override with `.agentframe/project.json`. |
+| P33 | Project or team identity derived from a Git remote. One microservice project spreads across several repositories, so a repository scope fragments the memory of one project. | `.agentframe/project.json` declares the project per repository. `teams.json` maps teams to projects. `MEMORY_SCOPE_GRANULARITY` selects project, team, or repo (D20). |
 | P34 | A scope treated as a security boundary in a trusted-coworker deployment. It creates false confidence and blocks normal cross-team work. | Scopes select defaults and relevance. Git and the identity provider control code access. |

@@ -76,21 +76,22 @@ remain restricted.
 
 ## Teams, Projects, And Agents Are Separate Identifiers
 
-A team owns several repositories. A monorepository holds the software of
-several teams. Therefore the design never derives a team from a Git
-remote.
+A team owns several repositories. One microservice project spreads one
+service into each of several repositories. A repository can also hold
+software from more than one team. Therefore the design never derives a
+team or a project from a Git remote alone.
 
 | Identifier | Source | Purpose |
 |---|---|---|
 | `team` | `teams.json` | Routing, registry selection, ownership |
-| `projectKey` | Normalized Git remote, or an explicit override | Working context, memory relevance |
+| `projectKey` | `.agentframe/project.json`, else `teams.json`, else the normalized Git remote | Working context, memory relevance |
 | `username` | `users.json` | Attribution, direct messages |
 | `agentId` | Generated per agent process | Presence, claims |
 
-A repository may declare its owning team and a stable project
-identifier in `.agentframe/project.json`. That declaration wins over
-remote normalization, which resolves renames, aliases, and
-monorepositories. A branch is context, never identity.
+Each repository declares its owning team and its project in
+`.agentframe/project.json`. That declaration wins over remote
+normalization. It groups the sibling services of one project, and it
+survives a rename or a move. A branch is context, never identity.
 
 ## Connecting To A Person
 
@@ -122,9 +123,10 @@ Each agent registers with a **workspace identity**:
   heartbeatAt }
 ```
 
-- `projectKey` = the normalized git remote URL of the repo of the agent.
-  Normalization: strip the scheme, the credentials, and `.git`, then
-  lowercase. Example: `github.com/swiknaba/agentframe`.
+- `projectKey` = the project of the repository, from
+  `.agentframe/project.json`. Several sibling service repositories share
+  one `projectKey`. The normalized Git remote is the fallback for an
+  unconfigured repository (D20).
 - `branch` = the current git branch. Each heartbeat refreshes the
   branch. The agent therefore follows its human across checkouts.
 
@@ -151,7 +153,7 @@ carries the user identity. The humans stay in the loop.
 | **Presence registry** | Agents register with a workspace identity and a heartbeat. `list_agents` defaults to the `projectKey` of the caller. Filters exist for project and branch. Stale entries expire on missed heartbeats. |
 | **Message bus** | Channels are keyed `project/<key>` and `project/<key>/branch/<branch>`. Direct agent-to-agent messages are allowed within a project. The log is persistent and append-only. Delivery is SSE with `Last-Event-ID` replay, a 7-day TTL, and a SQLite store (D6). |
 | **Task board** | FIFO + optional integer priority (order `priority DESC, created_at ASC`). Each claim carries a lease with a heartbeat **and a monotonic fencing token**. A task returns to the board when the lease expires (D5). Completion and heartbeats must present the current fencing token. A stale token is rejected. Delivery is therefore **at-least-once**, and every external effect carries an idempotency key. The task shape uses the envelope from the [service contracts §C5](2026-08-28-service-contracts.md#c5-delegated-job-vocabulary). Each task is scoped to a `projectKey`, and optionally a branch. |
-| **Shared memory** | All participating agents point at the same memory-worker + Chroma. `scopeIds` carry the `projectKey`. Shared memory is therefore project-scoped by construction. |
+| **Shared memory** | All participating agents point at the same memory-worker + Chroma. `scopeIds` carry the `projectKey`, so sibling service repositories share one memory pool (D20). |
 
 **Exposure:** the coordination service is itself an MCP server. Each
 local hub registers it via `registry.json` (D4). Agents gain these
