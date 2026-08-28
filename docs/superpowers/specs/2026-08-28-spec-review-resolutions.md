@@ -16,7 +16,7 @@
 | # | Disposition | Where |
 |---|---|---|
 | F01 | **Resolved.** Registry trust policy: pinned HTTPS origin, local approval for privileged entries (`registry.trust.json`), validate-then-swap, keep last accepted. Pinned `stdio_npx` versions (D13). The "no central trust" claim is corrected. | Contracts §C2, design D13, P29, P31 |
-| F02 | **Resolved.** Principal model: `principals.json`, token→username binding, project sets from teams, `agentId` protection, separate administrator token, denial tests. | Collaboration spec, contracts §C3 |
+| F02 | **SUPERSEDED by G12/G15 (D15).** The original resolution built project-level authorization on `principals.json`. That assumed an untrusted multi-tenant deployment. The real model is trusted coworkers, so identity now serves routing and attribution. Impersonation protection and operator actions remain. See the [follow-up resolutions](2026-08-28-spec-review-follow-up-resolutions.md). | Collaboration spec, D15 |
 | F03 | **Resolved.** At-least-once contract: fencing tokens on claim/heartbeat/completion, idempotency keys on external effects. The exactly-once claims are removed. | D5, collaboration spec, contracts §C5, P30 |
 | F04 | **Resolved.** D14: the task board core (queue, claim, lease, fence) moves to Phase 1. Presence, messaging, and collaboration stay Phase 2. | Design D14, §6 |
 | F05 | **Resolved.** D9 now names the shared service secrets (bot tokens, signing secrets, service bearers) and requires storage and rotation. The README claim is corrected. | Design D9, README |

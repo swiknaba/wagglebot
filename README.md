@@ -60,8 +60,11 @@ service secrets, such as the chat bot token.
   file. Run them anywhere.
 * **Local-first.** One command starts a working stack. The extraction
   model runs on a CPU. Development needs no cloud account.
-* **Credentials stay local.** Only the engineer workstation holds a
-  secret.
+* **Credentials stay local.** Engineer credentials and tool-server
+  credentials stay on each workstation. Shared channel secrets stay in
+  the shared deployment.
+* **Trusted coworkers.** Identity serves routing, context, and
+  attribution. Git and your identity provider control code access.
 
 ## Documentation
 

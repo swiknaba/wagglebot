@@ -141,6 +141,20 @@ layer compromise. It does not remove the need for local trust rules:
 5. A removal on refresh drains the namespace: no new calls, subprocess
    termination after the grace period, cache invalidation.
 
+**Tool descriptions are untrusted input.** The trust policy governs
+commands and credentials. It does not govern the descriptive text that
+an upstream returns. A tool description reaches the model, so a hostile
+upstream can attempt prompt injection through it (P32):
+
+1. Cap the size of each name, description, and schema. Truncate beyond
+   the cap.
+2. Strip control characters and instruction-like markup from
+   descriptions before the model sees them.
+3. Tag every tool with its provenance namespace, so the model can tell
+   which upstream supplied the text.
+4. Treat `tool_catalog.json` as first-party content. It is reviewed in
+   the central repository, never fetched from an upstream.
+
 **Redirects and private targets.** The hub never forwards a credential
 across an origin change. On a cross-origin redirect, it strips the
 credential and rejects the redirect unless the trust policy allows the
@@ -322,12 +336,20 @@ authorization follows the principal model of the
 the service derives allowed scopes from the principal, and it rejects a
 caller-supplied scope outside that set.
 
-**Extractor input disclosure.** Proposal text reaches the extractor
-before any banlist runs. The banlist filters the output, not the input.
-The default local extractor keeps everything inside the deployment. A
-remote `EXTRACTOR_API_BASE` outside the deployment requires the explicit
-flag `EXTRACTOR_ALLOW_EXTERNAL=1`. The operator thereby acknowledges
-that proposal content leaves the boundary (guards F17).
+**Extractor input scrub.** Proposal text reaches the extractor before
+the output banlist runs, so the worker scrubs the **input** first:
+
+1. Apply secret detection to every proposal: the existing banlist terms,
+   plus high-entropy strings and common key formats.
+2. Redact each match before the extractor call. Record the count of
+   redactions and the policy version on the job.
+3. Reject a proposal that is mostly secret material. The rejection
+   message names the rule, never the content.
+
+The scrub runs for every extractor, local or remote. A local extractor
+keeps everything inside the deployment. A remote `EXTRACTOR_API_BASE`
+outside the deployment **additionally** requires the explicit flag
+`EXTRACTOR_ALLOW_EXTERNAL=1` (guards F17, G05).
 
 **Scope model — exactly two scopes.** Resist a third.
 
@@ -426,7 +448,14 @@ type Task = {
   projectKey: string;
   branch?: string;
   priority: number;              // default 0
-  eligibility: "shared_responder" | "owner:<username>" | "any";
+  team?: string;                 // owning team, from channels.json
+  eligibility:
+    | "shared_responder"
+    | `owner:${string}`          // one engineer
+    | `team:${string}`           // any member of that team
+    | `project:${string}`
+    | "any";
+  requiredCapabilities?: string[];
   idempotencyKey: string;        // dedup key for external effects
   payload: JobSpec | ChannelEvent;
   result?: JobResult | ChannelReplyResult;
@@ -445,6 +474,23 @@ Rules:
    current `fence`. A stale fence is rejected.
 4. Delivery is **at-least-once**. Every external effect (a Slack reply,
    a comment) deduplicates on `idempotencyKey`.
+
+**External effects use a durable effect path.** A fence stops a stale
+*completion*. It cannot stop a stale responder from already having sent
+a message. Therefore every channel effect passes through the ingress
+service, which owns the provider credentials, and which:
+
+1. Stores the effect record before transmission.
+2. Rejects an effect that carries a stale fence.
+3. Deduplicates on `idempotencyKey`, and returns the stored result for
+   a repeat.
+4. Stores the provider request identifier with the record.
+5. On an ambiguous timeout, marks the effect `unknown` and reconciles
+   by provider lookup where the provider supports it. It never blindly
+   retries.
+
+Never claim exactly-once external behavior. Prove the provider behavior
+first, and rely on the local record (G04, P30).
 
 The `delegated_job` payload uses this vocabulary:
 
@@ -468,9 +514,10 @@ platform-specific:
   tolerates unreachable upstreams and heals them with background
   refresh.
 - Point load-balancer or orchestrator health checks at the shallow
-  `/readyz`. Use a long grace period (~300 s). A slow proxy warmup then
-  cannot kill a task. The deep `/health` is for humans and monitoring
-  only.
+  `/livez`. Use a long grace period (~300 s). A slow proxy warmup then
+  cannot kill a task. Point traffic routing at `/readyz`, which reports
+  dependency and startup state and returns 503 when the service cannot
+  serve (D8). There is no `/health` endpoint.
 - Model provisioning: `llama-server` downloads by `-hf` ref on the first
   run into a mounted cache volume. No init-container choreography is
   needed.
@@ -489,7 +536,7 @@ is stable. The decisions in the main spec reference these.
 | P3 | A service without auth relies on positional safety (localhost sidecar) | Bearer required everywhere (D7) |
 | P4 | Manifest files are read-modify-write under an in-process lock | Single worker instance per storage root, documented |
 | P5 | A worker hard-fails without a local model file, wired through fragile mount choreography | D2 removes in-process model loading entirely |
-| P6 | Conflicting policy-path defaults; a missing file degrades to a silent empty policy | One default. A missing file warns at startup |
+| P6 | Conflicting policy-path defaults; a missing file degrades to a silent empty policy | One default path. A missing file selects the built-in default policy and warns. The policy is never empty. |
 | P7 | Test seams built from module monkeypatching | Explicit dependency injection |
 | P8 | Upstreams registered unconditionally, without config | Zero unconditional proxies |
 | P9 | Remote and stdio startup failures treated the same | Deliberate asymmetry: keep unreachable remotes, abort on missing binaries |
@@ -513,3 +560,6 @@ is stable. The decisions in the main spec reference these.
 | P29 | A remote registry treated as plain config. It selects commands, endpoints, and credential names, so a compromise executes code and exfiltrates secrets. | The registry trust policy in §C2: pinned HTTPS origin, local approval for privileged entries, validate-then-swap, keep last accepted. |
 | P30 | A claim lease sold as exactly-once. A responder can finish after lease expiry, and a second responder replies again. | At-least-once contract: fencing tokens on claim/heartbeat/completion, idempotency keys on external effects. |
 | P31 | Unpinned executable dependencies: `npx` latest, `:latest` images, unpinned skills. The next publish executes on every workstation. | Exact versions everywhere: `stdio_npx` requires `pkg@x.y.z`, images pin digests, `skills.list` pins revisions. |
+| P32 | Upstream tool descriptions treated as trusted text. They reach the model, so a hostile upstream can attempt prompt injection. | Size caps, control-character stripping, provenance tags. The routing catalog stays first-party. |
+| P33 | Team identity derived from a Git remote. A team owns several repositories, and a monorepository holds several teams. | `teams.json` maps teams to projects. A repository may override with `.agentframe/project.json`. |
+| P34 | A scope treated as a security boundary in a trusted-coworker deployment. It creates false confidence and blocks normal cross-team work. | Scopes select defaults and relevance. Git and the identity provider control code access. |

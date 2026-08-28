@@ -191,7 +191,9 @@ adapters.
 - `sync-agents` merges each fragment into its harness config. The
   Claude Code adapter merges `hooks/claude-code.json` into
   `~/.claude/settings.json` with `jq` and preserves the other keys.
-  This tooling owns the `hooks` key of each target file.
+  This tooling owns only the hook entries that carry an agentframe
+  identifier. It never owns the complete `hooks` key, and it preserves
+  every entry it did not write.
 - Harnesses without hook support get the rules only through the base
   template. Add an adapter when a harness gains hook support.
 

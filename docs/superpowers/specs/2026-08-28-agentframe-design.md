@@ -75,6 +75,11 @@ and deploy. No team must fork the internals of a different company.
 | D12 | **People connect by username, never by address.** Each engineer registers with the company username (SSO name). All agent traffic flows outbound through the shared coordination service. A direct connection between two people requires an approval: the receiver sees who asks and accepts or rejects. No VPN, tunnel, or IP exchange exists in this design. |
 | D13 | **Every executable dependency is pinned.** `stdio_npx` packages carry exact versions, container images pin digests, and `skills.list` pins revisions. Nothing installs `latest`. |
 | D14 | **The task board core ships in Phase 1.** Queue, claim, lease, and fence move forward, because default ingress delivery depends on them. Presence, messaging, and cross-machine collaboration stay Phase 2. |
+| D15 | **Trusted coworkers.** Every registered engineer is trusted. Identity serves routing, context, and attribution. Teams and scopes never deny an operation between registered users. Git and the company identity provider control code access. Only impersonation protection and operator actions stay restricted (P34). |
+| D16 | **Team, project, and user are separate identifiers.** A team owns several repositories, and a monorepository holds several teams. `teams.json` maps teams to projects, and `.agentframe/project.json` may override remote normalization. A branch is context, never identity (P33). |
+| D17 | **Channel events route through `channels.json`.** Each ingress source maps to a team, a project, a responder, and a reply identity. An unrouted or ambiguous event is rejected, never guessed. |
+| D18 | **Phase 1 ships a minimal reference responder.** The success criteria need a working reply path. The reference responder claims tasks, heartbeats with its fence, submits effects, and proposes memory. It stays a reference, and any runtime may replace it. |
+| D19 | **Embedding provider — pending decision.** This decision blocks implementation. Store the provider, the model, the artifact revision, the dimension, the distance function, and a schema version with each collection. |
 
 ### Why D9 and D10 matter
 
@@ -186,7 +191,7 @@ engineer workstation (D9). The
   heals them with background refresh. A missing stdio binary aborts
   startup. `MCP_HUB_STARTUP_STRICT=1` also aborts on unreachable
   remotes.
-- Log redaction: token fingerprints (12-char SHA-256), sanitized
+- Log redaction: keyed token fingerprints (contracts §C2), sanitized
   endpoints, and argument key names only. Values are never logged.
 
 The CodeMode transform is the most difficult part. Plan its
@@ -261,12 +266,18 @@ A `ChannelEvent` needs a reply in its thread. Two responder kinds exist.
 
 | Responder | Runs where | Use for |
 |---|---|---|
-| **Shared responder agent** (default) | Shared layer, always on | Team-facing channels: Slack mentions, pull request comments. It holds the bot tokens, because it is the bot. |
+| **Shared responder agent** (default) | Shared layer, always on | Team-facing channels: Slack mentions, pull request comments. Phase 1 ships a minimal reference implementation (D18). |
 | **Local agent** (Phase 2) | Engineer workstation | Personal events routed to one engineer. It claims tasks scoped to itself. |
 
-Agentframe stays runtime-agnostic (Goal 6). The project therefore ships
-the **responder contract**, not a responder. The starter template
-contains a skeleton.
+Agentframe stays runtime-agnostic (Goal 6), so any runtime may replace
+the responder. Phase 1 still ships a **minimal reference responder**,
+because the default channel path needs a working reply flow for the
+success criteria (D18). It claims tasks, heartbeats with its fence,
+submits effects through the durable path, and proposes memory.
+
+Provider credentials live with the services that use them: the signing
+secrets on ingress, and the bot token on the effect path. The local hub
+never receives a channel secret.
 
 A laptop is the wrong host for a team-facing channel. A laptop sleeps.
 Three laptops race for the same mention. The bot token would also spread
@@ -322,7 +333,8 @@ A standalone MCP + SSE service, scoped by project and branch.
 
 The
 [cross-machine collaboration spec](2026-08-28-cross-machine-collaboration-design.md)
-has the full design, including the principal model (`principals.json`).
+has the full design, including the central files and the trusted
+coworker model (D15).
 
 ---
 
@@ -333,8 +345,15 @@ agentframe/
 ├── services/
 │   ├── mcp-hub/                 # MCP aggregation proxy (TypeScript/Bun)
 │   ├── memory-worker/           # Durable memory pipeline (TypeScript/Bun)
-│   ├── ingress/                 # Channel adapter service (TypeScript/Bun)
+│   ├── ingress/                 # Channel adapters + durable effect path
+│   ├── responder/               # Minimal reference responder (D18)
 │   └── coordination/            # Task board (Ph. 1) + collab (Ph. 2)
+├── central/                     # Operator-maintained, versioned
+│   ├── users.json               # username → tokenHash, teams
+│   ├── teams.json               # team → manager, projects
+│   ├── channels.json            # ingress source → team, project, responder
+│   ├── registry.base.json
+│   └── registry.team.<team>.json
 ├── packages/
 │   └── types/                   # Shared types (ChannelEvent, MemoryProvider, JobSpec, ...)
 ├── provisioning/
@@ -391,7 +410,7 @@ services:
 
   # ── shared profile: deployed one time for the team ────────────────
   chroma-db:
-    image: chromadb/chroma:latest
+    image: chromadb/chroma@sha256:<pinned-digest>   # never :latest (D13)
     profiles: [shared]
     ports: ["18000:8000"]
 
@@ -487,16 +506,23 @@ URL**, and the shared layer composes the response from the principal:
 
 ```
 MCP_HUB_CONFIG_URL=https://shared.internal/registry
-Authorization: Bearer <principal token>
+Authorization: Bearer <user token>
 ```
 
-The request carries the principal token of the engineer. The shared
-layer resolves the token through `principals.json`, finds the teams of
-that engineer, and returns `base + team files`, composed.
+The request carries the user token of the engineer. The shared layer
+resolves the token through `users.json`, finds the teams of that
+engineer, and returns `registry.base.json` merged with each
+`registry.team.<team>.json`. A team layer wins over the base layer for
+the same namespace. The validation command prints the effective
+registry.
 
-Team membership therefore lives in **one place**: `principals.json`.
-Move an engineer to a different team there, and the next registry
-refresh delivers the new tool set. No workstation config changes.
+Team membership therefore lives in **one place**: `users.json`. Move an
+engineer to a different team there, and the next registry refresh
+delivers the new tool set. No workstation config changes.
+
+The registry selects **which upstreams appear**, for relevance. It is
+not a permission gate: local credentials decide which upstream actually
+works for one engineer (D15).
 
 The manager curates `registry.base.json` one time. Each team lead
 curates one team file. No engineer edits a registry.
@@ -507,14 +533,17 @@ The workstation needs exactly two values:
 
 1. The shared layer URL (one value for the whole company, part of the
    provisioning defaults).
-2. The **principal token** of the engineer, from the administrator,
-   into the gitignored `.env.credentials` file.
+2. The **user token** of the engineer, from the operator, into the
+   gitignored `.env.credentials` file.
 
-One principal token authenticates the engineer to every shared service:
-the registry endpoint, the memory worker, and coordination. Each service
-derives the identity, the teams, and the allowed scopes from
-`principals.json`. Upstream MCP credentials stay separate and arrive
-per upstream (D10).
+One user token authenticates the engineer to every shared service: the
+registry endpoint, the memory worker, and coordination. Each service
+derives the identity and the teams from `users.json`. Upstream MCP
+credentials stay separate and arrive per upstream (D10).
+
+Onboarding and offboarding are one operator procedure: edit
+`users.json` and `teams.json`, issue or revoke one token, and run the
+validation command.
 
 ### Cross-Team Knowledge
 
@@ -597,9 +626,11 @@ Agentframe does not build it. Choose the second deployment instead.
 
 ## Success Criteria
 
-1. Both profiles start a working stack on one machine. The only required
-   configuration is an empty `registry.json`. The extractor runs on a CPU
-   without a model pre-download step.
+1. Both profiles start a working stack on one machine. The required
+   inputs are an empty `registry.json` and the generated service bearer
+   tokens (D7). Channel connectors need their provider secrets, and
+   stay optional. The extractor runs on a CPU without a model
+   pre-download step.
 2. A user adds an upstream to `registry.json` and restarts the hub. The
    new tools appear in `list_available_mcps`.
 3. A `POST /memory/proposals` with a fact reaches Chroma after the
@@ -613,8 +644,10 @@ Agentframe does not build it. Choose the second deployment instead.
    harness target. `install-skills` installs the curated list on a clean
    machine (see the provisioning spec).
 6. **Credential isolation.** Two engineers pull the same registry. Each
-   hub authenticates as its own engineer. No secret appears in the
-   shared layer, in the registry, or in any log.
+   hub authenticates as its own engineer. No engineer credential and no
+   upstream MCP credential appears in the shared layer, in the
+   registry, or in any log. The shared layer holds only its own service
+   secrets, such as channel provider secrets (D9).
 7. **Graceful skip.** An engineer lacks the credential for one upstream.
    That namespace is absent from `list_available_mcps`. Every other
    namespace still works.
