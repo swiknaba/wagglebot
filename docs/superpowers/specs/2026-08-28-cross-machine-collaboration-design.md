@@ -6,9 +6,9 @@
 
 ## Use Cases
 
-- Two engineers work on the same project. Each engineer oversees a local
+- Two engineers work on the same system. Each engineer oversees a local
   agent. They enable collaboration. Their agents then exchange findings
-  and hand off tasks, scoped to that project and branch.
+  and hand off tasks, scoped to that system and branch.
 - A research agent on one machine feeds findings to a coding agent on a
   different machine.
 - The team shares durable memory without a central cloud deploy.
@@ -39,23 +39,20 @@ Two authenticated roles exist, and only two:
 Engineering managers maintain three small files in one central
 repository. Repository write access is the only permission system.
 
-```json
-// users.json
-{ "users": [
-  { "username": "alice", "tokenHash": "...", "teams": ["payments"] }
-] }
-
-// catalog.json — teams (with hierarchy) and projects, Backstage style
-{ "teams":    [ { "team": "payments", "parent": "platform-group", "manager": "bob" } ],
-  "projects": [ { "project": "payments-platform", "owner": "payments" } ] }
-
-// channels.json  — see the routing section
+```yaml
+# users.yaml — the token binding
+users:
+  - username: alice          # company Git username, lowercase
+    tokenHash: "..."
+    memberOf: [team-payments]
 ```
 
-Each repository declares its own membership in
-`.agentframe/catalog.json`, or in an existing Backstage
-`catalog-info.yaml`. See the
-[service contracts](2026-08-28-service-contracts.md) scope model.
+`catalog.yaml` holds the Backstage entities: Domain, System, and Group.
+`channels.yaml` holds the ingress routes. The
+[service contracts](2026-08-28-service-contracts.md) give both schemas.
+
+Each repository declares its components in `catalog-info.yaml`, or in
+`.agentframe/catalog.yaml` with the identical schema.
 
 Rules:
 
@@ -64,8 +61,8 @@ Rules:
    token, never from a request field. This prevents impersonation and
    gives correct attribution.
 2. `username` is the company Git username, in lowercase.
-3. A service reads teams from `users.json`, and the hierarchy from
-   `catalog.json`. Team values select defaults and routes. They never
+3. A service reads teams from `users.yaml`, and the hierarchy from
+   `catalog.yaml`. Team values select defaults and routes. They never
    deny an operation between registered users.
 4. An agent registers under its user. A second registration with the
    same `agentId` and a different user is rejected.
@@ -79,26 +76,27 @@ one company of trusted coworkers, so the authorization model is
 deliberately absent. Only impersonation protection and operator actions
 remain restricted.
 
-## Teams, Projects, And Agents Are Separate Identifiers
+## Identifiers Follow The Backstage Entity Model
 
-Agentframe assumes no repository layout. One team runs a
-monorepository. Another team spreads one project across many service
-repositories. A third team owns several projects. Therefore the design
-declares projects, and never derives them from a Git remote.
+Agentframe assumes no repository layout, and derives nothing from a Git
+remote. The catalog declares everything (D20).
 
 | Identifier | Source | Purpose |
 |---|---|---|
-| `team` | `catalog.json`, with `parent` for subteams | Routing, registry selection, ownership |
-| `projectKey` | The closest enclosing `.agentframe/catalog.json`. No inference. | Working context, memory relevance |
-| `username` | `users.json` | Attribution, direct messages |
+| `domain` | `catalog.yaml` | Broad grouping, wide memory read scope |
+| `system` | `catalog.yaml` | The project. Memory write scope, channel key. |
+| `component` | The repository declaration | The unit of work, attribution |
+| `group` | `catalog.yaml`, `parent` for subteams | Routing, registry selection, ownership |
+| `username` | `users.yaml` | Attribution, direct messages |
 | `agentId` | Generated per agent process | Presence, claims |
 
-The central `catalog.json` lists the teams and the projects, in the
-Backstage style. Each repository declares its membership in
-`.agentframe/catalog.json`, or in an existing Backstage
-`catalog-info.yaml`. A team therefore selects its own granularity by
-file placement, and the declaration survives a rename or a move. A
-branch is context, never identity.
+Ownership is separate from grouping: every entity names an owning group.
+A reorganization therefore edits one `owner` field, and never renames a
+system or a domain.
+
+A team selects its own granularity by where it places the component
+declaration. The declaration survives a rename or a move. A branch is
+context, never identity.
 
 ## Connecting To A Person
 
@@ -126,14 +124,14 @@ Each agent registers with a **workspace identity**:
 ```
 { agentId, name, owner,            // owner = the username of the engineer
   machine, capabilities[],
-  workspace: { projectKey, branch },
+  workspace: { system, component, branch },
   heartbeatAt }
 ```
 
-- `projectKey` = the project declared by the closest enclosing
-  `.agentframe/catalog.json`. Repositories that declare the same value
-  share one project. An undeclared repository has no `projectKey`, and
-  agentframe never infers one (D20).
+- `system` and `component` come from the closest enclosing declaration.
+  Components that name the same system share one memory space and one
+  channel. An undeclared repository has no system, and agentframe never
+  infers one (D20).
 - `branch` = the current git branch. Each heartbeat refreshes the
   branch. The agent therefore follows its human across checkouts.
 
@@ -144,10 +142,10 @@ collaborate, so the design never blocks that path.
 
 | Relationship | Default behavior |
 |---|---|
-| Same `projectKey` + same `branch` | The branch channel joins automatically |
-| Same `projectKey`, different branch | The project channel joins automatically |
-| Same team, other project | Discoverable. The team channel joins automatically. |
-| Other team | Discoverable and reachable. No channel joins automatically. |
+| Same `system` + same `branch` | The branch channel joins automatically |
+| Same `system`, different branch | The system channel joins automatically |
+| Same domain, other system | Discoverable. The domain channel joins automatically. |
+| Other domain | Discoverable and reachable. No channel joins automatically. |
 
 Enablement is **opt-in per engineer**. An agent joins coordination only
 when its operator sets `COORD_URL` and the user token. Each message
@@ -157,41 +155,48 @@ carries the user identity. The humans stay in the loop.
 
 | Component | Design |
 |---|---|
-| **Presence registry** | Agents register with a workspace identity and a heartbeat. `list_agents` defaults to the `projectKey` of the caller. Filters exist for project and branch. Stale entries expire on missed heartbeats. |
-| **Message bus** | Channels are keyed `project/<key>` and `project/<key>/branch/<branch>`. Direct agent-to-agent messages are allowed within a project. The log is persistent and append-only. Delivery is SSE with `Last-Event-ID` replay, a 7-day TTL, and a SQLite store (D6). |
-| **Task board** | FIFO + optional integer priority (order `priority DESC, created_at ASC`). Each claim carries a lease with a heartbeat **and a monotonic fencing token**. A task returns to the board when the lease expires (D5). Completion and heartbeats must present the current fencing token. A stale token is rejected. Delivery is therefore **at-least-once**, and every external effect carries an idempotency key. The task shape uses the envelope from the [service contracts §C5](2026-08-28-service-contracts.md#c5-delegated-job-vocabulary). Each task is scoped to a `projectKey`, and optionally a branch. |
-| **Shared memory** | All participating agents point at the same memory-worker + Chroma. `scopeIds` carry the `projectKey`, so every repository that declares the same project shares one memory pool (D20). |
+| **Presence registry** | Agents register with a workspace identity and a heartbeat. `list_agents` defaults to the `system` of the caller. Filters exist for domain, system, and branch. Stale entries expire on missed heartbeats. |
+| **Message bus** | Channels are keyed `system/<name>`, `system/<name>/branch/<branch>`, and `domain/<name>`. Direct agent-to-agent messages need no channel. The log is persistent and append-only. Delivery is SSE with `Last-Event-ID` replay, a 7-day TTL, and a SQLite store (D6). |
+| **Task board** | FIFO + optional integer priority (order `priority DESC, created_at ASC`). Each claim carries a lease with a heartbeat **and a monotonic fencing token**. A task returns to the board when the lease expires (D5). Completion and heartbeats must present the current fencing token. A stale token is rejected. Delivery is therefore **at-least-once**, and every external effect carries an idempotency key. The task shape uses the envelope from the [service contracts §C5](2026-08-28-service-contracts.md#c5-delegated-job-vocabulary). Each task is scoped to a `system`, and optionally a branch. |
+| **Shared memory** | All participating agents point at the same memory-worker + Chroma. `scopeIds` carry the `system`, so every component of one system shares a memory pool (D20). |
 
 **Exposure:** the coordination service is itself an MCP server. Each
-local hub registers it via `registry.json` (D4). Agents gain these
+local hub registers it via `registry.yaml` (D4). Agents gain these
 `coordination_*` tools: `list_agents`, `send_message`, `read_channel`,
 `post_task`, `claim_task`, `complete_task`.
 
 ## Channel Routing
 
 An incoming event must reach the owning team. The shared layer therefore
-holds `channels.json`, which maps each ingress source to a route:
+holds `channels.yaml`, which maps each ingress source to a route:
 
-```json
-{ "routes": [
-  { "source": "slack",  "match": { "channelId": "C123" },
-    "team": "payments", "projectKey": "github.com/acme/pay-api",
-    "responder": "shared", "allowedEvents": ["slack.app_mention"],
-    "replyIdentity": "payments-bot" },
-  { "source": "github", "match": { "repo": "acme/pay-api" },
-    "team": "payments", "projectKey": "github.com/acme/pay-api",
-    "responder": "shared", "allowedEvents": ["github.issue_comment.created"] }
-] }
+```yaml
+# channels.yaml
+routes:
+  - source: slack
+    match: { channelId: C123 }
+    system: payments-platform
+    owner: team-payments
+    responder: shared
+    allowedEvents: [slack.app_mention]
+    replyIdentity: payments-bot
+
+  - source: github
+    match: { repo: acme/pay-api }
+    system: payments-platform
+    owner: team-payments
+    responder: shared
+    allowedEvents: [github.issue_comment.created]
 ```
 
 Rules:
 
 1. Ingress resolves the route before it creates a task. The route
-   supplies the team, the project, the responder, and the reply
+   supplies the system, the owning group, the responder, and the reply
    identity.
 2. Ingress **rejects an event with no route, or with more than one
-   route**. It logs the rejection. It never guesses a team from message
-   text.
+   route**. It logs the rejection. It never guesses a system from
+   message text.
 3. An event type outside `allowedEvents` is dropped, and logged.
 4. The validation command reports every unrouted channel and every
    duplicate match.
@@ -204,8 +209,8 @@ The task envelope carries eligibility. The board supports these forms:
 |---|---|
 | `shared_responder` | The shared responder agent |
 | `owner:<username>` | Agents of that engineer |
-| `team:<team>` | Agents of any member of that team |
-| `project:<projectKey>` | Agents working in that project |
+| `group:<group>` | Agents of any member of that group |
+| `system:<name>` | Agents working in that system |
 | `any` | Any registered agent |
 
 An eligibility entry may also require a capability set. Within the
@@ -221,8 +226,8 @@ claim mechanism.
 
 | Task source | Scope | Default claimer |
 |---|---|---|
-| Ingress channel event | The project of the channel | The shared responder agent |
-| Agent-to-agent handoff | `projectKey` and branch | Any eligible local agent |
+| Ingress channel event | The system named by the route | The shared responder agent |
+| Agent-to-agent handoff | `system` and branch | Any eligible local agent |
 
 The shared responder agent claims team-facing events, because it stays
 on and holds the bot tokens. A local agent may claim events routed to
@@ -249,12 +254,11 @@ service is the only rendezvous point.
 
 ## Success Criteria
 
-1. Two agents on different machines register with the same `projectKey`
-   and branch. They see each other in `list_agents` and exchange
-   messages.
-2. An agent on a different branch of the same project is discoverable
-   and messageable. The branch channel excludes it.
-3. An agent from a different project sees nothing.
+1. Two agents on different machines register with the same `system` and
+   branch. They see each other in `list_agents` and exchange messages.
+2. An agent on a different branch of the same system is discoverable and
+   messageable. The branch channel excludes it.
+3. An agent in another domain is discoverable, and joins no channel automatically.
 4. An agent disconnects with a claimed task. The task returns to the
    board after the lease expires.
 5. An agent reconnects after sleep. It replays missed channel messages

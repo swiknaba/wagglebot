@@ -31,7 +31,7 @@
 
 ## C2. MCP Hub contract
 
-**Proxy config shape** (an entry of `registry.json`):
+**Proxy config shape** (an entry of the `proxies` list in `registry.yaml`):
 
 ```typescript
 type ProxyConfig = {
@@ -80,16 +80,15 @@ type CredentialSource =
 
 Example registry entry. It contains no secret:
 
-```json
-{
-  "namespace": "example",
-  "mode": "remote_http",
-  "endpoint": "https://mcp.example.com/mcp",
-  "auth": {
-    "scheme": { "kind": "bearer" },
-    "source": { "from": "env", "var": "EXAMPLE_TOKEN" }
-  }
-}
+```yaml
+# registry.yaml
+proxies:
+  - namespace: example
+    mode: remote_http
+    endpoint: https://mcp.example.com/mcp
+    auth:
+      scheme: { kind: bearer }
+      source: { from: env, var: EXAMPLE_TOKEN }   # value stays local
 ```
 
 **Resolution rules:**
@@ -152,7 +151,7 @@ upstream can attempt prompt injection through it (P32):
    descriptions before the model sees them.
 3. Tag every tool with its provenance namespace, so the model can tell
    which upstream supplied the text.
-4. Treat `tool_catalog.json` as first-party content. It is reviewed in
+4. Treat `tool_catalog.yaml` as first-party content. It is reviewed in
    the central repository, never fetched from an upstream.
 
 **Redirects and private targets.** The hub never forwards a credential
@@ -363,79 +362,131 @@ keeps everything inside the deployment. A remote `EXTRACTOR_API_BASE`
 outside the deployment **additionally** requires the explicit flag
 `EXTRACTOR_ALLOW_EXTERNAL=1` (guards F17, G05).
 
-**Scope model — exactly two scopes.** Resist a third.
+**Scope model — three scopes, and they follow the catalog.**
 
-| Scope | Written by | Default visibility |
+| Scope | Written by | Read by default |
 |---|---|---|
-| `project:<projectKey>` | Agents, through `propose_memory` | Everyone working in that project |
-| `org` | Humans, through a published file | Every team |
+| `system:<name>` | Agents, through `propose_memory` | Everyone working in that system |
+| `domain:<name>` | Humans, by publication | Every system in that domain |
+| `org` | Humans, by publication | Everyone |
 
-**A project is a catalog entry, never a repository (D20).** The model
-follows [Backstage](https://backstage.io): the central catalog owns the
-taxonomy, and each repository declares where it belongs. Agentframe
-never infers ownership from a Git remote, a directory name, or any
-repository shape.
+Agents write to **exactly one** scope: the system of their component.
+The domain and org scopes exist for human-published, reviewed content,
+so a broad scope never fills with unreviewed working memory.
 
-**The central catalog** holds the taxonomy. Managers maintain it in the
-central repository:
+A `memory_search` reads the system of the caller, then the domain of
+that system, then `org`. The cascade matches how knowledge actually
+travels: service detail stays near the service, a domain shares its
+conventions, and the organization shares its interfaces.
 
-```json
-// catalog.json
-{
-  "teams": [
-    { "team": "payments",       "parent": "platform-group", "manager": "bob" },
-    { "team": "payments-core",  "parent": "payments" },
-    { "team": "platform-devex", "parent": "platform-group", "manager": "carol" }
-  ],
-  "projects": [
-    { "project": "payments-platform", "owner": "payments" },
-    { "project": "developer-tooling", "owner": "platform-devex" }
-  ]
-}
+Component level is deliberately **not** a scope. Components of one
+system share a memory space, which is what a microservice team needs.
+
+**The catalog uses the full [Backstage](https://backstage.io) entity
+model (D20).** Agentframe never infers ownership from a Git remote, a
+directory name, or any repository shape.
+
+| Entity | Meaning | Declared in |
+|---|---|---|
+| **Component** | One software unit. Usually one repository, or one subtree of a repository. | The repository |
+| **System** | A set of components that work together. One project. | The central catalog |
+| **Domain** | A set of systems that share a business area. | The central catalog |
+| **Group** | A team. `parent` gives the hierarchy, so a manager group holds several teams. | The central catalog |
+| **User** | One engineer. | `users.yaml` |
+| **API** | A published interface of a system. | The repository |
+
+**Ownership is separate from grouping.** Every entity carries an `owner`
+that names a Group. That separation is the reason the model survives a
+reorganization: a team change edits one `owner` field, and never renames
+a domain or a system.
+
+A Domain may therefore equal one team, when the organization works that
+way. The model permits that shape without forcing it.
+
+**The format is Backstage YAML, not a private schema.** Agentframe reads
+the entity envelope that Backstage defines. An organization that already
+runs Backstage points agentframe at its existing catalog files, and
+writes nothing new.
+
+**The central catalog** holds systems, domains, and groups, as a
+multi-document YAML file:
+
+```yaml
+# catalog.yaml
+apiVersion: backstage.io/v1alpha1
+kind: Domain
+metadata:
+  name: payments
+spec:
+  owner: team-payments
+---
+apiVersion: backstage.io/v1alpha1
+kind: System
+metadata:
+  name: payments-platform
+spec:
+  owner: team-payments
+  domain: payments
+---
+apiVersion: backstage.io/v1alpha1
+kind: Group
+metadata:
+  name: team-payments
+spec:
+  type: team
+  parent: platform-group          # subteam hierarchy
 ```
 
-`parent` gives the team hierarchy, so a manager group can hold several
-teams and subteams.
+**Each repository declares its components.** The component is the unit
+of declaration, so the file lives with the code:
 
-**Each repository declares its membership.** One file per unit of
-ownership:
-
-```json
-// .agentframe/catalog.json
-{ "component": "pay-api", "project": "payments-platform" }
+```yaml
+# catalog-info.yaml  (Backstage standard location)
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: pay-api
+spec:
+  type: service
+  owner: team-payments
+  system: payments-platform
 ```
+
+The loader reads `catalog-info.yaml` first. A team that does not run
+Backstage may use `.agentframe/catalog.yaml` instead, with the identical
+schema. The agentframe path wins when both exist.
+
+YAML also carries comments, which a hand-maintained catalog needs.
 
 Resolution:
 
 1. The declaration file is **authoritative**. Its directory is the root
    of that component. In a repository with several components, place one
    file per component subtree, and the closest enclosing file applies.
-2. **There is no inference fallback.** A repository without a
-   declaration has no project context.
-3. A `project` value that the catalog does not list is a **hard error**.
-   The message names the file and the unknown value. A typo therefore
-   fails loudly, instead of creating an orphan memory space.
+2. **There is no inference fallback.**
+3. A `system` or `owner` value that the central catalog does not list is
+   a **hard error**. The message names the file and the unknown value.
 
-**Without a declaration**, the agent still runs. It gets no project
+**Without a declaration**, the agent still runs. It gets no system
 memory scope. `memory_search` then covers the `org` scope only, and
 `propose_memory` returns a clear instruction to add the file. The agent
-never invents a scope name, so nothing silently writes to a space that
-no search covers.
+never invents a scope name (P35).
 
-That model covers every layout, because placement is a team decision:
+That model covers every layout, because the component boundary is a team
+decision:
 
-| Team layout | File placement | Result |
+| Team layout | Components | Systems |
 |---|---|---|
-| One monorepository, one project | Repository root | One memory space |
-| Many repositories, one project | Each repository root, same `project` | One shared memory space |
-| One monorepository, several projects | One file per component subtree | One space per project |
-| Several repositories, several projects | Each root, different `project` | One space per project |
+| Microservices | One per service repository | One system holds them all |
+| Monorepository, one project | One at the repository root | One system |
+| Monorepository, several projects | One per subtree | One system per subtree |
+| A team owning several projects | As above | Several systems, one domain |
 
 **Backstage compatibility.** When a repository already carries a
-`catalog-info.yaml`, the loader reads it instead, and maps
-`spec.system` to the project and `spec.owner` to the team. Teams that
-run Backstage therefore add no second ownership file. A
-`.agentframe/catalog.json` wins when both exist.
+`catalog-info.yaml`, the loader reads it, and maps `spec.system`,
+`spec.owner`, and `spec.type` directly. Teams that run Backstage add no
+second ownership file. A `.agentframe/catalog.yaml` wins when both
+exist.
 
 Rules:
 
@@ -452,12 +503,14 @@ Rules:
 **Publication into the `org` scope.** Each team repository holds one
 file, `.agentframe/public.md`. An ingestion job reads each file and
 upserts its content into the `org` scope, with the source
-`team:<projectKey>`.
+`group:<group>`.
 
 * The file states a contract, not a history.
 * A pull request reviews each change.
 * Re-ingestion replaces the previous records of that source. The team
   therefore controls deletion by editing the file.
+* A search finds a published interface by system, by owning group, by
+  API name, and by endpoint (G24).
 * Publication skips the LLM extractor. The team already wrote the
   facts, so extraction would only add loss.
 
@@ -526,15 +579,16 @@ type Task = {
   taskId: string;
   version: 1;
   kind: "delegated_job" | "channel_event";
-  projectKey: string;
+  system: string;
   branch?: string;
   priority: number;              // default 0
-  team?: string;                 // owning team, from channels.json
+  system?: string;               // from the channel route
+  owner?: string;                // owning group
   eligibility:
     | "shared_responder"
     | `owner:${string}`          // one engineer
-    | `team:${string}`           // any member of that team
-    | `project:${string}`
+    | `group:${string}`          // any member of that group
+    | `system:${string}`
     | "any";
   requiredCapabilities?: string[];
   idempotencyKey: string;        // dedup key for external effects
@@ -637,11 +691,11 @@ is stable. The decisions in the main spec reference these.
 | P25 | A shared hub forwards the caller token to an upstream. The MCP specification forbids this, and it is the confused-deputy attack. | The hub runs local (D9). It strips the inbound `Authorization` header and injects its own resolved credential. |
 | P26 | Channel events routed through the memory pipeline. The extractor drops them, adds up to 120 s of latency, and offers no claim semantics. | Ingress posts to the coordination task board (D11). Memory receives facts only. |
 | P27 | A secret committed to the shared registry | The registry declares credential *references* only. The hub rejects a `literal` source from a URL-loaded registry. |
-| P28 | Two names for two different files, both called "catalog" | `registry.json` lists upstreams. `tool_catalog.json` gives routing advice. |
+| P28 | Two names for two different files, both called "catalog" | `registry.yaml` lists upstreams. `tool_catalog.yaml` gives routing advice. |
 | P29 | A remote registry treated as plain config. It selects commands, endpoints, and credential names, so a compromise executes code and exfiltrates secrets. | The registry trust policy in §C2: pinned HTTPS origin, local approval for privileged entries, validate-then-swap, keep last accepted. |
 | P30 | A claim lease sold as exactly-once. A responder can finish after lease expiry, and a second responder replies again. | At-least-once contract: fencing tokens on claim/heartbeat/completion, idempotency keys on external effects. |
 | P31 | Unpinned executable dependencies: `npx` latest, `:latest` images, unpinned skills. The next publish executes on every workstation. | Exact versions everywhere: `stdio_npx` requires `pkg@x.y.z`, images pin digests, `skills.list` pins revisions. |
 | P32 | Upstream tool descriptions treated as trusted text. They reach the model, so a hostile upstream can attempt prompt injection. | Size caps, control-character stripping, provenance tags. The routing catalog stays first-party. |
-| P33 | Any assumption about repository layout, and any inference from a Git remote. A repo-per-project rule fragments a microservice team. A repo-as-project rule breaks a monorepository team. | Declare, never derive, in the Backstage style. The central `catalog.json` owns the taxonomy. Each repository declares membership. No inference fallback exists (D20). |
+| P33 | Any assumption about repository layout, and any inference from a Git remote. A repo-per-project rule fragments a microservice team. A repo-as-project rule breaks a monorepository team. | Declare, never derive, in the Backstage style. The central `catalog.yaml` owns the taxonomy. Each repository declares membership. No inference fallback exists (D20). |
 | P34 | A scope treated as a security boundary in a trusted-coworker deployment. It creates false confidence and blocks normal cross-team work. | Scopes select defaults and relevance. Git and the identity provider control code access. |
 | P35 | A silent fallback that invents an identifier, for example a project name derived from a Git remote. It contradicts catalog validation, and it writes facts into a space that no search covers. | No inference fallback. A missing declaration gives no project scope, and says so. An unknown value fails loudly. |

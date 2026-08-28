@@ -64,7 +64,7 @@ and deploy. No team must fork the internals of a different company.
 | D1 | The full stack is **TypeScript (Bun)**. The hub is built on `@modelcontextprotocol/sdk`. |
 | D2 | The memory extractor uses **OpenAI-compatible HTTP only**. It does not load models in-process. The compose stack ships a `llama.cpp` server container with a small Qwen GGUF (~1.1 GB, CPU-friendly). A remote endpoint needs only a different `EXTRACTOR_API_BASE` value, no code change. |
 | D3 | There is **no MCP wrapper service in front of Chroma**. The memory worker uses the official Chroma JS client. The memory worker also exposes a first-party MCP surface for search and proposals. The hub registers that surface like any upstream (guards P17). |
-| D4 | Coordination runs as a **standalone container**. The hub registers it via `registry.json` like any other upstream. It never embeds in the hub. |
+| D4 | Coordination runs as a **standalone container**. The hub registers it via `registry.yaml` like any other upstream. It never embeds in the hub. |
 | D5 | Task board: **FIFO claiming with an optional integer `priority`** (default 0, order `priority DESC, created_at ASC`). No deadlines, no scheduler. Each claim carries a **lease with a heartbeat and a monotonic fencing token**. An expired lease returns the task to the board. Delivery is **at-least-once**: completion requires the current fence, and external effects deduplicate on an idempotency key. |
 | D6 | Messages are **persistent with replay**: an append-only log, cursor-based replay over SSE (`Last-Event-ID`), a 7-day TTL, and a SQLite store. |
 | D7 | **Auth is fail-closed everywhere.** Each service requires a bearer token when one is configured. A network-exposed service refuses to start without one. One env name pattern applies: `<SERVICE>_BEARER_TOKEN` on the server, and the same name on clients (guards P2, P3, P11). |
@@ -76,11 +76,12 @@ and deploy. No team must fork the internals of a different company.
 | D13 | **Every executable dependency is pinned.** `stdio_npx` packages carry exact versions, container images pin digests, and `skills.list` pins revisions. Nothing installs `latest`. |
 | D14 | **The task board core ships in Phase 1.** Queue, claim, lease, and fence move forward, because default ingress delivery depends on them. Presence, messaging, and cross-machine collaboration stay Phase 2. |
 | D15 | **Trusted coworkers.** Every registered engineer is trusted. Identity serves routing, context, and attribution. Teams and scopes never deny an operation between registered users. Git and the company identity provider control code access. Only impersonation protection and operator actions stay restricted (P34). |
-| D16 | **Team, project, and user are separate identifiers.** A project is a catalog entry, not a repository. The central `catalog.json` owns the taxonomy, including team hierarchy through `parent`. A branch is context, never identity (P33). |
-| D17 | **Channel events route through `channels.json`.** Each ingress source maps to a team, a project, a responder, and a reply identity. An unrouted or ambiguous event is rejected, never guessed. |
+| D16 | **The catalog uses the full Backstage entity model.** Component (one repository or subtree) sits in a System (one project), which sits in a Domain (a business area). A Group owns each entity, with `parent` for subteams. Ownership stays separate from grouping, so a reorganization edits one `owner` field. A branch is context, never identity (P33). |
+| D17 | **Channel events route through `channels.yaml`.** Each ingress source maps to a team, a project, a responder, and a reply identity. An unrouted or ambiguous event is rejected, never guessed. |
 | D18 | **Phase 1 ships a minimal reference responder.** The success criteria need a working reply path. The reference responder claims tasks, heartbeats with its fence, submits effects, and proposes memory. It stays a reference, and any runtime may replace it. |
 | D19 | **Embeddings use the Chroma built-in default** (`all-MiniLM-L6-v2`, 384 dimensions, cosine distance). No second model service, no extra container, no GPU. Chroma persists the embedding function in the collection configuration, so every deployment stays consistent. Each collection still records the provider, the model, the dimension, the distance function, and a schema version, because a later model change needs a full re-embed. |
-| D20 | **The catalog model follows Backstage.** The central `catalog.json` defines teams and projects. Each repository declares its membership in `.agentframe/catalog.json`, or in an existing Backstage `catalog-info.yaml`. Agentframe never infers ownership from a Git remote or a directory name. An undeclared repository gets no project scope, and an unknown project value is a hard error. Teams therefore choose their own granularity by file placement. |
+| D20 | **Catalog files use Backstage YAML.** The central `catalog.yaml` holds Domain, System, and Group entities. Each repository declares its components in `catalog-info.yaml`, or in `.agentframe/catalog.yaml` with the identical schema. An organization already running Backstage points agentframe at its existing files. Agentframe never infers from a Git remote. An undeclared repository gets no system scope, and an unknown value is a hard error. |
+| D21 | **Memory scopes follow the catalog: `system`, `domain`, `org`.** Agents write only to the system of their component. Humans publish to the domain and organization scopes. A search reads system, then domain, then organization. Component level is not a scope, so the components of one system share one memory space. |
 
 ### Why D9 and D10 matter
 
@@ -132,7 +133,7 @@ support that without a change (see the compose section).
   LOCAL (per engineer workstation)      SHARED (deployed one time)
  ┌──────────────────────────────┐      ┌────────────────────────────┐
  │  Agent (any runtime)         │      │  registry (+ tool_catalog) │
- │      │ MCP_HUB_URL           │◄─────│  registry.json — NO secrets│
+ │      │ MCP_HUB_URL           │◄─────│  registry.yaml — NO secrets│
  │      ▼                       │ pull └────────────────────────────┘
  │  mcp-hub :9000               │      ┌────────────────────────────┐
  │  + engineer credentials      │─────▶│  memory-worker :3011       │
@@ -298,12 +299,12 @@ serves both.
 
 | File | Answers | Shared | Secrets |
 |---|---|---|---|
-| `registry.json` | Which upstreams exist, and how to reach and authenticate each one | Yes | No. It names each credential only. |
-| `tool_catalog.json` | When to use each family, and what to avoid | Yes | No |
+| `registry.yaml` | Which upstreams exist, and how to reach and authenticate each one | Yes | No. It names each credential only. |
+| `tool_catalog.yaml` | When to use each family, and what to avoid | Yes | No |
 
 The startup sequence:
 
-1. The hub pulls `registry.json` from `MCP_HUB_CONFIG_URL`.
+1. The hub pulls `registry.yaml` from `MCP_HUB_CONFIG_URL`.
 2. The hub resolves each credential locally. It skips any upstream with
    a missing credential.
 3. The hub connects to each remaining upstream. It caches the tool
@@ -313,7 +314,7 @@ The startup sequence:
 
 At run time the agent calls `search` for a capability. The hub answers
 from its cached schemas. The agent calls `recommend_tool_families` for
-routing advice. The hub answers from `tool_catalog.json`.
+routing advice. The hub answers from `tool_catalog.yaml`.
 
 The team therefore curates both the upstream list **and** the routing
 advice one time. Each engineer receives both. The remote origin of the
@@ -350,11 +351,11 @@ agentframe/
 │   ├── responder/               # Minimal reference responder (D18)
 │   └── coordination/            # Task board (Ph. 1) + collab (Ph. 2)
 ├── central/                     # Operator-maintained, versioned
-│   ├── users.json               # username → tokenHash, teams
-│   ├── catalog.json             # teams (+parent), projects, ownership
-│   ├── channels.json            # ingress source → team, project, responder
-│   ├── registry.base.json
-│   └── registry.team.<team>.json
+│   ├── users.yaml               # username → tokenHash, teams
+│   ├── catalog.yaml             # teams (+parent), projects, ownership
+│   ├── channels.yaml            # ingress source → team, project, responder
+│   ├── registry.base.yaml
+│   └── registry.team.<team>.yaml
 ├── packages/
 │   └── types/                   # Shared types (ChannelEvent, MemoryProvider, JobSpec, ...)
 ├── provisioning/
@@ -368,8 +369,8 @@ agentframe/
 │   └── starter/                 # Scaffold for new projects
 │       ├── agent/               # Skeleton agent (connects to hub)
 │       ├── responder/           # Skeleton shared responder agent
-│       ├── registry.json        # Empty upstream registry with examples
-│       ├── tool_catalog.json    # Empty routing guide with one example family
+│       ├── registry.yaml        # Empty upstream registry with examples
+│       ├── tool_catalog.yaml    # Empty routing guide with one example family
 │       └── docker-compose.override.yml
 ├── models/                      # GGUF cache (gitignored, documented)
 ├── docker-compose.yml           # Both profiles: local and shared
@@ -400,13 +401,13 @@ services:
       MCP_HUB_PORT: 9000
       MCP_HUB_BEARER_TOKEN: ${MCP_HUB_BEARER_TOKEN}
       MCP_HUB_CONFIG_URL: ${REGISTRY_URL:-}          # shared registry
-      MCP_HUB_CONFIG_PATH: /config/registry.json     # fallback
+      MCP_HUB_CONFIG_PATH: /config/registry.yaml     # fallback
       # Upstream credentials arrive as env vars named by the registry.
       # They stay on this machine.
     env_file:
       - .env.credentials       # gitignored, per engineer
     volumes:
-      - ./registry.json:/config/registry.json:ro
+      - ./registry.yaml:/config/registry.yaml:ro
     ports: ["9000:9000"]
 
   # ── shared profile: deployed one time for the team ────────────────
@@ -470,7 +471,7 @@ Start commands:
 * One solo engineer: `docker compose --profile local --profile shared up`
 
 There are no vendor-specific services. Users add upstreams to
-`registry.json`. Users extend the stack with
+`registry.yaml`. Users extend the stack with
 `docker-compose.override.yml`.
 
 ---
@@ -498,8 +499,8 @@ Teams need different upstreams. Compose the registry instead of writing
 one file per team:
 
 ```
-registry.base.json      → memory, coordination, org-wide tools (all teams)
-registry.<team>.json    → the upstreams of one team
+registry.base.yaml      → memory, coordination, org-wide tools (all teams)
+registry.team.<team>.yaml → the upstreams of one team
 ```
 
 The workstation never selects a team. Every hub pulls **one identical
@@ -511,13 +512,13 @@ Authorization: Bearer <user token>
 ```
 
 The request carries the user token of the engineer. The shared layer
-resolves the token through `users.json`, finds the teams of that
-engineer, and returns `registry.base.json` merged with each
-`registry.team.<team>.json`. A team layer wins over the base layer for
+resolves the token through `users.yaml`, finds the teams of that
+engineer, and returns `registry.base.yaml` merged with each
+`registry.team.<team>.yaml`. A team layer wins over the base layer for
 the same namespace. The validation command prints the effective
 registry.
 
-Team membership therefore lives in **one place**: `users.json`. Move an
+Team membership therefore lives in **one place**: `users.yaml`. Move an
 engineer to a different team there, and the next registry refresh
 delivers the new tool set. No workstation config changes.
 
@@ -525,7 +526,7 @@ The registry selects **which upstreams appear**, for relevance. It is
 not a permission gate: local credentials decide which upstream actually
 works for one engineer (D15).
 
-The manager curates `registry.base.json` one time. Each team lead
+The manager curates `registry.base.yaml` one time. Each team lead
 curates one team file. No engineer edits a registry.
 
 ### Onboarding An Engineer
@@ -539,11 +540,11 @@ The workstation needs exactly two values:
 
 One user token authenticates the engineer to every shared service: the
 registry endpoint, the memory worker, and coordination. Each service
-derives the identity and the teams from `users.json`. Upstream MCP
+derives the identity and the teams from `users.yaml`. Upstream MCP
 credentials stay separate and arrive per upstream (D10).
 
 Onboarding and offboarding are one operator procedure: edit
-`users.json` and `catalog.json`, issue or revoke one token, and run the
+`users.yaml` and `catalog.yaml`, issue or revoke one token, and run the
 validation command.
 
 ### Cross-Team Knowledge
@@ -609,10 +610,10 @@ design already covers this case. It costs **no new code**.
 
 | Concern | How the design covers it | Cost |
 |---|---|---|
-| Tool access | Serve the agency its own composed registry, `registry.agency-<name>.json`. | None. This is the layered registry. |
+| Tool access | Serve the agency its own composed registry, `registry.team.<name>.yaml`. | None. This is the layered registry. |
 | Credentials | Credentials already stay on each workstation (D9). The shared layer never held them. | None |
 | Memory isolation | Deploy a second shared layer for the agency. | One more deployment. Zero code. |
-| Collaboration | Coordination scopes by `projectKey`. An agency on other repositories stays invisible. | None |
+| Collaboration | The agency uses its own catalog, so its systems and domains stay separate. | None |
 
 Deploy a second shared layer for each external party. Full isolation
 then follows from the deployment, not from a permission model.
@@ -628,11 +629,11 @@ Agentframe does not build it. Choose the second deployment instead.
 ## Success Criteria
 
 1. Both profiles start a working stack on one machine. The required
-   inputs are an empty `registry.json` and the generated service bearer
+   inputs are an empty `registry.yaml` and the generated service bearer
    tokens (D7). Channel connectors need their provider secrets, and
    stay optional. The extractor runs on a CPU without a model
    pre-download step.
-2. A user adds an upstream to `registry.json` and restarts the hub. The
+2. A user adds an upstream to `registry.yaml` and restarts the hub. The
    new tools appear in `list_available_mcps`.
 3. A `POST /memory/proposals` with a fact reaches Chroma after the
    extraction pipeline runs. This works with the bundled llama.cpp
