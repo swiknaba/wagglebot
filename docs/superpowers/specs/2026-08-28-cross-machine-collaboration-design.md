@@ -45,13 +45,17 @@ repository. Repository write access is the only permission system.
   { "username": "alice", "tokenHash": "...", "teams": ["payments"] }
 ] }
 
-// teams.json
-{ "teams": [
-  { "team": "payments", "manager": "bob", "projects": ["payments-platform"] }
-] }
+// catalog.json — teams (with hierarchy) and projects, Backstage style
+{ "teams":    [ { "team": "payments", "parent": "platform-group", "manager": "bob" } ],
+  "projects": [ { "project": "payments-platform", "owner": "payments" } ] }
 
 // channels.json  — see the routing section
 ```
+
+Each repository declares its own membership in
+`.agentframe/catalog.json`, or in an existing Backstage
+`catalog-info.yaml`. See the
+[service contracts](2026-08-28-service-contracts.md) scope model.
 
 Rules:
 
@@ -60,8 +64,9 @@ Rules:
    token, never from a request field. This prevents impersonation and
    gives correct attribution.
 2. `username` is the company Git username, in lowercase.
-3. A service reads teams from `users.json`. Team values select defaults
-   and routes. They never deny an operation between registered users.
+3. A service reads teams from `users.json`, and the hierarchy from
+   `catalog.json`. Team values select defaults and routes. They never
+   deny an operation between registered users.
 4. An agent registers under its user. A second registration with the
    same `agentId` and a different user is rejected.
 5. Operator actions need the operator token.
@@ -83,16 +88,17 @@ declares projects, and never derives them from a Git remote.
 
 | Identifier | Source | Purpose |
 |---|---|---|
-| `team` | `teams.json` | Routing, registry selection, ownership |
-| `projectKey` | The nearest `.agentframe/project.json`, else the normalized Git remote | Working context, memory relevance |
+| `team` | `catalog.json`, with `parent` for subteams | Routing, registry selection, ownership |
+| `projectKey` | The closest enclosing `.agentframe/catalog.json`. No inference. | Working context, memory relevance |
 | `username` | `users.json` | Attribution, direct messages |
 | `agentId` | Generated per agent process | Presence, claims |
 
-`teams.json` lists the projects that each team owns.
-`.agentframe/project.json` maps a subtree to one of those projects, and
-the nearest declaration wins. A team therefore selects its own
-granularity, and the declaration survives a rename or a move. A branch
-is context, never identity.
+The central `catalog.json` lists the teams and the projects, in the
+Backstage style. Each repository declares its membership in
+`.agentframe/catalog.json`, or in an existing Backstage
+`catalog-info.yaml`. A team therefore selects its own granularity by
+file placement, and the declaration survives a rename or a move. A
+branch is context, never identity.
 
 ## Connecting To A Person
 
@@ -124,10 +130,10 @@ Each agent registers with a **workspace identity**:
   heartbeatAt }
 ```
 
-- `projectKey` = the project declared by the nearest
-  `.agentframe/project.json`, walking up from the working directory.
-  Repositories that declare the same value share one project. The
-  normalized Git remote is the fallback when no file exists (D20).
+- `projectKey` = the project declared by the closest enclosing
+  `.agentframe/catalog.json`. Repositories that declare the same value
+  share one project. An undeclared repository has no `projectKey`, and
+  agentframe never infers one (D20).
 - `branch` = the current git branch. Each heartbeat refreshes the
   branch. The agent therefore follows its human across checkouts.
 

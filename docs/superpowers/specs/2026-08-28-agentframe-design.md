@@ -76,11 +76,11 @@ and deploy. No team must fork the internals of a different company.
 | D13 | **Every executable dependency is pinned.** `stdio_npx` packages carry exact versions, container images pin digests, and `skills.list` pins revisions. Nothing installs `latest`. |
 | D14 | **The task board core ships in Phase 1.** Queue, claim, lease, and fence move forward, because default ingress delivery depends on them. Presence, messaging, and cross-machine collaboration stay Phase 2. |
 | D15 | **Trusted coworkers.** Every registered engineer is trusted. Identity serves routing, context, and attribution. Teams and scopes never deny an operation between registered users. Git and the company identity provider control code access. Only impersonation protection and operator actions stay restricted (P34). |
-| D16 | **Team, project, and user are separate identifiers.** A project is a declared name, not a repository. `teams.json` lists the projects a team owns. `.agentframe/project.json` maps a subtree to a project, and the nearest declaration wins. A branch is context, never identity (P33). |
+| D16 | **Team, project, and user are separate identifiers.** A project is a catalog entry, not a repository. The central `catalog.json` owns the taxonomy, including team hierarchy through `parent`. A branch is context, never identity (P33). |
 | D17 | **Channel events route through `channels.json`.** Each ingress source maps to a team, a project, a responder, and a reply identity. An unrouted or ambiguous event is rejected, never guessed. |
 | D18 | **Phase 1 ships a minimal reference responder.** The success criteria need a working reply path. The reference responder claims tasks, heartbeats with its fence, submits effects, and proposes memory. It stays a reference, and any runtime may replace it. |
 | D19 | **Embeddings use the Chroma built-in default** (`all-MiniLM-L6-v2`, 384 dimensions, cosine distance). No second model service, no extra container, no GPU. Chroma persists the embedding function in the collection configuration, so every deployment stays consistent. Each collection still records the provider, the model, the dimension, the distance function, and a schema version, because a later model change needs a full re-embed. |
-| D20 | **Memory spaces are declared, never derived from repository layout.** Agentframe assumes no repository structure. Each team declares the projects it owns in `teams.json`. Each repository, or each subtree of a repository, declares its project in `.agentframe/project.json`. The nearest declaration wins. Teams therefore choose their own granularity: one space for a whole monorepository, one space across many service repositories, or several spaces inside one repository. |
+| D20 | **The catalog model follows Backstage.** The central `catalog.json` defines teams and projects. Each repository declares its membership in `.agentframe/catalog.json`, or in an existing Backstage `catalog-info.yaml`. Agentframe never infers ownership from a Git remote or a directory name. An undeclared repository gets no project scope, and an unknown project value is a hard error. Teams therefore choose their own granularity by file placement. |
 
 ### Why D9 and D10 matter
 
@@ -351,7 +351,7 @@ agentframe/
 │   └── coordination/            # Task board (Ph. 1) + collab (Ph. 2)
 ├── central/                     # Operator-maintained, versioned
 │   ├── users.json               # username → tokenHash, teams
-│   ├── teams.json               # team → manager, projects
+│   ├── catalog.json             # teams (+parent), projects, ownership
 │   ├── channels.json            # ingress source → team, project, responder
 │   ├── registry.base.json
 │   └── registry.team.<team>.json
@@ -543,7 +543,7 @@ derives the identity and the teams from `users.json`. Upstream MCP
 credentials stay separate and arrive per upstream (D10).
 
 Onboarding and offboarding are one operator procedure: edit
-`users.json` and `teams.json`, issue or revoke one token, and run the
+`users.json` and `catalog.json`, issue or revoke one token, and run the
 validation command.
 
 ### Cross-Team Knowledge

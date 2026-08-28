@@ -370,50 +370,72 @@ outside the deployment **additionally** requires the explicit flag
 | `project:<projectKey>` | Agents, through `propose_memory` | Everyone working in that project |
 | `org` | Humans, through a published file | Every team |
 
-**A project is a declared name, never a repository (D20).** Agentframe
-assumes no repository layout. One team runs a monorepository. Another
-team spreads one project across many service repositories. A third team
-owns several projects. All three must work, so the design derives
-nothing from the repository shape.
+**A project is a catalog entry, never a repository (D20).** The model
+follows [Backstage](https://backstage.io): the central catalog owns the
+taxonomy, and each repository declares where it belongs. Agentframe
+never infers ownership from a Git remote, a directory name, or any
+repository shape.
 
-Two declarations do the whole job:
-
-```json
-// central: teams.json — which projects a team owns
-{ "teams": [
-  { "team": "payments", "manager": "bob",
-    "projects": ["payments-platform"] },
-  { "team": "platform", "manager": "carol",
-    "projects": ["platform-infra", "platform-devex"] }
-] }
-```
+**The central catalog** holds the taxonomy. Managers maintain it in the
+central repository:
 
 ```json
-// local: .agentframe/project.json — which project a subtree belongs to
-{ "project": "payments-platform" }
+// catalog.json
+{
+  "teams": [
+    { "team": "payments",       "parent": "platform-group", "manager": "bob" },
+    { "team": "payments-core",  "parent": "payments" },
+    { "team": "platform-devex", "parent": "platform-group", "manager": "carol" }
+  ],
+  "projects": [
+    { "project": "payments-platform", "owner": "payments" },
+    { "project": "developer-tooling", "owner": "platform-devex" }
+  ]
+}
 ```
 
-Resolution for `projectKey`:
+`parent` gives the team hierarchy, so a manager group can hold several
+teams and subteams.
 
-1. Walk up from the working directory of the agent. The **nearest**
-   `.agentframe/project.json` wins.
-2. The normalized Git remote URL, when no declaration exists. This
-   fallback keeps an unconfigured repository working.
+**Each repository declares its membership.** One file per unit of
+ownership:
 
-That rule covers every layout, because the declaration lives wherever
-the team puts it:
+```json
+// .agentframe/catalog.json
+{ "component": "pay-api", "project": "payments-platform" }
+```
 
-| Team layout | Where the file goes | Result |
+Resolution:
+
+1. The declaration file is **authoritative**. Its directory is the root
+   of that component. In a repository with several components, place one
+   file per component subtree, and the closest enclosing file applies.
+2. **There is no inference fallback.** A repository without a
+   declaration has no project context.
+3. A `project` value that the catalog does not list is a **hard error**.
+   The message names the file and the unknown value. A typo therefore
+   fails loudly, instead of creating an orphan memory space.
+
+**Without a declaration**, the agent still runs. It gets no project
+memory scope. `memory_search` then covers the `org` scope only, and
+`propose_memory` returns a clear instruction to add the file. The agent
+never invents a scope name, so nothing silently writes to a space that
+no search covers.
+
+That model covers every layout, because placement is a team decision:
+
+| Team layout | File placement | Result |
 |---|---|---|
 | One monorepository, one project | Repository root | One memory space |
-| Many service repositories, one project | Root of each repository, same `project` value | One shared memory space |
-| One monorepository, several projects | One file per subtree | One space per subtree |
-| Several repositories, several projects | Root of each repository, different values | One space per project |
+| Many repositories, one project | Each repository root, same `project` | One shared memory space |
+| One monorepository, several projects | One file per component subtree | One space per project |
+| Several repositories, several projects | Each root, different `project` | One space per project |
 
-The memory worker rejects a `project` value that no team declares in
-`teams.json`. A typo would otherwise create an orphan memory space that
-nobody searches. The rejection is a correctness guard, not a permission
-check (D15).
+**Backstage compatibility.** When a repository already carries a
+`catalog-info.yaml`, the loader reads it instead, and maps
+`spec.system` to the project and `spec.owner` to the team. Teams that
+run Backstage therefore add no second ownership file. A
+`.agentframe/catalog.json` wins when both exist.
 
 Rules:
 
@@ -620,5 +642,6 @@ is stable. The decisions in the main spec reference these.
 | P30 | A claim lease sold as exactly-once. A responder can finish after lease expiry, and a second responder replies again. | At-least-once contract: fencing tokens on claim/heartbeat/completion, idempotency keys on external effects. |
 | P31 | Unpinned executable dependencies: `npx` latest, `:latest` images, unpinned skills. The next publish executes on every workstation. | Exact versions everywhere: `stdio_npx` requires `pkg@x.y.z`, images pin digests, `skills.list` pins revisions. |
 | P32 | Upstream tool descriptions treated as trusted text. They reach the model, so a hostile upstream can attempt prompt injection. | Size caps, control-character stripping, provenance tags. The routing catalog stays first-party. |
-| P33 | Any assumption about repository layout. A repo-per-project rule fragments a microservice team. A repo-as-project rule breaks a monorepository team, and a team that owns several projects. | Declare, never derive. `teams.json` lists the projects of a team. `.agentframe/project.json` maps a subtree to a project, nearest declaration wins (D20). |
+| P33 | Any assumption about repository layout, and any inference from a Git remote. A repo-per-project rule fragments a microservice team. A repo-as-project rule breaks a monorepository team. | Declare, never derive, in the Backstage style. The central `catalog.json` owns the taxonomy. Each repository declares membership. No inference fallback exists (D20). |
 | P34 | A scope treated as a security boundary in a trusted-coworker deployment. It creates false confidence and blocks normal cross-team work. | Scopes select defaults and relevance. Git and the identity provider control code access. |
+| P35 | A silent fallback that invents an identifier, for example a project name derived from a Git remote. It contradicts catalog validation, and it writes facts into a space that no search covers. | No inference fallback. A missing declaration gives no project scope, and says so. An unknown value fails loudly. |
