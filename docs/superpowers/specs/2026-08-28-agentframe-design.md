@@ -216,7 +216,9 @@ agentframe/
 │   ├── skills.list              # Curated skill packages
 │   ├── bin/install-skills
 │   ├── bin/sync-agents
-│   └── templates/AGENTS.base.md # Shared agent base template
+│   └── templates/
+│       ├── AGENTS.base.md       # Shared agent base template
+│       └── hooks/               # Per-harness hook fragments
 ├── templates/
 │   └── starter/                 # Scaffold for new projects
 │       ├── agent/               # Skeleton agent (connects to hub + memory)

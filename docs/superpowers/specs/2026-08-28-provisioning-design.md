@@ -127,6 +127,12 @@ Answer directly. Do not restate the request.
 Do not add praise, generic introductions, repeated conclusions, or unnecessary notes.
 Before delivery, silently check the applicable sentence lengths, terminology, verb forms, and prohibited forms.
 Claim full STE compliance only after a validator checks the vocabulary against the Issue 9 dictionary.
+
+COMPLIANCE TARGET
+
+Aim for 80 percent pragmatic compliance, so output is in good shape by human standards.
+Give priority to sentence length, active voice, and the prohibited forms.
+Re-read these rules before you write or revise a documentation file.
 ```
 
 ### Distribution
@@ -146,6 +152,27 @@ every agent harness location. One file then governs all agents:
 Behavior: create missing directories. Diff before copy, and report
 `synced` or `already ok`. Apply `chmod 600`. Print summary counts. Exit
 non-zero on failure. The target list lives in one place: the script.
+
+## Harness Hooks
+
+Base instructions lose salience in long agent sessions. A hook
+re-injects the writing rules at edit time, at the moment they apply.
+Hooks are harness-specific, so the mechanism mirrors the template
+distribution: one fragment per harness, one sync script, per-harness
+adapters.
+
+- `provisioning/templates/hooks/<harness>.json` — the hook fragments.
+  The seed fragment reminds the agent of the STE rules on each Markdown
+  write.
+- `sync-agents` merges each fragment into its harness config. The
+  Claude Code adapter merges `hooks/claude-code.json` into
+  `~/.claude/settings.json` with `jq` and preserves the other keys.
+  This tooling owns the `hooks` key of each target file.
+- Harnesses without hook support get the rules only through the base
+  template. Add an adapter when a harness gains hook support.
+
+NOTE: The base template is the portable layer and reaches every
+harness. Hooks are a per-harness reinforcement, not a replacement.
 
 ## Local LLM Provisioning
 
@@ -167,3 +194,6 @@ to point `EXTRACTOR_API_BASE` at an existing local server (llama.cpp
    synced, already-ok, and failed counts.
 3. Edit `AGENTS.base.md` and run `sync-agents` again. Every target then
    has the new content.
+4. `sync-agents` merges the hook fragments into each supported harness
+   config and preserves the other keys. A second run reports the hooks
+   as already installed.
