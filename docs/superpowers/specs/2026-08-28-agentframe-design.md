@@ -482,14 +482,39 @@ registry.base.json      → memory, coordination, org-wide tools (all teams)
 registry.<team>.json    → the upstreams of one team
 ```
 
-The shared layer serves one composed file for each team:
+The workstation never selects a team. Every hub pulls **one identical
+URL**, and the shared layer composes the response from the principal:
 
 ```
-MCP_HUB_CONFIG_URL=https://shared.internal/registry/team-payments.json
+MCP_HUB_CONFIG_URL=https://shared.internal/registry
+Authorization: Bearer <principal token>
 ```
+
+The request carries the principal token of the engineer. The shared
+layer resolves the token through `principals.json`, finds the teams of
+that engineer, and returns `base + team files`, composed.
+
+Team membership therefore lives in **one place**: `principals.json`.
+Move an engineer to a different team there, and the next registry
+refresh delivers the new tool set. No workstation config changes.
 
 The manager curates `registry.base.json` one time. Each team lead
 curates one team file. No engineer edits a registry.
+
+### Onboarding An Engineer
+
+The workstation needs exactly two values:
+
+1. The shared layer URL (one value for the whole company, part of the
+   provisioning defaults).
+2. The **principal token** of the engineer, from the administrator,
+   into the gitignored `.env.credentials` file.
+
+One principal token authenticates the engineer to every shared service:
+the registry endpoint, the memory worker, and coordination. Each service
+derives the identity, the teams, and the allowed scopes from
+`principals.json`. Upstream MCP credentials stay separate and arrive
+per upstream (D10).
 
 ### Cross-Team Knowledge
 

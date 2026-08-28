@@ -28,8 +28,10 @@ The shared layer holds one file, `principals.json`:
 
 Rules:
 
-1. The administrator issues one coordination token per engineer. The
-   token binds to one username. The service derives the principal from
+1. The administrator issues one **principal token** per engineer. The
+   token binds to one username. The same token authenticates the
+   engineer to every shared service: coordination, the memory worker,
+   and the registry endpoint. Each service derives the principal from
    the token, never from a request field.
 2. The service derives the allowed projects from the teams of the
    principal. It rejects a `projectKey` outside that set.
