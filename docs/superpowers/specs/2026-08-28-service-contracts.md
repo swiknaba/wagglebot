@@ -31,11 +31,18 @@
 
 ## C2. MCP Hub contract
 
-**Proxy config shape:**
+**Proxy config shape** (an entry of `registry.json`):
 
-```
-ProxyConfig { namespace, mode, endpoint?, command?, args[], env{}, bearer_token? }
-mode ∈ remote_http | remote_sse | stdio_npx | stdio_cmd
+```typescript
+type ProxyConfig = {
+  namespace: string;
+  mode: "remote_http" | "remote_sse" | "stdio_npx" | "stdio_cmd";
+  endpoint?: string;
+  command?: string;
+  args?: string[];
+  env?: Record<string, string>;
+  auth?: { scheme: AuthScheme; source: CredentialSource };
+};
 ```
 
 - `stdio_npx` is sugar for `command="npx", args=("-y", package, *args)`.
@@ -46,13 +53,73 @@ mode ∈ remote_http | remote_sse | stdio_npx | stdio_cmd
   When the host injects credentials via env, list them explicitly per
   proxy.
 
+**Auth scheme and credential source are separate axes (D10).** The
+scheme states how to present a credential. The source states where the
+hub finds the value. The shared registry carries both, but never a
+value.
+
+```typescript
+type AuthScheme =
+  | { kind: "none" }
+  | { kind: "bearer" }                                 // Authorization: Bearer <cred>
+  | { kind: "header"; name: string; prefix?: string }  // X-Api-Key: <cred>
+  | { kind: "basic"; username: string }                // cred = the password
+  | { kind: "env"; map: Record<string, string> };      // stdio only
+
+type CredentialSource =
+  | { from: "env"; var: string }        // the normal case
+  | { from: "file"; path: string }      // a mounted secret file
+  | { from: "literal"; value: string }; // development only, never shared
+```
+
+Example registry entry. It contains no secret:
+
+```json
+{
+  "namespace": "example",
+  "mode": "remote_http",
+  "endpoint": "https://mcp.example.com/mcp",
+  "auth": {
+    "scheme": { "kind": "bearer" },
+    "source": { "from": "env", "var": "EXAMPLE_TOKEN" }
+  }
+}
+```
+
+**Resolution rules:**
+
+1. Resolve each credential at registration time, on the workstation.
+2. Skip a namespace when its credential is absent. Log one clear line.
+   Set the namespace status to `error` with a `credential_missing`
+   reason. Never abort startup for a missing credential.
+3. Never write a resolved value to a log. Log the 12-char fingerprint.
+4. Reject a `literal` source when the config came from
+   `MCP_HUB_CONFIG_URL`. A shared registry must never carry a secret.
+
+**Stdio credentials use the environment, not OAuth.** The MCP
+specification states this directly:
+
+> Implementations using an STDIO transport **SHOULD NOT** follow this
+> specification, and instead retrieve credentials from the environment.
+
+Use `{ kind: "env", map: { GITHUB_TOKEN: "$SOURCE" } }` for stdio
+upstreams. The hub resolves the source and injects the value into the
+subprocess environment.
+
+**A team-wide token needs no new mechanism.** A team token and a
+personal token both resolve from an environment variable. Only the
+distribution differs. The provisioning tooling distributes the team
+token to each workstation.
+
 **Env surface:**
 
 | Env | Default |
 |---|---|
 | `MCP_HUB_HOST` / `MCP_HUB_PORT` | `0.0.0.0` / `9000` |
 | `MCP_HUB_BEARER_TOKEN` | — (required when exposed, D7) |
-| `MCP_HUB_CONFIG_PATH` | — (required) |
+| `MCP_HUB_CONFIG_PATH` | — (required unless `MCP_HUB_CONFIG_URL` is set) |
+| `MCP_HUB_CONFIG_URL` | — (the shared registry; wins over the path) |
+| `MCP_HUB_CONFIG_REFRESH_SECONDS` | 900 (0 disables the re-pull) |
 | `MCP_HUB_LOG_LEVEL`, `MCP_HUB_DEBUG_HTTP`, `MCP_HUB_DEBUG_MCP` | info / 0 / 0 |
 | `MCP_HUB_STARTUP_STRICT` | 0 |
 | `MCP_HUB_LIST_TOOLS_CACHE_TTL_SECONDS` | 30 |
@@ -245,6 +312,20 @@ conversation (P13).
 **Graceful degradation:** the agent-side hub connection helper returns
 zero tools when `MCP_HUB_URL` is unset. The agent still boots.
 
+**Delivery and the responder (D11).** Ingress posts each `ChannelEvent`
+to the coordination task board. One responder claims the task. The claim
+lease gives exactly one responder per event.
+
+| Rule | Reason |
+|---|---|
+| Memory is never the event transport | The extractor drops transcripts and runs for up to 120 s. Memory stores facts, not work items (P26). |
+| The shared responder handles team channels | A workstation sleeps. Several workstations race. Bot tokens must not spread (D9). |
+| The responder replies with a channel-bound tool | The `conversationKey` names the thread. The tool refuses an unparsable key. |
+| The responder proposes memory as a side effect | Durable facts still reach memory through the normal path. |
+
+The direct-callback mode (`INGRESS_CALLBACK_URL`) stays available for a
+solo engineer. That mode gives no claim semantics.
+
 ## C5. Delegated-job vocabulary
 
 The task board (collaboration spec) uses this type vocabulary. It does
@@ -304,3 +385,7 @@ is stable. The decisions in the main spec reference these.
 | P22 | Stdio subprocesses inherit the full parent env | Explicit env allow-list per proxy |
 | P23 | A required host directory that is gitignored and undocumented | `./models` documented in README + compose comments |
 | P24 | Model ids duplicated across files | Single source in compose/env |
+| P25 | A shared hub forwards the caller token to an upstream. The MCP specification forbids this, and it is the confused-deputy attack. | The hub runs local (D9). It strips the inbound `Authorization` header and injects its own resolved credential. |
+| P26 | Channel events routed through the memory pipeline. The extractor drops them, adds up to 120 s of latency, and offers no claim semantics. | Ingress posts to the coordination task board (D11). Memory receives facts only. |
+| P27 | A secret committed to the shared registry | The registry declares credential *references* only. The hub rejects a `literal` source from a URL-loaded registry. |
+| P28 | Two names for two different files, both called "catalog" | `registry.json` lists upstreams. `tool_catalog.json` gives routing advice. |

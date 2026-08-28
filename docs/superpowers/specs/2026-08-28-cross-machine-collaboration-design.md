@@ -52,10 +52,26 @@ have access to (`GET /channels/:key/log`). The humans stay in the loop.
 | **Task board** | FIFO + optional integer priority (order `priority DESC, created_at ASC`). Each claim carries a lease with a heartbeat. A task returns to the board when its claimer stops (for example, a laptop sleeps) (D5). The task shape uses `JobSpec`/`JobResult` from the [service contracts §C5](2026-08-28-service-contracts.md#c5-delegated-job-vocabulary). Each task is scoped to a `projectKey`, and optionally a branch. |
 | **Shared memory** | All participating agents point at the same memory-worker + Chroma. `scopeIds` carry the `projectKey`. Shared memory is therefore project-scoped by construction. |
 
-**Exposure:** the coordination service is itself an MCP server. The hub
-registers it via `config.json` (D4). Agents gain these
+**Exposure:** the coordination service is itself an MCP server. Each
+local hub registers it via `registry.json` (D4). Agents gain these
 `coordination_*` tools: `list_agents`, `send_message`, `read_channel`,
 `post_task`, `claim_task`, `complete_task`.
+
+## The Task Board Also Serves Ingress
+
+The ingress service posts each `ChannelEvent` to this task board (D11).
+A channel event and a delegated job therefore share one queue and one
+claim mechanism.
+
+| Task source | Scope | Default claimer |
+|---|---|---|
+| Ingress channel event | The project of the channel | The shared responder agent |
+| Agent-to-agent handoff | `projectKey` and branch | Any eligible local agent |
+
+The shared responder agent claims team-facing events, because it stays
+on and holds the bot tokens. A local agent may claim events routed to
+its own engineer. The claim lease prevents two agents from answering one
+Slack mention.
 
 ## Networking
 

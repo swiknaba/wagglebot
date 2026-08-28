@@ -32,7 +32,7 @@ Agentframe uses two layers.
 
 **Shared, deployed one time for the team:**
 
-* The upstream catalog. It lists the MCP servers. It names each
+* The upstream registry. It lists the MCP servers. It names each
   credential, but it stores no secret.
 * Durable memory for the whole team.
 * Agent collaboration, scoped by project and branch.
@@ -44,9 +44,9 @@ server. Central curation therefore needs no central trust.
 
 | Component | Purpose |
 |---|---|
-| MCP hub | One endpoint for every tool server. Add an upstream in the catalog, not in code. |
+| MCP hub | One endpoint for every tool server. Add an upstream in the registry, not in code. |
 | Memory | Agents propose facts. A local LLM extracts them. The team searches them later. |
-| Ingress | Slack, GitHub, and webhook events reach your agent in one common format. |
+| Ingress | Slack, GitHub, and webhook events become tasks. One agent claims each task and replies. |
 | Collaboration | Two agents on the same project and branch exchange findings and hand off tasks. |
 | Provisioning | One command installs the curated skills and writes the base prompt to each harness. |
 
