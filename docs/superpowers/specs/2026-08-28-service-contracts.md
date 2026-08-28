@@ -400,7 +400,8 @@ zero tools when `MCP_HUB_URL` is unset. The agent still boots.
 
 **Delivery and the responder (D11).** Ingress posts each `ChannelEvent`
 to the coordination task board. One responder claims the task. The claim
-lease gives exactly one responder per event.
+lease gives one live claim at a time. Delivery is at-least-once, so
+every external effect deduplicates on its idempotency key (P30).
 
 | Rule | Reason |
 |---|---|
