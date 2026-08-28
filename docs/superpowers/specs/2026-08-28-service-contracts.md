@@ -272,6 +272,35 @@ documented, so runtimes can add richer sources later (P14).
 The worker injects it verbatim into the extraction prompt. That is the
 full format.
 
+**Scope model — exactly two scopes.** Resist a third.
+
+| Scope | Written by | Default visibility |
+|---|---|---|
+| `project:<projectKey>` | Agents, through `propose_memory` | The team of that project |
+| `org` | Humans, through a published file | Every team |
+
+Rules:
+
+1. A `memory_search` covers the caller own project scope plus `org`.
+2. An agent never writes to the `org` scope. Agents propose to their
+   own project scope only.
+3. One team never reads the project scope of another team.
+4. `projectKey` uses the normalized git remote URL, as the
+   [collaboration spec](2026-08-28-cross-machine-collaboration-design.md)
+   defines it.
+
+**Publication into the `org` scope.** Each team repository holds one
+file, `.agentframe/public.md`. An ingestion job reads each file and
+upserts its content into the `org` scope, with the source
+`team:<projectKey>`.
+
+* The file states a contract, not a history.
+* A pull request reviews each change.
+* Re-ingestion replaces the previous records of that source. The team
+  therefore controls deletion by editing the file.
+* Publication skips the LLM extractor. The team already wrote the
+  facts, so extraction would only add loss.
+
 ## C4. Channel wiring contract
 
 **The architectural spine:**

@@ -70,7 +70,7 @@ and deploy. No team must fork the internals of a different company.
 | D7 | **Auth is fail-closed everywhere.** Each service requires a bearer token when one is configured. A network-exposed service refuses to start without one. One env name pattern applies: `<SERVICE>_BEARER_TOKEN` on the server, and the same name on clients (guards P2, P3, P11). |
 | D8 | **One health convention:** `GET /readyz` is shallow, always 200, and auth-exempt (the load-balancer target). `GET /health` is deep and returns 503 when the service is not ready. |
 | D9 | **The hub always runs local, on the engineer workstation.** The shared layer holds zero credentials and never calls an upstream server. Central curation therefore needs no central trust. |
-| D10 | **The config splits in two.** The shared catalog declares each upstream and names its credential. It stores no secret. The local hub resolves each credential from the workstation. A team-wide token uses the same mechanism, with different distribution. |
+| D10 | **The config splits in two.** The shared registry declares each upstream and names its credential. It stores no secret. The local hub resolves each credential from the workstation. A team-wide token uses the same mechanism, with different distribution. |
 | D11 | **Ingress runs shared and posts to the coordination task board.** A `ChannelEvent` becomes a task, and one responder claims it. Memory is never the transport for an event. |
 
 ### Why D9 and D10 matter
@@ -105,7 +105,7 @@ stay on the workstation.**
 | Layer | Runs where | Holds |
 |---|---|---|
 | **Local** | Each engineer workstation | The MCP hub, the engineer credentials, the stdio upstream subprocesses, the skills, and the base prompt |
-| **Shared** | Deployed one time for the team | The catalog, memory, ingress, coordination, and the shared responder agent |
+| **Shared** | Deployed one time for the team | The registry, memory, ingress, coordination, and the shared responder agent |
 
 A solo engineer runs both layers on one machine. The compose profiles
 support that without a change (see the compose section).
@@ -115,7 +115,7 @@ support that without a change (see the compose section).
 ```
   LOCAL (per engineer workstation)      SHARED (deployed one time)
  ┌──────────────────────────────┐      ┌────────────────────────────┐
- │  Agent (any runtime)         │      │  catalog                   │
+ │  Agent (any runtime)         │      │  registry (+ tool_catalog) │
  │      │ MCP_HUB_URL           │◄─────│  registry.json — NO secrets│
  │      ▼                       │ pull └────────────────────────────┘
  │  mcp-hub :9000               │      ┌────────────────────────────┐
@@ -433,6 +433,121 @@ There are no vendor-specific services. Users add upstreams to
 
 ---
 
+## Operating At Team Scale
+
+This section uses one worked example: five teams, three engineers each,
+fifteen engineers total.
+
+### Deployment Shape
+
+| Layer | Count | Holds |
+|---|---|---|
+| Local hub | 15, one per engineer | That engineer credentials |
+| Shared layer | **1**, not one per team | Registry, memory, coordination, ingress, responder |
+
+Deploy one shared layer, not five. Scoping already separates the teams.
+Memory scopes by project. Coordination scopes by project and branch.
+Five deployments would multiply the operations work by five, for fifteen
+people. Five deployments would also block every cross-team benefit.
+
+### Layered Registry
+
+Teams need different upstreams. Compose the registry instead of writing
+one file per team:
+
+```
+registry.base.json      → memory, coordination, org-wide tools (all teams)
+registry.<team>.json    → the upstreams of one team
+```
+
+The shared layer serves one composed file for each team:
+
+```
+MCP_HUB_CONFIG_URL=https://shared.internal/registry/team-payments.json
+```
+
+The manager curates `registry.base.json` one time. Each team lead
+curates one team file. No engineer edits a registry.
+
+### Cross-Team Knowledge
+
+Teams interface with each other. Each team therefore needs a small,
+reliable view of the other teams. Memory uses **two scopes** for this.
+
+| Scope | Written by | Visible to | Content |
+|---|---|---|---|
+| `project:<key>` | Agents, automatically | The team of that project | Working memory: decisions, facts, and people |
+| `org` | Humans, by publication | Every team | The public interface of a team |
+
+A memory search covers the own project scope plus the `org` scope by
+default. One team therefore never reads the working memory of another
+team.
+
+**Publication is explicit and human-owned.** Each team repository holds
+one file, `.agentframe/public.md`. The team writes the file. The team
+reviews each change in a pull request. The shared layer ingests the file
+into the `org` scope, with the source `team:<key>`.
+
+The file states the contract of a team, not its history. Good content:
+
+* The endpoints that other teams call, and the authentication for each.
+* The events that the team publishes.
+* The owner of each system, and the escalation path.
+* The decisions that constrain other teams.
+
+NOTE: Automatic summarization of one team memory for other teams looks
+attractive, but it fails. The output has no owner, so nobody maintains
+it. The compression is lossy, so nobody trusts it. Working memory also
+records attempts and dead ends, which help one team and mislead every
+other team. A published contract is small, owned, versioned, and
+reviewable. Prefer publication.
+
+### Bottlenecks At Fifteen Engineers
+
+| Component | Behavior at 15 | First real limit |
+|---|---|---|
+| Local hubs | No shared state | None |
+| Coordination | Small payloads, low rate | Far beyond 15 |
+| Memory worker | One instance per storage root. It processes the queue in sequence (P4). | Near 50 engineers |
+| **Extractor LLM** | **The first bottleneck.** One CPU model serves every proposal. | Bursts, for example many session compactions at one time |
+
+The extractor already has an escape hatch. D2 makes it an
+OpenAI-compatible endpoint. Point `EXTRACTOR_API_BASE` at a larger host
+or a GPU machine. No code changes.
+
+Memory runs asynchronously. A queue backlog delays new facts. A backlog
+never blocks an engineer.
+
+### When To Split The Shared Layer
+
+Split for a hard boundary, never for scale alone:
+
+* One team processes regulated data, and its memory must stay separate.
+* One team is external, for example an agency.
+
+### External Parties
+
+An external agency needs stricter access than an internal team. The
+design already covers this case. It costs **no new code**.
+
+| Concern | How the design covers it | Cost |
+|---|---|---|
+| Tool access | Serve the agency its own composed registry, `registry.agency-<name>.json`. | None. This is the layered registry. |
+| Credentials | Credentials already stay on each workstation (D9). The shared layer never held them. | None |
+| Memory isolation | Deploy a second shared layer for the agency. | One more deployment. Zero code. |
+| Collaboration | Coordination scopes by `projectKey`. An agency on other repositories stays invisible. | None |
+
+Deploy a second shared layer for each external party. Full isolation
+then follows from the deployment, not from a permission model.
+
+NOTE: A softer alternative exists. One shared layer could bind each
+bearer token to a set of allowed memory scopes. The agency would then
+lose access to the `org` scope, but keep its own project scope. That
+alternative adds an authorization model to the memory worker.
+Agentframe does not build it. Choose the second deployment instead.
+
+---
+
 ## Success Criteria
 
 1. Both profiles start a working stack on one machine. The only required
@@ -456,7 +571,10 @@ There are no vendor-specific services. Users add upstreams to
 7. **Graceful skip.** An engineer lacks the credential for one upstream.
    That namespace is absent from `list_available_mcps`. Every other
    namespace still works.
-8. (Phase 2) The success criteria in the collaboration spec pass:
+8. **Scope isolation.** Team A publishes a fact through
+   `.agentframe/public.md`. Team B finds it in a memory search. Team B
+   never finds a working-memory record of Team A.
+9. (Phase 2) The success criteria in the collaboration spec pass:
    same-project and same-branch agents collaborate, other-branch agents
    are discoverable only, and an expired claim lease returns its task to
    the board.
