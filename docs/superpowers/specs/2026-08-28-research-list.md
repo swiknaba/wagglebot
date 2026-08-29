@@ -68,3 +68,47 @@ Three points of contact deserve a note:
 
 **Next step.** None required. Wagglebot needs no change. Answer the two
 questions above before documenting a Flue example.
+
+## R2. Markdown Subagents
+
+**Why it is here.** R1 showed that a Flue agent needs an API key per
+engineer, and a harness-bundled AI (JetBrains AI, Copilot, a Claude
+Code subscription) never exposes one. A Markdown subagent avoids that
+completely, because it rides the AI the engineer already uses. It is
+therefore the better default for most shared agents (D33).
+
+Nobody on this project has written one yet.
+
+**Questions to answer:**
+
+1. What is the Claude Code format? The directory is `.claude/agents/`
+   for one project and `~/.claude/agents/` for every project. What does
+   the frontmatter hold, and which fields matter?
+2. Which other harnesses support a subagent at all? Codex, Cline,
+   Junie, Gemini. If they do, what format?
+3. Are the formats close enough to render from one source? Wagglebot
+   already solves this shape for the base template: `sync-agents`
+   writes one rendered file to six harness targets. The same pattern
+   may apply to subagents.
+4. What does a good subagent contain? A prompt, a tool list, a model
+   tier. What separates a useful one from a wasted one?
+5. Can a subagent call the wagglebot MCP hub, and reach memory?
+
+**The decision this feeds.** D31 says distribution is runtime-neutral,
+so a list entry may hold a Markdown subagent. Question 3 decides
+whether wagglebot renders one definition into several harness formats,
+or distributes each format separately.
+
+**Next step.** Write one real subagent for this repository, and learn
+the format by using it. A `spec-reviewer` that reads a spec and reports
+contradictions would earn its place today.
+
+## R3. Does Flue Expose An MCP Server?
+
+**Why it is here.** R1 confirmed Flue is an MCP **client**. If it can
+also **serve** MCP, then a Flue agent becomes a tool in the hub, and
+any harness calls it with structured input and output. Without that, a
+caller runs `flue run ...` and parses standard output.
+
+**Next step.** Check the Flue documentation. This question is small,
+and it only matters after a team wants a Flue agent.
