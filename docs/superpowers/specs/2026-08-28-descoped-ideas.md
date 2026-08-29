@@ -72,7 +72,14 @@ the work.
 
 ### What we would build, if the answer is yes
 
-Keep it a delivery system, never a workflow engine.
+**First, check whether we build anything at all.** An unattended agent
+needs durable execution: it must survive a crash and resume. That is
+what an agent runtime such as Flue already provides
+([research list R1](2026-08-28-research-list.md)). Running the flow on
+an existing runtime may remove the need for a task board completely.
+
+If a delivery system is still needed, keep it a delivery system, never
+a workflow engine.
 
 ```yaml
 # channels.yaml
