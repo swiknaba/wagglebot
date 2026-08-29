@@ -129,6 +129,66 @@ stay on the workstation.**
 A solo engineer runs both layers on one machine. The compose profiles
 support that without a change (see the compose section).
 
+### Interfaces At A Glance
+
+Most of the surface is MCP tools, not HTTP. Six HTTP endpoints exist.
+
+```mermaid
+graph TB
+    subgraph WS["LOCAL — one per engineer workstation"]
+        AGENT["Agent harness<br/>Claude Code, Codex, ..."]
+        HUB["MCP Hub<br/>:9000"]
+        CREDS[(".env.credentials<br/>never leaves the machine")]
+        STDIO["stdio upstream<br/>subprocesses"]
+    end
+
+    subgraph SH["SHARED — deployed one time for the team"]
+        REG["Registry endpoint<br/>GET /registry"]
+        MEM["Memory worker<br/>POST /memory/proposals<br/>POST /memories/upsert<br/>POST /memories/invalidate<br/>POST /run-once"]
+        CHROMA[("Chroma<br/>volume: /chroma/chroma")]
+        COORD["Coordination service<br/>MCP + SSE"]
+        SQLITE[("SQLite<br/>volume: channels, tasks")]
+        ING["Ingress<br/>Slack, GitHub, webhook"]
+        RESP["Shared responder agent"]
+    end
+
+    REMOTE["Remote MCP upstreams<br/>your vendors"]
+
+    AGENT -->|"MCP: search, get_schema, execute<br/>list_available_mcps"| HUB
+    AGENT -->|"MCP: memory_search, propose_memory"| MEM
+    AGENT -->|"MCP: coordination_*"| COORD
+
+    HUB -.->|reads at startup| CREDS
+    HUB -->|"GET /registry<br/>Bearer user token"| REG
+    HUB -->|proxies| REMOTE
+    HUB -->|proxies| STDIO
+
+    MEM --> CHROMA
+    COORD --> SQLITE
+    ING -->|posts a task| COORD
+    RESP -->|claims a task| COORD
+    RESP -->|replies| ING
+
+    style CREDS fill:#ffe6e6
+    style WS fill:#f0f8ff
+    style SH fill:#f5f5f0
+```
+
+Read the diagram by following the arrows out of the agent. The agent
+talks to three things, and always by MCP. Credentials touch one box.
+
+| Surface | Kind | Who calls it |
+|---|---|---|
+| `search`, `get_schema`, `execute` | MCP tool | The agent, for every upstream tool |
+| `list_available_mcps` | MCP tool | The agent, to see live namespaces |
+| `memory_search`, `propose_memory` | MCP tool | The agent |
+| `coordination_*` (six tools) | MCP tool | The agent (Phase 2, task board Phase 1) |
+| `GET /registry` | HTTP | The hub only, never the agent |
+| `POST /memory/proposals` | HTTP | The memory MCP surface, internally |
+| `POST /memories/upsert`, `/memories/invalidate` | HTTP | Humans and the publication job (D23) |
+| `POST /run-once` | HTTP | An operator, to drain the queue |
+| `GET /livez`, `GET /readyz` | HTTP | The container runtime |
+
 ### Component Map
 
 ```
