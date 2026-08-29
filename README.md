@@ -11,7 +11,6 @@ Each team that builds AI agents writes the same infrastructure again:
 
 * An MCP layer that aggregates many tool servers.
 * Durable memory that outlives one session.
-* Ingress channels for Slack, GitHub, and webhooks.
 * A curated skill set and one base prompt for each engineer.
 
 Teams build this inside one company repository. Vendor services become
@@ -35,20 +34,19 @@ Wagglebot uses two layers.
 * The upstream registry. It lists the MCP servers. It names each
   credential, but it stores no secret.
 * Durable memory for the whole team.
-* Agent collaboration, scoped by system and branch.
+* Agent collaboration, scoped by system and branch (Phase 2).
 
 The shared layer holds no engineer credentials and no tool-server
 credentials. It never calls a tool server. It holds only its own
-service secrets, such as the chat bot token.
+service bearer tokens.
 
 ## What You Get
 
 | Component | Purpose |
 |---|---|
 | MCP hub | One endpoint for every tool server. Add an upstream in the registry, not in code. |
-| Memory | Agents propose facts. A local LLM extracts them. The team searches them later. |
-| Ingress | Slack, GitHub, and webhook events become tasks. One agent claims each task and replies. |
-| Collaboration | Two agents on the same system and branch exchange findings and hand off tasks. |
+| Memory | The agent writes facts about one repository to a local file, in git. Facts that cross a repository go to the shared store. The team searches both. |
+| Collaboration | Two agents on the same system and branch exchange findings and hand off tasks. (Phase 2) |
 | Provisioning | One command installs the curated skills and writes the base prompt to each harness. |
 
 ## Design Principles

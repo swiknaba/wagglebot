@@ -23,7 +23,7 @@ company already control code access.
 | Wagglebot does | Wagglebot does not |
 |---|---|
 | Name who acts, for attribution | Decide who may read a repository |
-| Route tasks and events to the right team | Grant or deny tool access by team |
+| Route tasks to the right team | Grant or deny tool access by team |
 | Select the effective registry | Block collaboration between teams |
 | Scope memory search for relevance | Treat a memory scope as a security boundary |
 
@@ -71,7 +71,7 @@ GitHub or GitLab may instead set the `github` source, which fetches
 `catalog.yaml` holds the Backstage entities: Domain, System, Group, and
 User. Group membership lives only there (`Group.spec.members`). The
 org-owner annotation grants publication to the `org` memory scope
-(D23). `channels.yaml` holds the ingress routes. The
+(D23). The
 [service contracts](2026-08-28-service-contracts.md) give both schemas.
 
 Each repository declares its components in `catalog-info.yaml`, or in
@@ -93,12 +93,12 @@ Rules:
    scopes is gated by the catalog (D23).
 4. An agent registers under its user. A second registration with the
    same `agentId` and a different user is rejected.
-5. Operator actions need the operator token.
+5. Operator actions need write access to the central repository.
 6. One validation command checks all central files, prints the
    effective configuration, and **rejects every duplicate** (D27). Two
-   entities of one kind sharing a name, a component naming an unknown
-   system, and two routes matching one event are hard errors. The
-   message names the file and the value.
+   entities of one kind sharing a name, and a component naming an
+   unknown system, are hard errors. The message names the file and the
+   value.
 
 NOTE: An earlier review asked for project-level authorization. That
 request assumed an untrusted multi-tenant deployment. This deployment is
@@ -115,7 +115,7 @@ remote. The catalog declares everything (D20).
 |---|---|---|
 | `domain` | `catalog.yaml` | Broad grouping, wide memory read scope |
 | `system` | `catalog.yaml` | The project. Promoted memory scope, channel key. |
-| `component` | The repository declaration | The unit of work. Default memory write scope, attribution. |
+| `component` | The repository declaration | The unit of work. Local memory file, attribution. |
 | `group` | `catalog.yaml`, `parent` for subteams | Routing, registry selection, ownership |
 | `username` | `catalog.yaml`, the User entity | Attribution, direct messages |
 | `agentId` | Generated per agent process | Presence, claims |
@@ -187,7 +187,7 @@ carries the user identity. The humans stay in the loop.
 |---|---|
 | **Presence registry** | Agents register with a workspace identity and a heartbeat. `list_agents` defaults to the `system` of the caller. Filters exist for domain, system, and branch. Stale entries expire on missed heartbeats. |
 | **Message bus** | Channels are keyed `system/<name>`, `system/<name>/branch/<branch>`, and `domain/<name>`. Direct agent-to-agent messages need no channel. The log is persistent and append-only. Delivery is SSE with `Last-Event-ID` replay, a 7-day TTL, and a SQLite store (D6). |
-| **Task board** (**Phase 1**, per D14. The rest of this table is Phase 2.) | FIFO + optional integer priority (order `priority DESC, created_at ASC`). Each claim carries a lease with a heartbeat **and a monotonic fencing token**. A task returns to the board when the lease expires (D5). Completion and heartbeats must present the current fencing token. A stale token is rejected. Delivery is therefore **at-least-once**, and every external effect carries an idempotency key. The task shape uses the envelope from the [service contracts §C5](2026-08-28-service-contracts.md#c5-delegated-job-vocabulary). Each task is scoped to a `system`, and optionally a branch. |
+| **Task board** | FIFO + optional integer priority (order `priority DESC, created_at ASC`). Each claim carries a lease with a heartbeat **and a monotonic fencing token**. A task returns to the board when the lease expires (D5). Completion and heartbeats must present the current fencing token. A stale token is rejected. Delivery is therefore **at-least-once**, and every external effect carries an idempotency key. The task shape uses the envelope from the [service contracts §C4](2026-08-28-service-contracts.md#c4-task-envelope-and-delegated-job-vocabulary-phase-2). Each task is scoped to a `system`, and optionally a branch. |
 | **Shared memory** | All participating agents point at the same memory-worker + Chroma. `scopeIds` carry the `component` and the `system` of the workspace. Agent writes default to `component`, with confirmed promotion to `system` (D22). |
 
 **Exposure:** the coordination service is itself an MCP server. Each
@@ -195,49 +195,12 @@ local hub registers it via `registry.yaml` (D4). Agents gain these
 `coordination_*` tools: `list_agents`, `send_message`, `read_channel`,
 `post_task`, `claim_task`, `complete_task`.
 
-## Channel Routing
-
-An incoming event must reach the owning team. The shared layer therefore
-holds `channels.yaml`, which maps each ingress source to a route:
-
-```yaml
-# channels.yaml
-routes:
-  - source: slack
-    match: { channelId: C123 }
-    system: payments-platform
-    owner: team-payments
-    responder: shared
-    allowedEvents: [slack.app_mention]
-    replyIdentity: payments-bot
-
-  - source: github
-    match: { repo: acme/pay-api }
-    system: payments-platform
-    owner: team-payments
-    responder: shared
-    allowedEvents: [github.issue_comment.created]
-```
-
-Rules:
-
-1. Ingress resolves the route before it creates a task. The route
-   supplies the system, the owning group, the responder, and the reply
-   identity.
-2. Ingress **rejects an event with no route, or with more than one
-   route**. It logs the rejection. It never guesses a system from
-   message text.
-3. An event type outside `allowedEvents` is dropped, and logged.
-4. The validation command reports every unrouted channel and every
-   duplicate match.
-
 ## Task Eligibility
 
 The task envelope carries eligibility. The board supports these forms:
 
 | Eligibility | Claimable by |
 |---|---|
-| `shared_responder` | The shared responder agent |
 | `owner:<username>` | Agents of that engineer |
 | `group:<group>` | Agents of any member of that group |
 | `system:<name>` | Agents working in that system |
@@ -247,27 +210,6 @@ An eligibility entry may also require a capability set. Within the
 eligible set, ordering stays FIFO with priority
 (`priority DESC, created_at ASC`). When several eligible agents wait,
 the first claim wins. The board never assigns work.
-
-## The Task Board Also Serves Ingress
-
-The ingress service posts each `ChannelEvent` to this task board (D11).
-A channel event and a delegated job therefore share one queue and one
-claim mechanism.
-
-| Task source | Scope | Default claimer |
-|---|---|---|
-| Ingress channel event | The system named by the route | The shared responder agent |
-| Agent-to-agent handoff | `system` and branch | Any eligible local agent |
-
-The shared responder agent claims team-facing events, because it stays
-on and holds the bot tokens. A local agent may claim events routed to
-its own engineer.
-
-A lease alone cannot give exactly-once replies. A responder can finish a
-reply after its lease expires, and a second responder can then claim the
-task. The fencing token and the idempotency key close that gap: the
-board rejects a completion with a stale token, and the channel action
-deduplicates on its key.
 
 ## Networking
 
@@ -301,6 +243,6 @@ service is the only rendezvous point.
 8. A token bound to engineer A cannot register an agent as engineer B.
    It also cannot publish to a domain whose owner group excludes A, and
    it cannot publish to `org` without the org-owner flag (D23).
-9. A responder completes a task after its lease expired. The board
+9. An agent completes a task after its lease expired. The board
    rejects the completion. The retry deduplicates on the idempotency
    key, and the channel receives one reply.

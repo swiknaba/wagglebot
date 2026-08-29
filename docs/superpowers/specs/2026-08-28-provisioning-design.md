@@ -46,8 +46,13 @@ coordination etiquette. Teams append overlays. Composition is plain
 concatenation: `AGENTS.base.md` + `overlays/*.md` → the rendered
 template. YAGNI: no templating engine.
 
-The base template carries two sections: a delegation policy and a
-writing baseline. Both are portable across harnesses and across teams.
+The base template carries three sections: a delegation policy, a
+writing baseline, and a memory policy. All three are portable across
+harnesses and across teams.
+
+The memory section is **required**, not optional. The agent extracts its
+own memory (D24), so the rules must reach the agent. A server policy
+file cannot do that job.
 
 Workstation-specific content stays out of the base template. Version
 managers, shell paths, and machine setup differ per person and per
@@ -201,6 +206,67 @@ Aim for 80 percent pragmatic compliance, so output is in good shape by human sta
 Give priority to sentence length, active voice, and the prohibited forms.
 Re-read these rules before you write or revise a documentation file.
 ```
+
+The template also ships with this memory section:
+
+```markdown
+## Memory
+
+You decide what to remember. No model on the server repeats this work,
+so a fact you skip is lost, and a fact you invent is believed.
+
+WHAT TO REMEMBER
+
+Remember only durable facts:
+
+* A decision, and the reason for it.
+* A convention that the code does not state.
+* A trap that cost you time.
+* Who owns what.
+
+Do not remember:
+
+* A transcript, or a summary of one session.
+* A fact the code already states. Read the code instead.
+* A guess, an attempt, or a dead end.
+* Anything about a person, beyond their role and their ownership.
+* A secret. The server rejects one, but never send one.
+
+Write few facts. A large memory is a haystack.
+
+WHERE TO WRITE
+
+Four scopes exist. Pick the smallest one that fits.
+
+| Scope | Content | How to write |
+|---|---|---|
+| `component` | A fact about this one repository | Edit `.wagglebot/memory.md` |
+| `system` | A fact about the whole project | Propose, then ask your engineer |
+| `domain` | A convention across projects | A human publishes it |
+| `org` | A company-wide interface | A human publishes it |
+
+Default to `component`. A file in the repository travels with the code,
+a pull request reviews it, and git keeps the history.
+
+Propose `system` only for a fact that a different repository needs.
+Then ask your engineer in the session, and accept the answer. Never
+promote silently. Never write to `domain` or `org`.
+
+BEFORE YOU WRITE
+
+1. Search memory first.
+2. If the fact exists, update it. Do not add a duplicate.
+3. If the fact contradicts an existing one, say so to your engineer.
+
+WHEN TO WRITE
+
+Write at the end of a session, and after you learn something that cost
+you time. Do not write during exploration.
+```
+
+NOTE: The superpowers skill set already works this way for larger
+artifacts. It writes specs and plans into `docs/superpowers/specs/`, in
+git. Component memory follows the same pattern, at a smaller size.
 
 ### Distribution
 

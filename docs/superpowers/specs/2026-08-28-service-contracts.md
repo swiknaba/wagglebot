@@ -621,118 +621,68 @@ with a session token, gated by the owner group of that Domain (D23).
 * Publication skips the LLM extractor. The team already wrote the
   facts, so extraction would only add loss.
 
-## C4. Channel wiring contract
+## C4. Task envelope and delegated-job vocabulary (Phase 2)
 
-**The architectural spine:**
-1. Channel handlers normalize provider payloads into structured inputs
-   before dispatch.
-2. Business capability goes through the MCP hub. Local tools are
-   reserved for channel-bound actions only.
-3. Agents never write durable memory directly. They only propose.
-4. All durable state lives under one storage root.
+NOTE: The task board is Phase 2 (D14). Event-triggered flows left the
+MVP, so nothing in Phase 1 posts a task. See the
+[descoped ideas](2026-08-28-descoped-ideas.md).
 
-**Conversation keys** — the session id IS the routing address. Tools
-parse it back to recover their binding:
-
-| Channel | Format |
-|---|---|
-| Slack | `slack:v1:<teamId>:<channelId>:<threadTs>` (segments URI-encoded) |
-| GitHub | `github:v1:owner:<owner>:repo:<repo>:issue:<n>` |
-| Webhook | `webhook:<provider>:<eventKey>` |
-
-**Session-bound tools:** channel tools are closures. Each closure is
-constructed per session with the conversation key captured. A tool
-refuses politely when the key does not parse ("This session is not bound
-to a Slack thread."). The LLM therefore cannot post to arbitrary
-channels. This gives capability scoping by construction.
-
-**Normalized envelopes** (`ChannelEvent.payload`):
-- `slack.app_mention`: `{eventId, teamId, channelId, threadTs, userId, text}`
-- `github.issue_comment.created` /
-  `github.pull_request_review_comment.created`: `{deliveryId,
-  installationId, issue:{owner,repo,issueNumber}, sender,
-  comment:{id, threadId?, body}}`
-- `webhook.event`: `{provider, body}`
-
-**Dedup keys:** an event without `id`/`eventId`/`deliveryId` gets a
-random fallback key. Events therefore never collapse into one
-conversation (P13).
-
-**Graceful degradation:** the agent-side hub connection helper returns
-zero tools when `MCP_HUB_URL` is unset. The agent still boots.
-
-**Delivery and the responder (D11).** Ingress posts each `ChannelEvent`
-to the coordination task board. One responder claims the task. The claim
-lease gives one live claim at a time. Delivery is at-least-once, so
-every external effect deduplicates on its idempotency key (P30).
-
-| Rule | Reason |
-|---|---|
-| Memory is never the event transport | The extractor drops transcripts and runs for up to 120 s. Memory stores facts, not work items (P26). |
-| The shared responder handles team channels | A workstation sleeps. Several workstations race. Bot tokens must not spread (D9). |
-| The responder replies with a channel-bound tool | The `conversationKey` names the thread. The tool refuses an unparsable key. |
-| The responder proposes memory as a side effect | Durable facts still reach memory through the normal path. |
-
-The direct-callback mode (`INGRESS_CALLBACK_URL`) stays available for a
-solo engineer. That mode gives no claim semantics.
-
-## C5. Task envelope and delegated-job vocabulary
-
-Every entry on the task board uses **one versioned envelope** with a
-discriminator (guards F06):
+Every entry on the task board uses **one versioned envelope**
+(guards F06):
 
 ```typescript
 type Task = {
   taskId: string;
   version: 1;
-  kind: "delegated_job" | "channel_event";
+  kind: "delegated_job";
   system: string;
   branch?: string;
   priority: number;              // default 0
-  system?: string;               // from the channel route
   owner?: string;                // owning group
   eligibility:
-    | "shared_responder"
     | `owner:${string}`          // one engineer
     | `group:${string}`          // any member of that group
     | `system:${string}`
     | "any";
   requiredCapabilities?: string[];
   idempotencyKey: string;        // dedup key for external effects
-  payload: JobSpec | ChannelEvent;
-  result?: JobResult | ChannelReplyResult;
+  payload: JobSpec;
+  result?: JobResult;
   state: "queued" | "claimed" | "done" | "failed" | "cancelled";
   fence: number;                 // monotonic, incremented per claim
 };
 ```
 
+**Claiming, in plain terms.** One agent takes a job so the others skip
+it. The claim expires, so a sleeping laptop never blocks a job forever.
+
+| Setting | Value |
+|---|---|
+| Claim lasts | 90 seconds |
+| Heartbeat | Every 30 seconds |
+| Attempts | 3 |
+| After 3 failures | State `failed`. It stays there for a human. No automatic retry. |
+| Cancellation | A queued task cancels at once. A claimed task dies at its next heartbeat. |
+
+Ninety and thirty give three missed heartbeats before a task returns to
+the board. One miss is a hiccup. Three is a dead process.
+
 Rules:
 
-1. Ingress posts `channel_event` tasks with
-   `eligibility: "shared_responder"` by default. Routing to one engineer
-   sets `eligibility: "owner:<username>"`.
-2. A local agent cannot claim a task outside its eligibility.
-3. A claim increments `fence`. Heartbeat and completion must present the
+1. An agent cannot claim a task outside its eligibility.
+2. A claim increments `fence`. Heartbeat and completion must present the
    current `fence`. A stale fence is rejected.
-4. Delivery is **at-least-once**. Every external effect (a Slack reply,
-   a comment) deduplicates on `idempotencyKey`.
+3. Delivery is **at-least-once**. Every external effect deduplicates on
+   `idempotencyKey`.
 
-**External effects use a durable effect path.** A fence stops a stale
-*completion*. It cannot stop a stale responder from already having sent
-a message. Therefore every channel effect passes through the ingress
-service, which owns the provider credentials, and which:
+**Why the fence exists.** A laptop wakes an hour late and finishes a
+job that another agent already did. The late agent still holds the old
+fence number, so the board refuses the work. Without that counter, the
+job happens twice.
 
-1. Stores the effect record before transmission.
-2. Rejects an effect that carries a stale fence.
-3. Deduplicates on `idempotencyKey`, and returns the stored result for
-   a repeat.
-4. Stores the provider request identifier with the record.
-5. On an ambiguous timeout, marks the effect `unknown` and reconciles
-   by provider lookup where the provider supports it. It never blindly
-   retries.
-
-Never claim exactly-once external behavior. Prove the provider behavior
-first, and rely on the local record (G04, P30).
+Never claim exactly-once external behavior. A fence stops a stale
+*completion*. It cannot undo an effect the stale worker already sent
+(G04, P30).
 
 The `delegated_job` payload uses this vocabulary:
 
@@ -742,11 +692,7 @@ maxCostUsd, maxTokens}, model {tier, provider, model}, permissions
 plus `JobResult`, `JobArtifact`, `JobFailure`, `JobRunRecord`, and a
 `JobRunner` interface (`submit/status/cancel/result`).
 
-The full state machine (lease duration, heartbeat interval, attempt
-limits, cancellation, poison tasks) is a pre-implementation deliverable.
-See the [review resolutions](2026-08-28-spec-review-resolutions.md).
-
-## C6. Ops (Docker-only)
+## C5. Ops (Docker-only)
 
 Wagglebot ships containers and a compose file, nothing
 platform-specific:
@@ -767,7 +713,7 @@ platform-specific:
   file and `.env.example` are generated views of that. They are never a
   second source of truth.
 
-## C7. Pitfall register
+## C6. Pitfall register
 
 Known design traps and the guard that wagglebot applies. The numbering
 is stable. The decisions in the main spec reference these.
@@ -796,11 +742,11 @@ is stable. The decisions in the main spec reference these.
 | P23 | A required host directory that is gitignored and undocumented | `./models` documented in README + compose comments |
 | P24 | Model ids duplicated across files | Single source in compose/env |
 | P25 | A shared hub forwards the caller token to an upstream. The MCP specification forbids this, and it is the confused-deputy attack. | The hub runs local (D9). It strips the inbound `Authorization` header and injects its own resolved credential. |
-| P26 | Channel events routed through the memory pipeline. The extractor drops them, adds up to 120 s of latency, and offers no claim semantics. | Ingress posts to the coordination task board (D11). Memory receives facts only. |
+| P26 | Work items routed through the memory pipeline. Memory stores durable facts and drops transcripts by design, so a work item disappears. It also offers no claim semantics. | A work item goes on the task board. Memory is never the transport for work. |
 | P27 | A secret committed to the shared registry | The registry declares credential *references* only. The hub rejects a `literal` source from a URL-loaded registry. |
 | P28 | Two names for two different files, both called "catalog" | `registry.yaml` lists upstreams. `tool_catalog.yaml` gives routing advice. |
 | P29 | A remote registry treated as plain config. It selects commands, endpoints, and credential names, so a compromise executes code and exfiltrates secrets. | The registry trust policy in §C2: pinned HTTPS origin, local approval for privileged entries, validate-then-swap, keep last accepted. |
-| P30 | A claim lease sold as exactly-once. A responder can finish after lease expiry, and a second responder replies again. | At-least-once contract: fencing tokens on claim/heartbeat/completion, idempotency keys on external effects. |
+| P30 | A claim lease sold as exactly-once. A worker can finish after lease expiry, and a second worker then repeats the job. | At-least-once contract: fencing tokens on claim, heartbeat, and completion, plus idempotency keys on every external effect. |
 | P31 | Unpinned executable dependencies: `npx` latest, `:latest` images, unpinned skills. The next publish executes on every workstation. | Exact versions everywhere: `stdio_npx` requires `pkg@x.y.z`, images pin digests, `skills.list` pins revisions. |
 | P32 | Upstream tool descriptions treated as trusted text. They reach the model, so a hostile upstream can attempt prompt injection. | Size caps, control-character stripping, provenance tags. The routing catalog stays first-party. |
 | P33 | Any assumption about repository layout, and any inference from a Git remote. A repo-per-project rule fragments a microservice team. A repo-as-project rule breaks a monorepository team. | Declare, never derive, in the Backstage style. The central `catalog.yaml` owns the taxonomy. Each repository declares membership. No inference fallback exists (D20). |

@@ -13,9 +13,10 @@
 
 Each AI agent that connects to company tools needs the same
 infrastructure. This infrastructure includes an MCP aggregation layer,
-durable memory, ingress channels, and a composition layer. Teams usually
-build this wiring in company-specific monorepos. Vendor services are
-hardcoded into the config layer of those monorepos.
+durable memory, and a way to give every engineer the same skills and
+instructions. Teams usually build this wiring in company-specific
+monorepos. Vendor services are hardcoded into the config layer of those
+monorepos.
 
 We want a **reusable framework** that each team can clone, configure,
 and deploy. No team must fork the internals of a different company.
@@ -29,16 +30,14 @@ and deploy. No team must fork the internals of a different company.
    The agent extracts them, so no model runs on the write path (D24).
    The pipeline scans each write for credentials, deduplicates it, and
    stores it as a vector embedding for later retrieval.
-3. **Pluggable Ingress Channels** — A channel adapter interface. New
-   event sources (Slack, GitHub, HTTP webhooks, email, SMS) plug in
-   without changes to the core.
-4. **Cross-Machine Collaboration** — A coordination layer for agents on
-   different machines. Agents discover each other, share memory, and
-   hand off tasks. The scope is the system and branch of their humans.
-5. **Agent Environment Provisioning** — Shared tooling that installs a
+3. **Agent Environment Provisioning** — Shared tooling that installs a
    curated skill set. The same tooling distributes one base instruction
    template across every agent harness on a workstation.
-6. **Runtime-Agnostic** — The framework services (hub, memory, channels,
+4. **Cross-Machine Collaboration** (Phase 2) — A coordination layer for
+   agents on different machines. Agents discover each other, share
+   memory, and hand off tasks. The scope is the system and branch of
+   their humans.
+5. **Runtime-Agnostic** — The framework services (hub, memory,
    coordination) run as standalone Docker containers. Any agent runtime
    (LangGraph, raw LLM loops, Claude Code) connects over HTTP/MCP.
 7. **Deployment-Agnostic** — Wagglebot ships Docker images and a
@@ -55,6 +54,10 @@ and deploy. No team must fork the internals of a different company.
 - **Deployment tooling** (Terraform, Helm, cloud-specific IaC). The
   contract ends at containers with documented env vars and health
   endpoints. The operator selects where to run them.
+- **Event-triggered agent flows** (a Sentry error or a Slack mention
+  that starts an agent). A local agent with an MCP server already does
+  this, under supervision. See the
+  [descoped ideas](2026-08-28-descoped-ideas.md).
 
 ---
 
@@ -66,20 +69,17 @@ and deploy. No team must fork the internals of a different company.
 | D2 | **An extractor serves document ingestion only, never the session path (D24).** When a deployment enables the batch mode, the extractor uses **OpenAI-compatible HTTP only**. It does not load models in-process. The optional compose profile ships a `llama.cpp` server container with a small Qwen GGUF (~1.1 GB, CPU-friendly). A remote endpoint needs only a different `EXTRACTOR_API_BASE` value, no code change. |
 | D3 | There is **no MCP wrapper service in front of Chroma**. The memory worker uses the official Chroma JS client. The memory worker also exposes a first-party MCP surface for search and proposals. The hub registers that surface like any upstream (guards P17). |
 | D4 | Coordination runs as a **standalone container**. The hub registers it via `registry.yaml` like any other upstream. It never embeds in the hub. |
-| D5 | Task board: **FIFO claiming with an optional integer `priority`** (default 0, order `priority DESC, created_at ASC`). No deadlines, no scheduler. Each claim carries a **lease with a heartbeat and a monotonic fencing token**. An expired lease returns the task to the board. Delivery is **at-least-once**: completion requires the current fence, and external effects deduplicate on an idempotency key. |
+| D5 | (Phase 2) Task board: **FIFO claiming with an optional integer `priority`** (default 0, order `priority DESC, created_at ASC`). No deadlines, no scheduler. Each claim carries a **lease with a heartbeat and a monotonic fencing token**. An expired lease returns the task to the board. Delivery is **at-least-once**: completion requires the current fence, and external effects deduplicate on an idempotency key. |
 | D6 | Messages are **persistent with replay**: an append-only log, cursor-based replay over SSE (`Last-Event-ID`), a 7-day TTL, and a SQLite store. |
 | D7 | **Auth is fail-closed everywhere.** Each service requires a bearer token when one is configured. A network-exposed service refuses to start without one. One env name pattern applies: `<SERVICE>_BEARER_TOKEN` on the server, and the same name on clients (guards P2, P3, P11). |
 | D8 | **One health convention:** `GET /livez` is shallow, always 200, and auth-exempt (process liveness). `GET /readyz` reports dependency and startup state, and returns 503 when the service cannot serve. Point load balancers at `/readyz`. |
-| D9 | **The hub always runs local, on the engineer workstation.** The shared layer holds **no engineer credentials and no upstream MCP credentials**, and it never calls an upstream MCP server. It does hold its own service secrets: bot tokens on the responder, webhook signing secrets on ingress, and the service bearer tokens. Those need normal secret storage and rotation. |
+| D9 | **The hub always runs local, on the engineer workstation.** The shared layer holds **no engineer credentials and no upstream MCP credentials**, and it never calls an upstream MCP server. It does hold its own service bearer tokens, which need normal secret storage and rotation. |
 | D10 | **The config splits in two.** The shared registry declares each upstream and names its credential. It stores no secret. The local hub resolves each credential from the workstation. A team-wide token uses the same mechanism, with different distribution. |
-| D11 | **Ingress runs shared and posts to the coordination task board.** A `ChannelEvent` becomes a task, and one live claim exists at a time. Memory is never the transport for an event. |
 | D12 | **People connect by username, never by address.** Each engineer registers with the company username (SSO name). All agent traffic flows outbound through the shared coordination service. A direct connection between two people requires an approval: the receiver sees who asks and accepts or rejects. No VPN, tunnel, or IP exchange exists in this design. |
 | D13 | **Every executable dependency is pinned.** `stdio_npx` packages carry exact versions, container images pin digests, and `skills.list` pins revisions. Nothing installs `latest`. |
-| D14 | **The task board core ships in Phase 1.** Queue, claim, lease, and fence move forward, because default ingress delivery depends on them. Presence, messaging, and cross-machine collaboration stay Phase 2. |
+| D14 | **Phase 1 ships three things: the MCP hub, shared memory, and provisioning.** Each one is useful while an engineer works, and none is possible without a shared layer. The task board, presence, messaging, and collaboration stay Phase 2, because each needs two agents running at one time. |
 | D15 | **Trusted coworkers.** Every registered engineer is trusted. Identity serves routing, context, and attribution. Teams and scopes never deny an operation between registered users. Git and the company identity provider control code access. Only impersonation protection and operator actions stay restricted (P34). |
 | D16 | **The catalog uses the full Backstage entity model.** Component (one repository or subtree) sits in a System (one project), which sits in a Domain (a business area). A Group owns each entity, with `parent` for subteams. Ownership stays separate from grouping, so a reorganization edits one `owner` field. A branch is context, never identity (P33). |
-| D17 | **Channel events route through `channels.yaml`.** Each ingress source maps to a group, a system, a responder, and a reply identity. An unrouted or ambiguous event is rejected, never guessed. |
-| D18 | **Phase 1 ships a minimal reference responder.** The success criteria need a working reply path. The reference responder claims tasks, heartbeats with its fence, submits effects, and proposes memory. It stays a reference, and any runtime may replace it. |
 | D19 | **Embeddings use the Chroma built-in default** (`all-MiniLM-L6-v2`, 384 dimensions, cosine distance). No second model service, no extra container, no GPU. Chroma persists the embedding function in the collection configuration, so every deployment stays consistent. Each collection still records the provider, the model, the dimension, the distance function, and a schema version, because a later model change needs a full re-embed. |
 | D20 | **Catalog files use Backstage YAML.** The central `catalog.yaml` holds Domain, System, and Group entities. Each repository declares its components in `catalog-info.yaml`, or in `.wagglebot/catalog.yaml` with the identical schema. An organization already running Backstage points wagglebot at its existing files. Wagglebot never infers from a Git remote. An undeclared repository gets no system scope, and an unknown value is a hard error. |
 | D21 | **Memory scopes follow the catalog: `component`, `system`, `domain`, `org`.** One scope exists per catalog level. A search reads component, then system, then domain, then organization. |
@@ -90,6 +90,7 @@ and deploy. No team must fork the internals of a different company.
 | D26 | **Authentication uses an SSH public key challenge, not a distributed token.** The agent signs a server nonce with the existing SSH key of the engineer, and receives a short-lived session token. The default key source is the `wagglebot.dev/ssh-key` annotation on the User entity in the catalog, added by pull request. That works with every Git host, including Bitbucket Server. An optional `github` source fetches `<host>/<username>.keys` instead. No token needs delivery or rotation, and `users.yaml` therefore does not exist: identity lives in the catalog. |
 | D27 | **The validation command rejects every duplicate.** Two entities of one kind sharing a name, a component naming an unknown system, and two channel routes matching one event are all hard errors. The message names the file and the value. Wagglebot never picks a winner silently (P35). |
 | D28 | **Every memory write passes a credential scan.** Two layers run server-side: a **gitleaks** rule scan for known provider formats, and the entropy check for the formats no rule set knows. A match is redacted, and a mostly-matching write is rejected. The error names the rule, never the content. `wagglebot rescan` re-applies current rules to stored memory, because new rules arrive after old writes. Memory outlives logs, so a credential stored here would surface for years. |
+| D29 | **Component memory is a local Markdown file, not a vector record.** The agent writes `.wagglebot/memory.md` in the repository. Git already distributes a file inside one repository, a pull request reviews each change, and the history is free. The shared store therefore holds only what crosses a repository boundary: `system`, `domain`, and `org`. A search still reads the local file first, then the three shared scopes. |
 
 ### Why D9 and D10 matter
 
@@ -130,7 +131,7 @@ stay on the workstation.**
 | Layer | Runs where | Holds |
 |---|---|---|
 | **Local** | Each engineer workstation | The MCP hub, the engineer credentials, the stdio upstream subprocesses, the skills, and the base prompt |
-| **Shared** | Deployed one time for the team | The registry, memory, ingress, coordination, and the shared responder agent |
+| **Shared** | Deployed one time for the team | The registry, memory, and (Phase 2) coordination |
 
 A solo engineer runs both layers on one machine. The compose profiles
 support that without a change (see the compose section).
@@ -154,8 +155,6 @@ graph TB
         CHROMA[("Chroma<br/>volume: /chroma/chroma")]
         COORD["Coordination service<br/>MCP + SSE"]
         SQLITE[("SQLite<br/>volume: channels, tasks")]
-        ING["Ingress<br/>Slack, GitHub, webhook"]
-        RESP["Shared responder agent"]
     end
 
     REMOTE["Remote MCP upstreams<br/>your vendors"]
@@ -171,9 +170,6 @@ graph TB
 
     MEM --> CHROMA
     COORD --> SQLITE
-    ING -->|posts a task| COORD
-    RESP -->|claims a task| COORD
-    RESP -->|replies| ING
 
     style CREDS fill:#ffe6e6
     style WS fill:#f0f8ff
@@ -206,22 +202,11 @@ talks to three things, and always by MCP. Credentials touch one box.
  │  mcp-hub :9000               │      ┌────────────────────────────┐
  │  + engineer credentials      │─────▶│  memory-worker :3011       │
  │      │                       │ MCP  │    │ chroma-db :8000       │
- │      ├──────────────┐        │      │    └ extractor-llm :8080   │
+ │      ├──────────────┐        │      │    └ extractor (optional)  │
  │      ▼              ▼        │      └────────────────────────────┘
  │  stdio MCP     remote MCP    │      ┌────────────────────────────┐
- │  subprocesses  upstreams     │─────▶│  coordination :3020        │
+ │  subprocesses  upstreams     │─────▶│  coordination :3020 (Ph. 2)│
  └──────────────────────────────┘ MCP  │  presence · log · tasks    │
-                                       └─────────────▲──────────────┘
-                                                     │ posts task
-   Slack ─┐                            ┌─────────────┴──────────────┐
-   GitHub ─┼──── webhook ─────────────▶│  ingress :3030             │
-   HTTP   ─┘                           │  normalizes → ChannelEvent │
-                                       └────────────────────────────┘
-                                                     │ claims task
-                                       ┌─────────────▼──────────────┐
-                                       │  responder agent (shared)  │
-                                       │  always on · holds bot     │
-                                       │  tokens · replies in thread│
                                        └────────────────────────────┘
 ```
 
@@ -313,68 +298,38 @@ it as an upstream, so agents reach memory through their own hub.
   not a disk loss or a bad migration. The stack therefore ships `dump`
   and `restore` commands for both stores.
 
-### 3. Ingress Channels (shared layer)
+### 3. Component Memory Is A Local File (D29)
 
-A standalone HTTP service. Ingress must run shared, because Slack and
-GitHub webhooks need a public URL. Adapters normalize each provider
-payload into one common envelope.
+Not every memory belongs on a server. A fact about one repository
+belongs **in** that repository:
 
-```typescript
-type ChannelEvent = {
-  id: string;              // dedup key
-  source: string;          // "slack", "github", "webhook", ...
-  conversationKey: string; // thread/issue/session identity (contracts §C4)
-  type: string;            // "slack.app_mention", "github.issue_comment.created"
-  payload: unknown;        // normalized event body
-  timestamp: string;
-};
+```
+.wagglebot/memory.md
 ```
 
-Built-in adapters: `webhook` (shared-secret header, **fail-closed**),
-`slack` (Events API, signature verification), and `github` (HMAC
-verification). The `conversationKey` formats and the session-bound tool
-pattern follow the service contracts (§C4). An event without
-`id`/`eventId`/`deliveryId` gets a random fallback key. Events therefore
-never collapse into one conversation (P13).
+Git already distributes that file to everyone who clones the
+repository. A pull request reviews each change, and the history is
+free. A server adds nothing.
 
-**Delivery: ingress posts each `ChannelEvent` to the coordination task
-board** (D11). One live claim exists at a time. Delivery is
-at-least-once, so external effects deduplicate on an idempotency key
-(D5, P30).
+The shared store therefore holds only what crosses a repository
+boundary:
 
-Ingress may also POST directly to one callback URL. That mode suits a
-solo engineer with no coordination service. It gives no claim semantics.
+| Scope | Where it lives |
+|---|---|
+| `component` | `.wagglebot/memory.md`, in the repository |
+| `system`, `domain`, `org` | The shared memory worker |
 
-### 4. The Responder Model
+A search reads the local file first, then the three shared scopes.
 
-A `ChannelEvent` needs a reply in its thread. Two responder kinds exist.
+This also makes the common case reviewable. A pull request that says
+"the agent wants to remember this" beats a silent write into a vector
+store.
 
-| Responder | Runs where | Use for |
-|---|---|---|
-| **Shared responder agent** (default) | Shared layer, always on | Team-facing channels: Slack mentions, pull request comments. Phase 1 ships a minimal reference implementation (D18). |
-| **Local agent** (Phase 2) | Engineer workstation | Personal events routed to one engineer. It claims tasks scoped to itself. |
+NOTE: The superpowers skill set already works this way. It writes specs
+and plans into `docs/superpowers/specs/`, in git. Component memory
+follows the same pattern.
 
-Wagglebot stays runtime-agnostic (Goal 6), so any runtime may replace
-the responder. Phase 1 still ships a **minimal reference responder**,
-because the default channel path needs a working reply flow for the
-success criteria (D18). It claims tasks, heartbeats with its fence,
-submits effects through the durable path, and proposes memory.
-
-Provider credentials live with the services that use them: the signing
-secrets on ingress, and the bot token on the effect path. The local hub
-never receives a channel secret.
-
-A laptop is the wrong host for a team-facing channel. A laptop sleeps.
-Three laptops race for the same mention. The bot token would also spread
-to every workstation, against D9.
-
-**Memory is never the transport for an event.** The memory pipeline
-extracts durable facts. It drops transcripts by design. It also runs an
-LLM with a 120 s timeout. Those properties suit facts, not work items.
-The responder still proposes memory through the normal path, as a side
-effect of its work (P26).
-
-### 5. How The Agent Knows Which Upstream To Use
+### 4. How The Agent Knows Which Upstream To Use
 
 The agent never reads the shared registry. The agent talks only to its
 local hub. Two centrally curated files answer the question, and the hub
@@ -407,14 +362,13 @@ The hub re-pulls the registry on the interval
 `MCP_HUB_CONFIG_REFRESH_SECONDS`. Tool schemas refresh on the existing
 background cycle.
 
-### 6. Coordination
+### 5. Coordination (Phase 2)
 
 A standalone MCP + SSE service, scoped by system and branch.
 
-| Part | Phase | Content |
-|---|---|---|
-| Task board core | **1** (D14) | Queue, claim, lease, fence, and the `ChannelEvent` tasks from ingress |
-| Collaboration | 2 | Presence, messaging, username connections with approval (D12) |
+All of it is Phase 2 (D14), because every part needs two agents
+running at one time: the task board, presence, messaging, and username
+connections with approval (D12).
 
 The
 [cross-machine collaboration spec](2026-08-28-cross-machine-collaboration-design.md)
@@ -430,16 +384,13 @@ wagglebot/
 ├── services/
 │   ├── mcp-hub/                 # MCP aggregation proxy (TypeScript/Bun)
 │   ├── memory-worker/           # Durable memory pipeline (TypeScript/Bun)
-│   ├── ingress/                 # Channel adapters + durable effect path
-│   ├── responder/               # Minimal reference responder (D18)
-│   └── coordination/            # Task board (Ph. 1) + collab (Ph. 2)
+│   └── coordination/            # Presence, messaging, tasks (Phase 2)
 ├── central/                     # Operator-maintained, versioned
 │   ├── catalog.yaml             # domains, systems, groups, users (+ssh keys)
-│   ├── channels.yaml            # ingress source → group, system, responder
 │   ├── registry.base.yaml
 │   └── registry.team.<team>.yaml
 ├── packages/
-│   └── types/                   # Shared types (ChannelEvent, MemoryProvider, JobSpec, ...)
+│   └── types/                   # Shared types (MemoryProvider, JobSpec, ...)
 ├── provisioning/
 │   ├── skills.list              # Curated skill packages
 │   ├── bin/install-skills
@@ -450,7 +401,6 @@ wagglebot/
 ├── templates/
 │   └── starter/                 # Scaffold for new projects
 │       ├── agent/               # Skeleton agent (connects to hub)
-│       ├── responder/           # Skeleton shared responder agent
 │       ├── registry.yaml        # Empty upstream registry with examples
 │       ├── tool_catalog.yaml    # Empty routing guide with one example family
 │       └── docker-compose.override.yml
@@ -468,8 +418,8 @@ One compose file carries both layers. The `local` profile runs on each
 workstation. The `shared` profile runs one time for the team. A solo
 engineer starts both profiles on one machine.
 
-NOTE: The block below is **schematic**. It omits the responder service,
-the registry serving, provider secrets on ingress, and bind-address
+NOTE: The block below is **schematic**. It omits the registry serving
+and bind-address
 hardening. The implemented compose file must start with documented
 inputs and must satisfy D7 and D8.
 
@@ -498,9 +448,9 @@ services:
     profiles: [shared]
     ports: ["18000:8000"]
 
-  extractor-llm:
+  extractor-llm:                   # optional, batch ingestion only (D2, D25)
     image: ghcr.io/ggml-org/llama.cpp:server
-    profiles: [shared]
+    profiles: [ingest]
     command: >
       -hf Qwen/Qwen2.5-1.5B-Instruct-GGUF:q5_k_m
       --host 0.0.0.0 --port 8080 -c 8192
@@ -513,27 +463,17 @@ services:
     environment:
       MEMORY_WORKER_PORT: 3011
       MEMORY_WORKER_BEARER_TOKEN: ${MEMORY_WORKER_BEARER_TOKEN}
-      EXTRACTOR_API_BASE: http://extractor-llm:8080/v1
+      EXTRACTOR_API_BASE: ${EXTRACTOR_API_BASE:-}   # only for batch ingestion
       CHROMA_URL: http://chroma-db:8000
       MEMORY_STORAGE_ROOT: /data
     volumes:
       - memory_data:/data
-      - ./policy:/policy:ro
-    depends_on: [chroma-db, extractor-llm]
+    depends_on: [chroma-db]
     ports: ["3011:3011"]
 
-  ingress:
-    build: ./services/ingress
-    profiles: [shared]
-    environment:
-      INGRESS_PORT: 3030
-      INGRESS_COORD_URL: http://coordination:3020    # preferred sink
-      INGRESS_CALLBACK_URL: ${AGENT_CALLBACK_URL:-}  # solo fallback
-    ports: ["3030:3030"]
-
-  coordination:                    # task board core in Phase 1 (D14)
+  coordination:                    # Phase 2 (D14)
     build: ./services/coordination
-    profiles: [shared]
+    profiles: [collab]
     environment:
       COORD_PORT: 3020
       COORD_BEARER_TOKEN: ${COORD_BEARER_TOKEN}
@@ -551,6 +491,8 @@ Start commands:
 * Each engineer: `docker compose --profile local up`
 * The team deployment: `docker compose --profile shared up`
 * One solo engineer: `docker compose --profile local --profile shared up`
+* Batch document ingestion, when wanted: add `--profile ingest`
+* Collaboration, in Phase 2: add `--profile collab`
 
 There are no vendor-specific services. Users add upstreams to
 `registry.yaml`. Users extend the stack with
@@ -568,10 +510,10 @@ fifteen engineers total.
 | Layer | Count | Holds |
 |---|---|---|
 | Local hub | 15, one per engineer | That engineer credentials |
-| Shared layer | **1**, not one per team | Registry, memory, coordination, ingress, responder |
+| Shared layer | **1**, not one per team | The registry, memory, and (Phase 2) coordination |
 
 Deploy one shared layer, not five. Scoping already separates the teams.
-Memory scopes by catalog level. Coordination scopes by system and branch.
+Memory scopes by catalog level.
 Five deployments would multiply the operations work by five, for fifteen
 people. Five deployments would also block every cross-team benefit.
 
@@ -720,18 +662,16 @@ Wagglebot does not build it. Choose the second deployment instead.
 
 1. Both profiles start a working stack on one machine. The required
    inputs are an empty `registry.yaml` and the generated service bearer
-   tokens (D7). Channel connectors need their provider secrets, and
-   stay optional. The extractor runs on a CPU without a model
-   pre-download step.
+   tokens (D7). No model download is needed, because no model runs on
+   the default path (D24).
 2. A user adds an upstream to `registry.yaml` and restarts the hub. The
    new tools appear in `list_available_mcps`.
-3. A `POST /memory/proposals` with a fact reaches Chroma after the
-   extraction pipeline runs. This works with the bundled llama.cpp
-   container. It also works with a remote OpenAI-compatible endpoint,
-   with no code change.
-4. A webhook event hits the ingress service. The event becomes a task on
-   the coordination board. One responder claims it and replies in the
-   thread.
+3. An agent calls `propose_memory` with a fact. The fact passes the
+   credential scan (D28), deduplicates, and reaches Chroma. No model
+   runs on that path.
+4. **Credential scan.** A fact containing an AWS key is redacted before
+   storage. A fact that is mostly key material is rejected. Neither
+   error message echoes the content.
 5. `provisioning/bin/sync-agents` writes one rendered template to every
    harness target. `install-skills` installs the curated list on a clean
    machine (see the provisioning spec).
@@ -739,17 +679,21 @@ Wagglebot does not build it. Choose the second deployment instead.
    hub authenticates as its own engineer. No engineer credential and no
    upstream MCP credential appears in the shared layer, in the
    registry, or in any log. The shared layer holds only its own service
-   secrets, such as channel provider secrets (D9).
+   bearer tokens (D9).
 7. **Graceful skip.** An engineer lacks the credential for one upstream.
    That namespace is absent from `list_available_mcps`. Every other
    namespace still works.
 8. **Scope isolation.** Team A publishes a fact through
    `.wagglebot/public.md`. Team B finds it in a memory search. Team B
    never finds a working-memory record of Team A.
-9. (Phase 2) The success criteria in the collaboration spec pass:
-   same-system and same-branch agents collaborate, other-branch agents
-   are discoverable only, and an expired claim lease returns its task to
-   the board.
+9. **Local component memory.** An agent records a repository fact in
+   `.wagglebot/memory.md` (D29). The file appears in `git status`, so a
+   human reviews it. A later `memory_search` finds it without a server
+   call.
+10. (Phase 2) The success criteria in the collaboration spec pass:
+    same-system and same-branch agents collaborate, other-branch agents
+    are discoverable only, and an expired claim lease returns its task
+    to the board.
 
 ---
 
