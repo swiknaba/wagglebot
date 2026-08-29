@@ -2,12 +2,14 @@
 
 > **Related specs:**
 > - [Service contracts](2026-08-28-service-contracts.md) — behavior
->   contracts for the hub, the memory worker, and the channels. The
->   pitfall register (P-numbers) is also there.
+>   contracts for the hub and the memory worker. The pitfall register
+>   (P-numbers) is also there.
 > - [Cross-machine collaboration](2026-08-28-cross-machine-collaboration-design.md)
 >   — the Phase 2 coordination service.
 > - [Workstation provisioning](2026-08-28-provisioning-design.md) —
 >   the curated skill list and the shared agent base template.
+> - [Descoped ideas](2026-08-28-descoped-ideas.md) — what we removed
+>   from the MVP, and what would bring it back.
 
 ## Problem
 
@@ -40,7 +42,7 @@ and deploy. No team must fork the internals of a different company.
 5. **Runtime-Agnostic** — The framework services (hub, memory,
    coordination) run as standalone Docker containers. Any agent runtime
    (LangGraph, raw LLM loops, Claude Code) connects over HTTP/MCP.
-7. **Deployment-Agnostic** — Wagglebot ships Docker images and a
+6. **Deployment-Agnostic** — Wagglebot ships Docker images and a
    compose file, nothing else. The stack runs the same on a laptop, a
    self-hosted box, or any container platform. Development needs no
    cloud accounts. The optional batch extractor runs on a CPU (D2, D25).
