@@ -50,7 +50,7 @@ All seven were verified against the files before the fix. All were real.
 | G08 | **Fixed.** Success criterion 6 permits shared service secrets, and still prohibits engineer and upstream credentials. The README principle is revised. |
 | G09 | **Fixed.** Criterion 1 lists the registry, the generated service tokens, and optional connector secrets. |
 | G10 | **Fixed.** The design refers to the keyed fingerprint rule in §C2. |
-| G11 | **Fixed.** The sync tool owns only entries with an agentframe identifier. |
+| G11 | **Fixed.** The sync tool owns only entries with an wagglebot identifier. |
 | G12 | **Fixed.** See the model correction above (D15). |
 | G13 | **Fixed.** The P6 guard states the built-in default policy. |
 | G14 | **Fixed.** The compose example pins a digest placeholder. |
@@ -61,7 +61,7 @@ All seven were verified against the files before the fix. All were real.
 |---|---|
 | G15 | **Resolved.** D15. The registry selects relevance, not permission. Local credentials decide what works. |
 | G16 | **Resolved.** Cross-team discovery, messaging, and handoff are available to every registered engineer. A connection rejection is a user preference (P34). |
-| G17 | **Resolved.** The runtime owns permission enforcement. Agentframe transports `JobSpec` and never sandboxes a job. |
+| G17 | **Resolved.** The runtime owns permission enforcement. Wagglebot transports `JobSpec` and never sandboxes a job. |
 | G18 | **Deferred** to `operations-contract.md`. The field list is adopted as the requirement. |
 | G19 | **Resolved, scoped.** P32: size caps, control-character stripping, provenance tags, first-party routing catalog. **Scoped down:** no formal change-review workflow for descriptions in Phase 1. |
 
@@ -73,8 +73,8 @@ All seven were verified against the files before the fix. All were real.
 | G21 | **Resolved.** `users.json` and `teams.json` in the central repository. Managers maintain them. |
 | G22 | **Resolved.** Two layers only: `registry.base.json` and `registry.team.<team>.json`. Team wins per namespace. Validation prints the effective registry. |
 | G23 | **Resolved.** Cross-team collaboration is the default. Scopes select channels and relevance. |
-| G24 | **Partial.** The published-interface field list is adopted for `.agentframe/public.md`. The searchable catalog schema goes to `protocol-contracts.md`. |
-| G25 | **Resolved.** D16: `.agentframe/project.json` overrides remote normalization, which covers monorepositories, aliases, and renames. A branch is context, never identity. |
+| G24 | **Partial.** The published-interface field list is adopted for `.wagglebot/public.md`. The searchable catalog schema goes to `protocol-contracts.md`. |
+| G25 | **Resolved.** D16: `.wagglebot/project.json` overrides remote normalization, which covers monorepositories, aliases, and renames. A branch is context, never identity. |
 | G26 | **Resolved.** Eligibility gains `team:`, `project:`, and a capability set. FIFO and priority hold inside the eligible set. |
 | G27 | **Resolved.** D17 and `channels.json`. An unrouted or ambiguous event is rejected, never guessed. |
 | G28 | **Resolved.** One operator procedure: edit the central files, issue or revoke one token, run validation. |
@@ -82,7 +82,7 @@ All seven were verified against the files before the fix. All were real.
 | G30 | **Deferred** to `operations-contract.md`. |
 | G31 | **Accepted.** The acceptance profile (3 managers, 2–5 teams each, multiple projects, cross-team publication, concurrent traffic, one shared stack) replaces the capacity estimates. Set measured limits after the first working implementation. |
 | G32 | **Resolved.** One validation command over users, teams, projects, registries, and channel routes. |
-| G33 | **Accepted.** Operators own model and data policy. Agentframe keeps only vector-compatibility metadata, the external extractor flag, deletion, retention, and backup behavior. |
+| G33 | **Accepted.** Operators own model and data policy. Wagglebot keeps only vector-compatibility metadata, the external extractor flag, deletion, retention, and backup behavior. |
 
 ## Where These Resolutions Push Back
 

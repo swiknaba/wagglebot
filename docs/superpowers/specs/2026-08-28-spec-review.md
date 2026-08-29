@@ -1,4 +1,4 @@
-# Agentframe Specification Review
+# Wagglebot Specification Review
 
 **Review date:** 2026-08-28  
 **Review scope:** All four specifications and the repository README.  
@@ -6,7 +6,7 @@
 
 ## Reviewed Documents
 
-- `2026-08-28-agentframe-design.md`
+- `2026-08-28-wagglebot-design.md`
 - `2026-08-28-service-contracts.md`
 - `2026-08-28-cross-machine-collaboration-design.md`
 - `2026-08-28-provisioning-design.md`
@@ -256,7 +256,7 @@ Define migration behavior for a model change.
 
 ### F20. Organization publication has no ingestion contract
 
-The design says that an ingestion job reads `.agentframe/public.md`. It does not define discovery, authentication, parsing, or deletion transactions.
+The design says that an ingestion job reads `.wagglebot/public.md`. It does not define discovery, authentication, parsing, or deletion transactions.
 
 It also does not define repository revision tracking or failure recovery. Partial replacement can remove valid organization facts.
 

@@ -1,4 +1,4 @@
-# Agentframe Specification Follow-Up Review
+# Wagglebot Specification Follow-Up Review
 
 **Review date:** 2026-08-28  
 **Audience:** Implementation agents, reviewers, and architecture owners.  
@@ -20,14 +20,14 @@ The target deployment is a self-operated engineering organization:
 - Approximately three engineering managers.
 - Approximately two to five teams per manager.
 - Multiple repositories and interfaces across teams.
-- One shared Agentframe stack.
+- One shared Wagglebot stack.
 - One local hub per participating engineer.
 
 Enterprise identity, high availability, regulatory governance, and managed-service features are out of scope.
 
 All registered engineers are trusted coworkers. Team and project data supports routing, context, and collaboration.
 
-Agentframe does not use team membership to control source code access.
+Wagglebot does not use team membership to control source code access.
 
 ## Current Assessment
 
@@ -231,11 +231,11 @@ Use the service contract rule everywhere.
 
 ### G11. Hook ownership statements conflict
 
-Provisioning distribution rules preserve hook entries that Agentframe did not create.
+Provisioning distribution rules preserve hook entries that Wagglebot did not create.
 
 The later hook section says that the tool owns the complete `hooks` key.
 
-Remove complete-key ownership. Track only entries with stable Agentframe identifiers.
+Remove complete-key ownership. Track only entries with stable Wagglebot identifiers.
 
 ### G12. Simplify the principal model in the specifications
 
@@ -280,11 +280,11 @@ Team and project values select the default channel. They do not deny cross-team 
 
 A person can reject a direct connection request as a user preference. This rejection is not an access-control rule.
 
-### G17. Keep job execution outside Agentframe
+### G17. Keep job execution outside Wagglebot
 
-Agentframe transports `JobSpec` data. The selected agent runtime executes the job.
+Wagglebot transports `JobSpec` data. The selected agent runtime executes the job.
 
-Document that the runtime owns permission enforcement. Do not build a job sandbox in Agentframe.
+Document that the runtime owns permission enforcement. Do not build a job sandbox in Wagglebot.
 
 ### G18. Add a durable activity log
 
@@ -342,7 +342,7 @@ Store these relationships:
 - A team owns one or more projects.
 - A project can have more than one owning team.
 
-Repository write access controls who can change these files. Agentframe needs no management role system.
+Repository write access controls who can change these files. Wagglebot needs no management role system.
 
 ### G22. Keep registry composition small
 
@@ -373,7 +373,7 @@ Project memory scopes improve search relevance. They do not form a code-access b
 
 ### G24. Make the published interface catalog searchable
 
-`.agentframe/public.md` is a strong starting point. Define a useful multi-team catalog around it.
+`.wagglebot/public.md` is a strong starting point. Define a useful multi-team catalog around it.
 
 Each published interface needs:
 
@@ -495,7 +495,7 @@ The command shows the effective configuration and reports conflicts. An administ
 
 Operators select models, providers, retention rules, and deployment boundaries.
 
-Agentframe only needs:
+Wagglebot only needs:
 
 - Model metadata required for vector compatibility.
 - Explicit external extractor configuration.

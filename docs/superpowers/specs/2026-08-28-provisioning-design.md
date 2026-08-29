@@ -1,6 +1,6 @@
 # Workstation Provisioning
 
-> Companion to the [agentframe design spec](2026-08-28-agentframe-design.md).
+> Companion to the [wagglebot design spec](2026-08-28-wagglebot-design.md).
 > One team shares one curated agent environment: the same skills and the
 > same base instructions, on every workstation and in every agent
 > harness. This tooling ships under `provisioning/`.
@@ -40,7 +40,7 @@ script warns and continues. The script exits non-zero on failures.
 
 `provisioning/templates/AGENTS.base.md` is the **shared agent base
 template**. It contains harness-independent instructions plus an
-agentframe connection block. The connection block covers three topics:
+wagglebot connection block. The connection block covers three topics:
 how to reach the hub, the propose-not-write memory rule, and
 coordination etiquette. Teams append overlays. Composition is plain
 concatenation: `AGENTS.base.md` + `overlays/*.md` → the rendered
@@ -223,12 +223,12 @@ non-zero on failure. The target list lives in one place: the script.
 The sync is **non-destructive** (guards F22):
 
 1. Write into a managed block
-   (`<!-- agentframe:begin -->` ... `<!-- agentframe:end -->`) where the
+   (`<!-- wagglebot:begin -->` ... `<!-- wagglebot:end -->`) where the
    harness format permits. Content outside the block stays untouched.
 2. Merge hook fragments per entry. Never replace a `hooks` key that
    contains entries this tool did not write.
 3. Back up each target file before the first mutation, under
-   `~/.agentframe/backups/<timestamp>/`.
+   `~/.wagglebot/backups/<timestamp>/`.
 4. Provide `--dry-run` (show the diff, change nothing) and `--restore`
    (write the newest backup back).
 
@@ -251,7 +251,7 @@ adapters.
 - `sync-agents` merges each fragment into its harness config. The
   Claude Code adapter merges `hooks/claude-code.json` into
   `~/.claude/settings.json` with `jq` and preserves the other keys.
-  This tooling owns only the hook entries that carry an agentframe
+  This tooling owns only the hook entries that carry an wagglebot
   identifier. It never owns the complete `hooks` key, and it preserves
   every entry it did not write.
 - Harnesses without hook support get the rules only through the base

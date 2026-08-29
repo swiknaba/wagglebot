@@ -1,6 +1,6 @@
 # Service Behavior Contracts
 
-> Companion to the [agentframe design spec](2026-08-28-agentframe-design.md).
+> Companion to the [wagglebot design spec](2026-08-28-wagglebot-design.md).
 > This document gives the behavior contracts for the framework services.
 > It also gives a register of known design traps (P-numbers). The
 > decisions in the main spec guard against those traps.
@@ -394,7 +394,7 @@ land too low, never too high, and the search cascade still finds it.
   Domain names as `owner`. Membership comes from `Group.spec.members`
   in the catalog.
 * `org`: the caller must carry the org-owner flag. The flag is the
-  annotation `agentframe.io/org-owner: "true"` on the User entity in
+  annotation `wagglebot.dev/org-owner: "true"` on the User entity in
   the central catalog. Several users may carry it. Write access to the
   central catalog repository is the permission to grant it, and the
   org owners maintain that repository.
@@ -409,7 +409,7 @@ shares its facts, a domain shares its conventions, and the
 organization shares its interfaces.
 
 **The catalog uses the full [Backstage](https://backstage.io) entity
-model (D20).** Agentframe never infers ownership from a Git remote, a
+model (D20).** Wagglebot never infers ownership from a Git remote, a
 directory name, or any repository shape.
 
 | Entity | Meaning | Declared in |
@@ -429,9 +429,9 @@ a domain or a system.
 A Domain may therefore equal one team, when the organization works that
 way. The model permits that shape without forcing it.
 
-**The format is Backstage YAML, not a private schema.** Agentframe reads
+**The format is Backstage YAML, not a private schema.** Wagglebot reads
 the entity envelope that Backstage defines. An organization that already
-runs Backstage points agentframe at its existing catalog files, and
+runs Backstage points wagglebot at its existing catalog files, and
 writes nothing new.
 
 **The central catalog** holds systems, domains, and groups, as a
@@ -468,7 +468,7 @@ kind: User
 metadata:
   name: alice
   annotations:
-    agentframe.io/org-owner: "true"   # may publish to the org scope
+    wagglebot.dev/org-owner: "true"   # may publish to the org scope
 spec:
   memberOf: [team-payments]
 ```
@@ -492,8 +492,8 @@ spec:
 ```
 
 The loader reads `catalog-info.yaml` first. A team that does not run
-Backstage may use `.agentframe/catalog.yaml` instead, with the identical
-schema. The agentframe path wins when both exist.
+Backstage may use `.wagglebot/catalog.yaml` instead, with the identical
+schema. The wagglebot path wins when both exist.
 
 YAML also carries comments, which a hand-maintained catalog needs.
 
@@ -524,7 +524,7 @@ decision:
 **Backstage compatibility.** When a repository already carries a
 `catalog-info.yaml`, the loader reads it, and maps `spec.system`,
 `spec.owner`, and `spec.type` directly. Teams that run Backstage add no
-second ownership file. A `.agentframe/catalog.yaml` wins when both
+second ownership file. A `.wagglebot/catalog.yaml` wins when both
 exist.
 
 Rules:
@@ -543,7 +543,7 @@ Rules:
    recorded as provenance.
 
 **Publication into the `domain` and `org` scopes.** Each team
-repository may hold one file, `.agentframe/public.md`. An ingestion job
+repository may hold one file, `.wagglebot/public.md`. An ingestion job
 reads each file and upserts its content into the `org` scope, with the
 source `group:<group>`. A domain publication uses the direct endpoints
 with a user token, gated by the owner group of that Domain (D23).
@@ -684,7 +684,7 @@ See the [review resolutions](2026-08-28-spec-review-resolutions.md).
 
 ## C6. Ops (Docker-only)
 
-Agentframe ships containers and a compose file, nothing
+Wagglebot ships containers and a compose file, nothing
 platform-specific:
 
 - Each image is overridable via `${*_IMAGE:-...:local}` in compose.
@@ -705,7 +705,7 @@ platform-specific:
 
 ## C7. Pitfall register
 
-Known design traps and the guard that agentframe applies. The numbering
+Known design traps and the guard that wagglebot applies. The numbering
 is stable. The decisions in the main spec reference these.
 
 | # | Trap | Guard |

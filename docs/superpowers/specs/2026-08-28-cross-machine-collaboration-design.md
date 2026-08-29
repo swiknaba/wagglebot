@@ -1,6 +1,6 @@
 # Cross-Machine Agent Collaboration (Phase 2)
 
-> Companion to the [agentframe design spec](2026-08-28-agentframe-design.md).
+> Companion to the [wagglebot design spec](2026-08-28-wagglebot-design.md).
 > Decisions D4–D6 apply: a standalone container, a FIFO + priority task
 > board with claim leases, and persistent messages with SSE replay.
 
@@ -15,12 +15,12 @@
 
 ## The Trust Model: Trusted Coworkers
 
-Every registered engineer is a trusted coworker. Agentframe therefore
+Every registered engineer is a trusted coworker. Wagglebot therefore
 uses identity for **routing, context, and attribution**, never as a
 source-code access boundary. Git and the identity provider of the
 company already control code access.
 
-| Agentframe does | Agentframe does not |
+| Wagglebot does | Wagglebot does not |
 |---|---|
 | Name who acts, for attribution | Decide who may read a repository |
 | Route tasks and events to the right team | Grant or deny tool access by team |
@@ -53,7 +53,7 @@ memory scope (D23). `channels.yaml` holds the ingress routes. The
 [service contracts](2026-08-28-service-contracts.md) give both schemas.
 
 Each repository declares its components in `catalog-info.yaml`, or in
-`.agentframe/catalog.yaml` with the identical schema.
+`.wagglebot/catalog.yaml` with the identical schema.
 
 Rules:
 
@@ -81,7 +81,7 @@ remain restricted.
 
 ## Identifiers Follow The Backstage Entity Model
 
-Agentframe assumes no repository layout, and derives nothing from a Git
+Wagglebot assumes no repository layout, and derives nothing from a Git
 remote. The catalog declares everything (D20).
 
 | Identifier | Source | Purpose |
@@ -133,7 +133,7 @@ Each agent registers with a **workspace identity**:
 
 - `system` and `component` come from the closest enclosing declaration.
   Components that name the same system share one memory space and one
-  channel. An undeclared repository has no system, and agentframe never
+  channel. An undeclared repository has no system, and wagglebot never
   infers one (D20).
 - `branch` = the current git branch. Each heartbeat refreshes the
   branch. The agent therefore follows its human across checkouts.

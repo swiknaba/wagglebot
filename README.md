@@ -1,4 +1,4 @@
-# Agentframe
+# Wagglebot
 
 One AI agent setup for a whole engineering team.
 
@@ -17,12 +17,12 @@ Each team that builds AI agents writes the same infrastructure again:
 Teams build this inside one company repository. Vendor services become
 hardcoded. Nobody can reuse the result.
 
-Agentframe separates the reusable parts. You supply the configuration.
+Wagglebot separates the reusable parts. You supply the configuration.
 You keep your internals.
 
 ## How It Works
 
-Agentframe uses two layers.
+Wagglebot uses two layers.
 
 **Local, on each engineer workstation:**
 
@@ -70,7 +70,7 @@ service secrets, such as the chat bot token.
 
 | Spec | Content |
 |---|---|
-| [Design](docs/superpowers/specs/2026-08-28-agentframe-design.md) | Goals, decisions, architecture, and the compose stack. |
+| [Design](docs/superpowers/specs/2026-08-28-wagglebot-design.md) | Goals, decisions, architecture, and the compose stack. |
 | [Service contracts](docs/superpowers/specs/2026-08-28-service-contracts.md) | Behavior contracts for each service, and the pitfall register. |
 | [Collaboration](docs/superpowers/specs/2026-08-28-cross-machine-collaboration-design.md) | Cross-machine agent collaboration. |
 | [Provisioning](docs/superpowers/specs/2026-08-28-provisioning-design.md) | Curated skills, the base prompt, and harness hooks. |
