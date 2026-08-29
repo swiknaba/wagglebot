@@ -38,7 +38,7 @@
 | F16 | **Deferred** to `task-state-machine.md` (expired cursor response, resynchronization, ordering, backpressure). | Deliverable 3 |
 | F17 | **Resolved.** Local extractor default. A remote extractor requires `EXTRACTOR_ALLOW_EXTERNAL=1`. | Contracts §C3 |
 | F18 | **Deferred** to `protocol-contracts.md` (provenance priority, correction handling, equal confidence, revision trail). | Deliverable 2 |
-| F19 | **Deferred, blocking.** Select the Phase 1 embedding provider before implementation. Store model identity and dimension with each collection. | Open question in the design spec |
+| F19 | **Resolved by D19.** The Phase 1 provider is the Chroma built-in default: `all-MiniLM-L6-v2`, 384 dimensions, cosine distance. Model identity and dimension are stored with each collection. | Design D19, contracts §C3 |
 | F20 | **Deferred** to `protocol-contracts.md` (publication discovery, principal, revision key, atomic replacement). The administrator principal is set (F07). | Deliverable 2 |
 | F21 | **Resolved.** Pinned CLI version, pinned `owner/repo@ref` skill entries, explicit `--update`. | Provisioning spec, D13 |
 | F22 | **Resolved.** Managed blocks, per-entry hook merges, backups, `--dry-run`, `--restore`. | Provisioning spec |
@@ -54,7 +54,7 @@
 | F27 | **Deferred** to `operations-contract.md` (metric set, structured logs, correlation identifiers). | Deliverable 4 |
 | F28 | **Resolved.** Keyed fingerprints (HMAC-SHA256, `LOG_FINGERPRINT_KEY`), or omission. | Contracts §C2 |
 | F29 | **Partial.** D13 pins executables and images. Version floors and the model artifact hash go to `operations-contract.md`. | Design D13, deliverable 4 |
-| F30 | **Deferred** to `protocol-contracts.md` (canonical test vectors for `projectKey`, SCP-style URLs, ports, aliases). | Deliverable 2 |
+| F30 | **Superseded by D20.** Remote normalization is gone, so the test vectors have no subject. The catalog declares every identifier, and an unknown value fails loudly (P35). | Design D20, contracts §C3 |
 | F31 | **Deferred** to `protocol-contracts.md` (every persisted record type and its collection). | Deliverable 2 |
 | F32 | **Resolved.** A built-in default policy replaces the silent empty policy. | Contracts §C3 |
 | F33 | **Deferred** to `acceptance-matrix.md`. The specs now contain first denial criteria (collaboration criteria 7–9). | Deliverable 6 |

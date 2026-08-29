@@ -25,17 +25,24 @@ restrictions remain, and both are justified:
 * Operator actions. Central files, token rotation, and direct memory
   mutation need the operator token.
 
-`principals.json` becomes `users.json` plus `teams.json`, maintained by
-the managers in the central repository. Repository write access is the
-only permission system (P34).
+`principals.json` becomes `users.yaml` plus the Backstage `catalog.yaml`,
+maintained by the managers in the central repository. Repository write
+access is the only permission system (P34).
+
+NOTE: Later decisions moved past parts of these dispositions. D20 and
+D21 replaced the project identifier with the Backstage catalog, and
+YAML replaced JSON for every hand-maintained file. D22 and D23 added
+the four memory scopes and the catalog-gated publication. The rows
+below carry the current file names and identifiers. The main specs stay
+authoritative.
 
 ## Blocking Findings
 
 | # | Disposition |
 |---|---|
-| G01 | **Open, blocking.** D19 records the required metadata (provider, model, artifact revision, dimension, distance function, schema version) and the migration duty. The provider choice needs your decision. |
+| G01 | **Resolved.** D19 selects the Chroma built-in default: `all-MiniLM-L6-v2`, 384 dimensions, cosine distance. No second model service, no extra container, no GPU. D19 also records the required metadata (provider, model, artifact revision, dimension, distance function, schema version) and the migration duty. |
 | G02 | **Accepted.** Four contract documents stay pre-implementation deliverables. The trust model consolidates into `security-model.md`. |
-| G03 | **Resolved.** One user token for every shared service. Lowercase Git username. `users.json` supports add, remove, team change, and token replacement. No audiences, issuers, or per-service tokens. |
+| G03 | **Resolved.** One user token for every shared service. Lowercase Git username. `users.yaml` supports add, remove, and token replacement. A group change edits `catalog.yaml` (D23). No audiences, issuers, or per-service tokens. |
 | G04 | **Resolved, scoped.** Channel effects pass through the durable effect path in ingress: store before send, reject a stale fence, deduplicate on the idempotency key, record the provider request id, mark ambiguous timeouts `unknown`. **Scoped down:** no separate effect microservice, and no per-provider reconciliation engine in Phase 1. |
 | G05 | **Resolved, scoped.** The worker scrubs proposal **input** before every extractor call: secret detection, redaction, policy version on the job, rejection without echoing content. **Scoped down:** no data-class taxonomy and no per-class provider allow-list. Those need a governance program the org does not run. |
 | G06 | **Resolved.** D18 ships a minimal reference responder in Phase 1. |
@@ -69,19 +76,19 @@ All seven were verified against the files before the fix. All were real.
 
 | # | Disposition |
 |---|---|
-| G20 | **Resolved.** D16 separates team, project, user, and agent identifiers. |
-| G21 | **Resolved.** `users.json` and `teams.json` in the central repository. Managers maintain them. |
-| G22 | **Resolved.** Two layers only: `registry.base.json` and `registry.team.<team>.json`. Team wins per namespace. Validation prints the effective registry. |
+| G20 | **Resolved.** D16 and D20 separate the identifiers: domain, system, component, group, username, and `agentId`. |
+| G21 | **Resolved.** `users.yaml` and `catalog.yaml` in the central repository. Managers maintain them. `users.yaml` holds only the token binding (D23). |
+| G22 | **Resolved.** Two layers only: `registry.base.yaml` and `registry.team.<team>.yaml`. Team wins per namespace. Validation prints the effective registry. |
 | G23 | **Resolved.** Cross-team collaboration is the default. Scopes select channels and relevance. |
 | G24 | **Partial.** The published-interface field list is adopted for `.wagglebot/public.md`. The searchable catalog schema goes to `protocol-contracts.md`. |
-| G25 | **Resolved.** D16: `.wagglebot/project.json` overrides remote normalization, which covers monorepositories, aliases, and renames. A branch is context, never identity. |
-| G26 | **Resolved.** Eligibility gains `team:`, `project:`, and a capability set. FIFO and priority hold inside the eligible set. |
-| G27 | **Resolved.** D17 and `channels.json`. An unrouted or ambiguous event is rejected, never guessed. |
+| G25 | **Superseded by D20.** Remote normalization is gone. Each repository declares its components in `catalog-info.yaml`, or in `.wagglebot/catalog.yaml`. That covers monorepositories, aliases, and renames. There is no inference fallback (P35). A branch is context, never identity. |
+| G26 | **Resolved.** Eligibility gains `group:`, `system:`, and a capability set. FIFO and priority hold inside the eligible set. |
+| G27 | **Resolved.** D17 and `channels.yaml`. An unrouted or ambiguous event is rejected, never guessed. |
 | G28 | **Resolved.** One operator procedure: edit the central files, issue or revoke one token, run validation. |
 | G29 | **Deferred** to Phase 2, with the field list adopted. Summaries stay operational, and never expose project working memory. |
 | G30 | **Deferred** to `operations-contract.md`. |
 | G31 | **Accepted.** The acceptance profile (3 managers, 2–5 teams each, multiple projects, cross-team publication, concurrent traffic, one shared stack) replaces the capacity estimates. Set measured limits after the first working implementation. |
-| G32 | **Resolved.** One validation command over users, teams, projects, registries, and channel routes. |
+| G32 | **Resolved.** One validation command over users, the catalog, registries, and channel routes. |
 | G33 | **Accepted.** Operators own model and data policy. Wagglebot keeps only vector-compatibility metadata, the external extractor flag, deletion, retention, and backup behavior. |
 
 ## Where These Resolutions Push Back
@@ -105,13 +112,13 @@ because the full version does not fit a fifteen-engineer internal tool:
 One process note. The review says "do not start the implementation
 plan." That is correct for **service implementation**. Writing the plan
 is how the four contract documents get scheduled, so planning may start
-once G01 has an answer.
+now. G01 has an answer (D19).
 
 ## Remaining Gate
 
 | Gate | State |
 |---|---|
-| Embedding provider decision (G01, D19) | **Open — needs your call** |
+| Embedding provider decision (G01, D19) | **Closed.** Chroma built-in default |
 | `protocol-contracts.md` | Deliverable |
 | `task-state-machine.md` | Deliverable |
 | `operations-contract.md` | Deliverable |
