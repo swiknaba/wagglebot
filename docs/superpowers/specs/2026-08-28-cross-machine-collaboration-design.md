@@ -112,7 +112,7 @@ The connection flow:
 1. Agent A requests a connection: `connect_to("username-b")`.
 2. The service delivers the request to the agents of engineer B.
 3. **Engineer B sees who asks** — the username, the agent name, the
-   machine, and the project — **and approves or rejects.**
+   machine, and the system — **and approves or rejects.**
 4. An approval persists. Later messages between the two flow without a
    new approval, until either engineer revokes the grant.
 
@@ -272,7 +272,8 @@ service is the only rendezvous point.
    the requester identity and approves. Messages then flow. B revokes
    the grant, and messages stop.
 8. A token bound to engineer A cannot register an agent as engineer B.
-   It also cannot read a project outside the teams of A.
+   It also cannot publish to a domain whose owner group excludes A, and
+   it cannot publish to `org` without the org-owner flag (D23).
 9. A responder completes a task after its lease expired. The board
    rejects the completion. The retry deduplicates on the idempotency
    key, and the channel receives one reply.

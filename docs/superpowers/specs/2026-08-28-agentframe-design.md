@@ -33,7 +33,7 @@ and deploy. No team must fork the internals of a different company.
    without changes to the core.
 4. **Cross-Machine Collaboration** — A coordination layer for agents on
    different machines. Agents discover each other, share memory, and
-   hand off tasks. The scope is the project and branch of their humans.
+   hand off tasks. The scope is the system and branch of their humans.
 5. **Agent Environment Provisioning** — Shared tooling that installs a
    curated skill set. The same tooling distributes one base instruction
    template across every agent harness on a workstation.
@@ -77,7 +77,7 @@ and deploy. No team must fork the internals of a different company.
 | D14 | **The task board core ships in Phase 1.** Queue, claim, lease, and fence move forward, because default ingress delivery depends on them. Presence, messaging, and cross-machine collaboration stay Phase 2. |
 | D15 | **Trusted coworkers.** Every registered engineer is trusted. Identity serves routing, context, and attribution. Teams and scopes never deny an operation between registered users. Git and the company identity provider control code access. Only impersonation protection and operator actions stay restricted (P34). |
 | D16 | **The catalog uses the full Backstage entity model.** Component (one repository or subtree) sits in a System (one project), which sits in a Domain (a business area). A Group owns each entity, with `parent` for subteams. Ownership stays separate from grouping, so a reorganization edits one `owner` field. A branch is context, never identity (P33). |
-| D17 | **Channel events route through `channels.yaml`.** Each ingress source maps to a team, a project, a responder, and a reply identity. An unrouted or ambiguous event is rejected, never guessed. |
+| D17 | **Channel events route through `channels.yaml`.** Each ingress source maps to a group, a system, a responder, and a reply identity. An unrouted or ambiguous event is rejected, never guessed. |
 | D18 | **Phase 1 ships a minimal reference responder.** The success criteria need a working reply path. The reference responder claims tasks, heartbeats with its fence, submits effects, and proposes memory. It stays a reference, and any runtime may replace it. |
 | D19 | **Embeddings use the Chroma built-in default** (`all-MiniLM-L6-v2`, 384 dimensions, cosine distance). No second model service, no extra container, no GPU. Chroma persists the embedding function in the collection configuration, so every deployment stays consistent. Each collection still records the provider, the model, the dimension, the distance function, and a schema version, because a later model change needs a full re-embed. |
 | D20 | **Catalog files use Backstage YAML.** The central `catalog.yaml` holds Domain, System, and Group entities. Each repository declares its components in `catalog-info.yaml`, or in `.agentframe/catalog.yaml` with the identical schema. An organization already running Backstage points agentframe at its existing files. Agentframe never infers from a Git remote. An undeclared repository gets no system scope, and an unknown value is a hard error. |
@@ -328,7 +328,7 @@ background cycle.
 
 ### 6. Coordination
 
-A standalone MCP + SSE service, scoped by project and branch.
+A standalone MCP + SSE service, scoped by system and branch.
 
 | Part | Phase | Content |
 |---|---|---|
@@ -354,8 +354,8 @@ agentframe/
 │   └── coordination/            # Task board (Ph. 1) + collab (Ph. 2)
 ├── central/                     # Operator-maintained, versioned
 │   ├── users.yaml               # username → tokenHash, teams
-│   ├── catalog.yaml             # teams (+parent), projects, ownership
-│   ├── channels.yaml            # ingress source → team, project, responder
+│   ├── catalog.yaml             # domains, systems, groups, users
+│   ├── channels.yaml            # ingress source → group, system, responder
 │   ├── registry.base.yaml
 │   └── registry.team.<team>.yaml
 ├── packages/
@@ -664,7 +664,7 @@ Agentframe does not build it. Choose the second deployment instead.
    `.agentframe/public.md`. Team B finds it in a memory search. Team B
    never finds a working-memory record of Team A.
 9. (Phase 2) The success criteria in the collaboration spec pass:
-   same-project and same-branch agents collaborate, other-branch agents
+   same-system and same-branch agents collaborate, other-branch agents
    are discoverable only, and an expired claim lease returns its task to
    the board.
 

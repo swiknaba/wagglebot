@@ -35,7 +35,7 @@ Agentframe uses two layers.
 * The upstream registry. It lists the MCP servers. It names each
   credential, but it stores no secret.
 * Durable memory for the whole team.
-* Agent collaboration, scoped by project and branch.
+* Agent collaboration, scoped by system and branch.
 
 The shared layer holds no engineer credentials and no tool-server
 credentials. It never calls a tool server. It holds only its own
@@ -48,7 +48,7 @@ service secrets, such as the chat bot token.
 | MCP hub | One endpoint for every tool server. Add an upstream in the registry, not in code. |
 | Memory | Agents propose facts. A local LLM extracts them. The team searches them later. |
 | Ingress | Slack, GitHub, and webhook events become tasks. One agent claims each task and replies. |
-| Collaboration | Two agents on the same project and branch exchange findings and hand off tasks. |
+| Collaboration | Two agents on the same system and branch exchange findings and hand off tasks. |
 | Provisioning | One command installs the curated skills and writes the base prompt to each harness. |
 
 ## Design Principles
