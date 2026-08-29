@@ -390,19 +390,45 @@ on the agent surface. `POST /memories/upsert` and
 The service derives the allowed scopes from the caller, and it rejects
 a caller-supplied scope outside that set.
 
-**Extractor input scrub.** Proposal text reaches the extractor before
-the output banlist runs, so the worker scrubs the **input** first:
+**Credential scan — mandatory on every write (D28).** A leaked token in
+a log rotates away. A leaked token in a vector store gets retrieved and
+shown to agents for years. The scan therefore runs on **every** write
+path: session facts, document ingestion, and human publication. It runs
+server-side, because a client is never a security boundary.
 
-1. Apply secret detection to every proposal: the existing banlist terms,
-   plus high-entropy strings and common key formats.
-2. Redact each match before the extractor call. Record the count of
-   redactions and the policy version on the job.
-3. Reject a proposal that is mostly secret material. The rejection
-   message names the rule, never the content.
+Two layers, because one is not enough:
 
-The scrub runs for every extractor, local or remote. A local extractor
-keeps everything inside the deployment. A remote `EXTRACTOR_API_BASE`
-outside the deployment **additionally** requires the explicit flag
+| Layer | Catches | Tool |
+|---|---|---|
+| Rule scan | Known provider formats: AWS, GitHub, Stripe, and about 150 more | **gitleaks**, a single static binary, pinned by version and checksum (D13) |
+| Entropy and banlist | The formats no rule set knows, including internal ones | The built-in check |
+
+Gitleaks is the right tool here. It ships one Go binary, it makes no
+network call, and another project maintains the rules. Trufflehog
+verifies each finding by calling the provider API, which this service
+must not do.
+
+Behavior on a finding:
+
+1. **Redact** each match, and keep the rest of the text. Record the
+   count of redactions, the rule identifiers, and the scanner version on
+   the record. A false positive costs a few characters.
+2. **Reject** the whole write when the text is mostly matches. That is a
+   credential dump, not a memory.
+3. **Never echo the matched content.** The error names the rule.
+
+**Rescan (D28).** New rules arrive after old memories are stored, so
+`wagglebot rescan` walks a collection, applies the current rules, and
+invalidates every hit. That command is the only way to fix a miss
+already written. It reports the count, and it names no content.
+
+Document ingestion carries the highest risk, because a real runbook or
+a Confluence page often contains a real credential. The scan runs
+before the extract step, so no credential reaches a model.
+
+The scan also runs before any extractor call. A local extractor keeps
+everything inside the deployment. A remote `EXTRACTOR_API_BASE` outside
+the deployment **additionally** requires the explicit flag
 `EXTRACTOR_ALLOW_EXTERNAL=1` (guards F17, G05).
 
 **Scope model — four scopes, one per catalog level (D22, D23).**

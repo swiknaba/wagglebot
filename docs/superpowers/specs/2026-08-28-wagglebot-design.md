@@ -25,9 +25,10 @@ and deploy. No team must fork the internals of a different company.
 1. **MCP Hub** — One `/mcp` endpoint that proxies requests to any number
    of upstream MCP servers. The hub has zero hardcoded upstreams. A
    user-supplied JSON config defines the full surface.
-2. **Durable Memory** — An async pipeline that accepts memory proposals.
-   An LLM extracts structured facts from each proposal. The pipeline
-   stores the facts as vector embeddings for later retrieval.
+2. **Durable Memory** — An async pipeline that accepts structured facts.
+   The agent extracts them, so no model runs on the write path (D24).
+   The pipeline scans each write for credentials, deduplicates it, and
+   stores it as a vector embedding for later retrieval.
 3. **Pluggable Ingress Channels** — A channel adapter interface. New
    event sources (Slack, GitHub, HTTP webhooks, email, SMS) plug in
    without changes to the core.
@@ -43,7 +44,7 @@ and deploy. No team must fork the internals of a different company.
 7. **Deployment-Agnostic** — Wagglebot ships Docker images and a
    compose file, nothing else. The stack runs the same on a laptop, a
    self-hosted box, or any container platform. Development needs no
-   cloud accounts. The extraction LLM runs on a CPU.
+   cloud accounts. The optional batch extractor runs on a CPU (D2, D25).
 
 ## Non-Goals
 
@@ -88,6 +89,7 @@ and deploy. No team must fork the internals of a different company.
 | D25 | **Document ingestion is a separate pipeline with a pluggable extract step.** A human names a source, for example a Confluence page. The pipeline fetches the content through an MCP tool, extracts facts, and writes them to a named scope. Two extract modes exist: `agent` (the default, and no extra container) and `local_llm` (an opt-in batch mode for bulk volume, D2). Ingestion inherits the authorization of its caller, so a write to `domain` still requires the owner group (D23). |
 | D26 | **Authentication uses an SSH public key challenge, not a distributed token.** The agent signs a server nonce with the existing SSH key of the engineer, and receives a short-lived session token. The default key source is the `wagglebot.dev/ssh-key` annotation on the User entity in the catalog, added by pull request. That works with every Git host, including Bitbucket Server. An optional `github` source fetches `<host>/<username>.keys` instead. No token needs delivery or rotation, and `users.yaml` therefore does not exist: identity lives in the catalog. |
 | D27 | **The validation command rejects every duplicate.** Two entities of one kind sharing a name, a component naming an unknown system, and two channel routes matching one event are all hard errors. The message names the file and the value. Wagglebot never picks a winner silently (P35). |
+| D28 | **Every memory write passes a credential scan.** Two layers run server-side: a **gitleaks** rule scan for known provider formats, and the entropy check for the formats no rule set knows. A match is redacted, and a mostly-matching write is rejected. The error names the rule, never the content. `wagglebot rescan` re-applies current rules to stored memory, because new rules arrive after old writes. Memory outlives logs, so a credential stored here would surface for years. |
 
 ### Why D9 and D10 matter
 
