@@ -93,6 +93,7 @@ and deploy. No team must fork the internals of a different company.
 | D27 | **The validation command rejects every duplicate.** Two entities of one kind sharing a name, a component naming an unknown system, and two channel routes matching one event are all hard errors. The message names the file and the value. Wagglebot never picks a winner silently (P35). |
 | D28 | **Every memory write passes a credential scan.** Two layers run server-side: a **gitleaks** rule scan for known provider formats, and the entropy check for the formats no rule set knows. A match is redacted, and a mostly-matching write is rejected. The error names the rule, never the content. `wagglebot rescan` re-applies current rules to stored memory, because new rules arrive after old writes. Memory outlives logs, so a credential stored here would surface for years. |
 | D29 | **Component memory is a local Markdown file, not a vector record.** The agent writes `.wagglebot/memory.md` in the repository. Git already distributes a file inside one repository, a pull request reviews each change, and the history is free. The shared store therefore holds only what crosses a repository boundary: `system`, `domain`, and `org`. A search still reads the local file first, then the three shared scopes. |
+| D30 | **A human can commit a memory directly, with `remember`.** The MCP tool `remember({ text, scope })` and the command `wagglebot remember` write one fact to a named scope. This path is explicit, so the agent never judges the importance and never asks for a promotion confirmation (D22). The named scope still needs authorization (D23), the text still passes the credential scan (D28), and a `component` scope still writes the local file (D29). The matching `forget` tool invalidates a record the same way. |
 
 ### Why D9 and D10 matter
 
@@ -185,7 +186,10 @@ talks to three things, and always by MCP. Credentials touch one box.
 |---|---|---|
 | `search`, `get_schema`, `execute` | MCP tool | The agent, for every upstream tool |
 | `list_available_mcps` | MCP tool | The agent, to see live namespaces |
-| `memory_search`, `propose_memory` | MCP tool | The agent |
+| `memory_search` | MCP tool | The agent |
+| `propose_memory` | MCP tool | The agent, from its own judgment (D24) |
+| `remember`, `forget` | MCP tool | **You**, by telling the agent (D30) |
+| `ingest_document` | MCP tool | You, to pull a page into memory (D25) |
 | `coordination_*` (six tools) | MCP tool | The agent (Phase 2, task board Phase 1) |
 | `GET /registry` | HTTP | The hub only, never the agent |
 | `POST /memory/proposals` | HTTP | The memory MCP surface, internally |
@@ -282,8 +286,8 @@ it as an upstream, so agents reach memory through their own hub.
   and `POST /memories/invalidate` (humans and the publication command,
   gated by the catalog per D23), `POST /run-once`, `GET /livez`, and
   `GET /readyz`. An MCP surface adds `memory_search`, `memory_query`,
-  `propose_memory`, and `ingest_document`. Agents reach memory through
-  the hub.
+  `propose_memory`, `remember`, `forget`, and `ingest_document`. Agents
+  reach memory through the hub.
 - **Queue:** a filesystem state machine (atomic rename claim,
   `queued/running/done/failed`, 3 attempts). Garbage collection removes
   old entries from `done/` and `failed/`. Session writes pass through
@@ -674,25 +678,29 @@ Wagglebot does not build it. Choose the second deployment instead.
 4. **Credential scan.** A fact containing an AWS key is redacted before
    storage. A fact that is mostly key material is rejected. Neither
    error message echoes the content.
-5. `provisioning/bin/sync-agents` writes one rendered template to every
+5. **Direct commit.** An engineer says "remember this for the system".
+   The agent calls `remember` with that scope, and the fact is stored
+   without a promotion question (D30). A `forget` call on the same
+   record removes it from later searches.
+6. `provisioning/bin/sync-agents` writes one rendered template to every
    harness target. `install-skills` installs the curated list on a clean
    machine (see the provisioning spec).
-6. **Credential isolation.** Two engineers pull the same registry. Each
+7. **Credential isolation.** Two engineers pull the same registry. Each
    hub authenticates as its own engineer. No engineer credential and no
    upstream MCP credential appears in the shared layer, in the
    registry, or in any log. The shared layer holds only its own service
    bearer tokens (D9).
-7. **Graceful skip.** An engineer lacks the credential for one upstream.
+8. **Graceful skip.** An engineer lacks the credential for one upstream.
    That namespace is absent from `list_available_mcps`. Every other
    namespace still works.
-8. **Scope isolation.** Team A publishes a fact through
+9. **Scope isolation.** Team A publishes a fact through
    `.wagglebot/public.md`. Team B finds it in a memory search. Team B
    never finds a working-memory record of Team A.
-9. **Local component memory.** An agent records a repository fact in
+10. **Local component memory.** An agent records a repository fact in
    `.wagglebot/memory.md` (D29). The file appears in `git status`, so a
    human reviews it. A later `memory_search` finds it without a server
    call.
-10. (Phase 2) The success criteria in the collaboration spec pass:
+11. (Phase 2) The success criteria in the collaboration spec pass:
     same-system and same-branch agents collaborate, other-branch agents
     are discoverable only, and an expired claim lease returns its task
     to the board.

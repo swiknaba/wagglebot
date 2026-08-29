@@ -275,6 +275,38 @@ The default mode is `agent`, which needs no extra container. The
 inherits the authorization of its caller: a write to `domain:payments`
 still requires membership in the owner group of that Domain (D23).
 
+**Path 3 — a human commits a memory directly (D30).** You tell the
+agent, and the agent writes it:
+
+```
+remember({ text: "We chose Postgres over DynamoDB. The join patterns
+                  made a document store expensive.",
+           scope: "system:payments-platform" })
+```
+
+This path is **explicit**, which changes three things:
+
+1. The agent never judges the importance. You said it, so it is kept.
+2. The agent never asks for a promotion confirmation (D22). You named
+   the scope.
+3. The write happens now, not on a queue.
+
+Everything else still applies. The named scope needs authorization
+(D23), the text passes the credential scan (D28), the taxonomy
+validates, and a duplicate reconciles instead of adding a record. A
+`component` scope writes the local file rather than the store (D29).
+
+`forget({ id })` invalidates one record the same way. It marks the
+record dead, and never hard-deletes, so the history stays.
+
+Both reach the agent as MCP tools. `wagglebot remember` and
+`wagglebot forget` give the same two operations outside an agent
+session.
+
+NOTE: An explicit path fills memory faster than a judged one, because
+nothing filters it. That is the intended trade: you asked for the fact,
+so you own its value.
+
 **The client is never a security boundary.** Whatever the path, the
 server always owns secret scrubbing, canonicalization, deduplication by
 content hash, embedding, and storage. A frontier model on a workstation

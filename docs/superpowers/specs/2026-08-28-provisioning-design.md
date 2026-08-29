@@ -262,6 +262,16 @@ WHEN TO WRITE
 
 Write at the end of a session, and after you learn something that cost
 you time. Do not write during exploration.
+
+WHEN YOUR ENGINEER TELLS YOU TO REMEMBER SOMETHING
+
+Use the `remember` tool, and give the scope they named.
+
+* Do not judge the importance. They asked, so write it.
+* Do not ask to promote the scope. They already chose it.
+* Ask only when they named no scope. Suggest the smallest one that fits.
+
+Use `forget` when they tell you a fact is wrong.
 ```
 
 NOTE: The superpowers skill set already works this way for larger
