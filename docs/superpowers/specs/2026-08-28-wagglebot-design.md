@@ -10,6 +10,8 @@
 >   the curated skill list and the shared agent base template.
 > - [Descoped ideas](2026-08-28-descoped-ideas.md) — what we removed
 >   from the MVP, and what would bring it back.
+> - [Research list](2026-08-28-research-list.md) — ideas that need
+>   study before a decision.
 
 ## Problem
 
@@ -718,6 +720,8 @@ Wagglebot does not build it. Choose the second deployment instead.
 
 ## Parking Lot — Ideas to Discuss
 
-> Captured but not yet designed.
+> Captured but not yet designed. An idea that needs study before a
+> decision goes to the [research list](2026-08-28-research-list.md)
+> instead.
 
 - [ ] _Your ideas go here — tell me what else you have in mind._
