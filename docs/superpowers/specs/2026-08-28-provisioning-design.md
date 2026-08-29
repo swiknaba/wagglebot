@@ -39,16 +39,76 @@ script warns and continues. The script exits non-zero on failures.
 ## Agent Base Template + Distribution
 
 `provisioning/templates/AGENTS.base.md` is the **shared agent base
-template**. It contains harness-independent baseline instructions plus
-an agentframe connection block. The connection block covers three
-topics: how to reach the hub, the propose-not-write memory rule, and
+template**. It contains harness-independent instructions plus an
+agentframe connection block. The connection block covers three topics:
+how to reach the hub, the propose-not-write memory rule, and
 coordination etiquette. Teams append overlays. Composition is plain
 concatenation: `AGENTS.base.md` + `overlays/*.md` → the rendered
 template. YAGNI: no templating engine.
 
+The base template carries two sections: a delegation policy and a
+writing baseline. Both are portable across harnesses and across teams.
+
+Workstation-specific content stays out of the base template. Version
+managers, shell paths, and machine setup differ per person and per
+team. Put that content in an overlay.
+
 ### Seed content for `AGENTS.base.md`
 
-The template ships with this baseline section:
+The template ships with this delegation section:
+
+```markdown
+## Delegation
+
+You usually run as the most expensive model in the session.
+Protect your tokens and your context window.
+If the harness supports subagents, delegation is the default, not the exception.
+
+DEFAULT TO DELEGATION
+
+Before each multi-step task, plan which steps a subagent can do.
+Delegate these task types:
+
+* Codebase search and file exploration.
+* Reads of many files to answer one question.
+* Mechanical edits across many files.
+* Implementation of a task that a written plan fully specifies.
+* Test runs, log analysis, and other verification with a clear pass signal.
+
+Keep these task types in the main session:
+
+* Architecture and plan decisions.
+* Debugging with an unclear cause.
+* Review of subagent output.
+* Small edits where delegation costs more than the edit.
+
+MODEL TIERS
+
+When the harness lets you select a subagent model, apply these tiers:
+
+* Use the cheapest tier (for example, Haiku) for search, summaries, and mechanical edits.
+* Use the middle tier (for example, Sonnet) for implementation of specified tasks.
+* Reserve the top tier for the main session.
+
+SUBAGENT PROMPTS
+
+* Write each subagent prompt as a self-contained task, because the subagent has no session context.
+* State the goal, the relevant files, the constraints, and the expected output format.
+* Review each result before you accept it.
+* Do not repeat delegated work in the main session without cause.
+
+SKILLS
+
+If a subagent-driven-development skill is available, invoke it before you execute a plan with independent tasks.
+If a dispatching-parallel-agents skill is available, invoke it when two or more tasks are independent.
+Re-read this section when you start a plan and when you complete a plan phase.
+```
+
+The delegation section names the skills by their skill name only. It
+does not pin a version. The curated `skills.list` controls which
+skills exist on the workstation.
+
+The template also ships with this baseline section:
 
 ```markdown
 ## Baseline
