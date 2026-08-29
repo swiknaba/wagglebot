@@ -14,11 +14,47 @@ ref is a tag or a commit hash. Comments are allowed. Seed content:
 ```
 obra/superpowers@<pinned-ref>
 ayghri/i-have-adhd@<pinned-ref>
-wagglebot/writing-a-custom-agent@<pinned-ref>   # bundled, D33
+wagglebot/skills@<pinned-ref>        # first-party, D33
 ```
 
 An unpinned entry is rejected. An unpinned entry would execute whatever
 the repository publishes next, on every workstation (P31, D13).
+
+### First-party skills (D33)
+
+Wagglebot ships with a specific toolset, so it ships the skills for
+that toolset. They live in **one repository**, `wagglebot/skills`,
+because they version with wagglebot itself. A registry format change
+breaks `adding-an-mcp-server` on the same day, so the two must move
+together.
+
+| Skill | Teaches |
+|---|---|
+| `writing-a-custom-agent` | The runtime and the file shape. It asks where the agent belongs before it writes code (D33). |
+| `adding-an-mcp-server` | A `registry.yaml` entry: the auth scheme against the credential source (D10), the pinning rules (D13), the trust approval (P29), and why a literal secret is rejected. |
+| `onboarding-a-repository` | `catalog-info.yaml`: which system, which owner, and why no fallback exists (D20, P35). |
+
+`publishing-team-knowledge` is a candidate, and it waits. Add it when
+somebody publishes to a domain scope for the first time.
+
+### What belongs in a skill, and what belongs in the base template
+
+The two carry different costs:
+
+| | Loaded | Cost |
+|---|---|---|
+| `AGENTS.base.md` | Every session, in every harness | Context, always |
+| A skill | On demand | None until used |
+
+The rule follows from that:
+
+* **Always needed → the base template.** The memory rules qualify,
+  because the agent may write memory at the end of any session.
+* **Occasionally needed → a skill.** Everything else about wagglebot
+  qualifies.
+
+Apply the rule to each new feature. Without it, every feature gets
+appended to the base template, and the template stops being readable.
 
 ## Skills Installer
 
