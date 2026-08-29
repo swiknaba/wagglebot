@@ -40,15 +40,16 @@ Engineering managers maintain three small files in one central
 repository. Repository write access is the only permission system.
 
 ```yaml
-# users.yaml — the token binding
+# users.yaml — the token binding, nothing else (D23)
 users:
   - username: alice          # company Git username, lowercase
     tokenHash: "..."
-    memberOf: [team-payments]
 ```
 
-`catalog.yaml` holds the Backstage entities: Domain, System, and Group.
-`channels.yaml` holds the ingress routes. The
+`catalog.yaml` holds the Backstage entities: Domain, System, Group, and
+User. Group membership lives only there (`Group.spec.members`). The
+org-owner annotation on a User entity grants publication to the `org`
+memory scope (D23). `channels.yaml` holds the ingress routes. The
 [service contracts](2026-08-28-service-contracts.md) give both schemas.
 
 Each repository declares its components in `catalog-info.yaml`, or in
@@ -61,9 +62,11 @@ Rules:
    token, never from a request field. This prevents impersonation and
    gives correct attribution.
 2. `username` is the company Git username, in lowercase.
-3. A service reads teams from `users.yaml`, and the hierarchy from
-   `catalog.yaml`. Team values select defaults and routes. They never
-   deny an operation between registered users.
+3. A service reads the identity from `users.yaml`, and the group
+   membership and hierarchy from `catalog.yaml`. Group values select
+   defaults and routes. They never deny an operation between registered
+   users. The one exception: publication into the `domain` and `org`
+   memory scopes is gated by the catalog (D23).
 4. An agent registers under its user. A second registration with the
    same `agentId` and a different user is rejected.
 5. Operator actions need the operator token.
@@ -84,8 +87,8 @@ remote. The catalog declares everything (D20).
 | Identifier | Source | Purpose |
 |---|---|---|
 | `domain` | `catalog.yaml` | Broad grouping, wide memory read scope |
-| `system` | `catalog.yaml` | The project. Memory write scope, channel key. |
-| `component` | The repository declaration | The unit of work, attribution |
+| `system` | `catalog.yaml` | The project. Promoted memory scope, channel key. |
+| `component` | The repository declaration | The unit of work. Default memory write scope, attribution. |
 | `group` | `catalog.yaml`, `parent` for subteams | Routing, registry selection, ownership |
 | `username` | `users.yaml` | Attribution, direct messages |
 | `agentId` | Generated per agent process | Presence, claims |
@@ -158,7 +161,7 @@ carries the user identity. The humans stay in the loop.
 | **Presence registry** | Agents register with a workspace identity and a heartbeat. `list_agents` defaults to the `system` of the caller. Filters exist for domain, system, and branch. Stale entries expire on missed heartbeats. |
 | **Message bus** | Channels are keyed `system/<name>`, `system/<name>/branch/<branch>`, and `domain/<name>`. Direct agent-to-agent messages need no channel. The log is persistent and append-only. Delivery is SSE with `Last-Event-ID` replay, a 7-day TTL, and a SQLite store (D6). |
 | **Task board** | FIFO + optional integer priority (order `priority DESC, created_at ASC`). Each claim carries a lease with a heartbeat **and a monotonic fencing token**. A task returns to the board when the lease expires (D5). Completion and heartbeats must present the current fencing token. A stale token is rejected. Delivery is therefore **at-least-once**, and every external effect carries an idempotency key. The task shape uses the envelope from the [service contracts §C5](2026-08-28-service-contracts.md#c5-delegated-job-vocabulary). Each task is scoped to a `system`, and optionally a branch. |
-| **Shared memory** | All participating agents point at the same memory-worker + Chroma. `scopeIds` carry the `system`, so every component of one system shares a memory pool (D20). |
+| **Shared memory** | All participating agents point at the same memory-worker + Chroma. `scopeIds` carry the `component` and the `system` of the workspace. Agent writes default to `component`, with confirmed promotion to `system` (D22). |
 
 **Exposure:** the coordination service is itself an MCP server. Each
 local hub registers it via `registry.yaml` (D4). Agents gain these

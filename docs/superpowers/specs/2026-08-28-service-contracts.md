@@ -340,12 +340,18 @@ policy is therefore never empty and never undefined (guards F32).
 
 **Mutation principals.** `POST /memory/proposals` is the only mutation
 on the agent surface. `POST /memories/upsert` and
-`POST /memories/invalidate` require the **administrator principal**. The
-publication ingestion job is the intended caller (guards F07). Scope
-authorization follows the principal model of the
-[collaboration spec](2026-08-28-cross-machine-collaboration-design.md):
-the service derives allowed scopes from the principal, and it rejects a
-caller-supplied scope outside that set.
+`POST /memories/invalidate` accept two callers (guards F07, D23):
+
+1. The **administrator principal**. The publication ingestion job is
+   the intended caller.
+2. A **user token**, checked against the catalog. A write to
+   `domain:<name>` requires membership in the owner group of that
+   Domain. A write to `org` requires the org-owner flag on the User
+   entity. The service reads both from the catalog, never from a
+   request field.
+
+The service derives the allowed scopes from the caller, and it rejects
+a caller-supplied scope outside that set.
 
 **Extractor input scrub.** Proposal text reaches the extractor before
 the output banlist runs, so the worker scrubs the **input** first:
@@ -362,25 +368,45 @@ keeps everything inside the deployment. A remote `EXTRACTOR_API_BASE`
 outside the deployment **additionally** requires the explicit flag
 `EXTRACTOR_ALLOW_EXTERNAL=1` (guards F17, G05).
 
-**Scope model — three scopes, and they follow the catalog.**
+**Scope model — four scopes, one per catalog level (D22, D23).**
 
 | Scope | Written by | Read by default |
 |---|---|---|
-| `system:<name>` | Agents, through `propose_memory` | Everyone working in that system |
-| `domain:<name>` | Humans, by publication | Every system in that domain |
-| `org` | Humans, by publication | Everyone |
+| `component:<name>` | Agents, the default target of `propose_memory` | Everyone working in that component |
+| `system:<name>` | Agents, after the engineer confirms a promotion | Everyone working in that system |
+| `domain:<name>` | Members of the owner group of that Domain | Every system in that domain |
+| `org` | Users with the org-owner flag | Everyone |
 
-Agents write to **exactly one** scope: the system of their component.
-The domain and org scopes exist for human-published, reviewed content,
-so a broad scope never fills with unreviewed working memory.
+**Routing of an agent write (D22).** The default target is the
+component of the workspace. The extractor classifies each memory:
+a fact about this repository stays at `component`, a fact about the
+whole project fits `system`. A system classification is a proposal,
+never a direct write. The interactive agent asks its engineer in
+session: "this looks project-wide, write to `system`?" A background
+process never asks, and a timeout falls back to `component`. An
+uncertain classification also falls back to `component`. A fact can
+land too low, never too high, and the search cascade still finds it.
 
-A `memory_search` reads the system of the caller, then the domain of
-that system, then `org`. The cascade matches how knowledge actually
-travels: service detail stays near the service, a domain shares its
-conventions, and the organization shares its interfaces.
+**Write authorization follows the catalog (D23).** Publication to
+`domain` and `org` stays an explicit human command, never a prompt.
 
-Component level is deliberately **not** a scope. Components of one
-system share a memory space, which is what a microservice team needs.
+* `domain:<name>`: the caller must be a member of the Group that the
+  Domain names as `owner`. Membership comes from `Group.spec.members`
+  in the catalog.
+* `org`: the caller must carry the org-owner flag. The flag is the
+  annotation `agentframe.io/org-owner: "true"` on the User entity in
+  the central catalog. Several users may carry it. Write access to the
+  central catalog repository is the permission to grant it, and the
+  org owners maintain that repository.
+
+This gate restricts publication into shared curated scopes. It never
+restricts collaboration between registered engineers, so D15 holds.
+
+A `memory_search` reads the component of the caller, then its system,
+then the domain of that system, then `org`. The cascade matches how
+knowledge travels: repository detail stays at the component, a project
+shares its facts, a domain shares its conventions, and the
+organization shares its interfaces.
 
 **The catalog uses the full [Backstage](https://backstage.io) entity
 model (D20).** Agentframe never infers ownership from a Git remote, a
@@ -391,8 +417,8 @@ directory name, or any repository shape.
 | **Component** | One software unit. Usually one repository, or one subtree of a repository. | The repository |
 | **System** | A set of components that work together. One project. | The central catalog |
 | **Domain** | A set of systems that share a business area. | The central catalog |
-| **Group** | A team. `parent` gives the hierarchy, so a manager group holds several teams. | The central catalog |
-| **User** | One engineer. | `users.yaml` |
+| **Group** | A team. `parent` gives the hierarchy, so a manager group holds several teams. `members` lists the usernames. | The central catalog |
+| **User** | One engineer. `memberOf` mirrors the group membership. The org-owner annotation marks a publication right for the `org` scope. | The central catalog |
 | **API** | A published interface of a system. | The repository |
 
 **Ownership is separate from grouping.** Every entity carries an `owner`
@@ -435,7 +461,20 @@ metadata:
 spec:
   type: team
   parent: platform-group          # subteam hierarchy
+  members: [alice, bob]
+---
+apiVersion: backstage.io/v1alpha1
+kind: User
+metadata:
+  name: alice
+  annotations:
+    agentframe.io/org-owner: "true"   # may publish to the org scope
+spec:
+  memberOf: [team-payments]
 ```
+
+Group membership lives in **one place**: the catalog. `users.yaml`
+holds only the token binding, `username` and `tokenHash` (D23).
 
 **Each repository declares its components.** The component is the unit
 of declaration, so the file lives with the code:
@@ -467,10 +506,10 @@ Resolution:
 3. A `system` or `owner` value that the central catalog does not list is
    a **hard error**. The message names the file and the unknown value.
 
-**Without a declaration**, the agent still runs. It gets no system
-memory scope. `memory_search` then covers the `org` scope only, and
-`propose_memory` returns a clear instruction to add the file. The agent
-never invents a scope name (P35).
+**Without a declaration**, the agent still runs. It gets no component
+and no system memory scope. `memory_search` then covers the `org` scope
+only, and `propose_memory` returns a clear instruction to add the file.
+The agent never invents a scope name (P35).
 
 That model covers every layout, because the component boundary is a team
 decision:
@@ -490,20 +529,24 @@ exist.
 
 Rules:
 
-1. A `memory_search` covers the caller current project scope plus `org`.
-2. An agent never writes to the `org` scope. Agents propose to their
-   own project scope only.
-3. A scope selects relevance, never permission (D15). A registered
-   engineer may query another project scope explicitly.
+1. A `memory_search` covers the full cascade of the caller: component,
+   system, domain, `org`.
+2. An agent never writes to the `domain` or `org` scopes. Agents
+   propose to their own component, or to their system after the
+   engineer confirms (D22).
+3. A read scope selects relevance, never permission (D15). A registered
+   engineer may query another component or system scope explicitly.
+   Writes to `domain` and `org` are gated by the catalog (D23).
 4. The scope of a proposal comes from the **workspace** of the agent,
    never from the team of the author. One engineer works across several
-   projects, so the workspace decides the scope. The author identity is
+   systems, so the workspace decides the scope. The author identity is
    recorded as provenance.
 
-**Publication into the `org` scope.** Each team repository holds one
-file, `.agentframe/public.md`. An ingestion job reads each file and
-upserts its content into the `org` scope, with the source
-`group:<group>`.
+**Publication into the `domain` and `org` scopes.** Each team
+repository may hold one file, `.agentframe/public.md`. An ingestion job
+reads each file and upserts its content into the `org` scope, with the
+source `group:<group>`. A domain publication uses the direct endpoints
+with a user token, gated by the owner group of that Domain (D23).
 
 * The file states a contract, not a history.
 * A pull request reviews each change.
@@ -698,4 +741,4 @@ is stable. The decisions in the main spec reference these.
 | P32 | Upstream tool descriptions treated as trusted text. They reach the model, so a hostile upstream can attempt prompt injection. | Size caps, control-character stripping, provenance tags. The routing catalog stays first-party. |
 | P33 | Any assumption about repository layout, and any inference from a Git remote. A repo-per-project rule fragments a microservice team. A repo-as-project rule breaks a monorepository team. | Declare, never derive, in the Backstage style. The central `catalog.yaml` owns the taxonomy. Each repository declares membership. No inference fallback exists (D20). |
 | P34 | A scope treated as a security boundary in a trusted-coworker deployment. It creates false confidence and blocks normal cross-team work. | Scopes select defaults and relevance. Git and the identity provider control code access. |
-| P35 | A silent fallback that invents an identifier, for example a project name derived from a Git remote. It contradicts catalog validation, and it writes facts into a space that no search covers. | No inference fallback. A missing declaration gives no project scope, and says so. An unknown value fails loudly. |
+| P35 | A silent fallback that invents an identifier, for example a project name derived from a Git remote. It contradicts catalog validation, and it writes facts into a space that no search covers. | No inference fallback. A missing declaration gives no memory scope, and says so. An unknown value fails loudly. |

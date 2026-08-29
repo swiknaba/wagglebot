@@ -81,7 +81,9 @@ and deploy. No team must fork the internals of a different company.
 | D18 | **Phase 1 ships a minimal reference responder.** The success criteria need a working reply path. The reference responder claims tasks, heartbeats with its fence, submits effects, and proposes memory. It stays a reference, and any runtime may replace it. |
 | D19 | **Embeddings use the Chroma built-in default** (`all-MiniLM-L6-v2`, 384 dimensions, cosine distance). No second model service, no extra container, no GPU. Chroma persists the embedding function in the collection configuration, so every deployment stays consistent. Each collection still records the provider, the model, the dimension, the distance function, and a schema version, because a later model change needs a full re-embed. |
 | D20 | **Catalog files use Backstage YAML.** The central `catalog.yaml` holds Domain, System, and Group entities. Each repository declares its components in `catalog-info.yaml`, or in `.agentframe/catalog.yaml` with the identical schema. An organization already running Backstage points agentframe at its existing files. Agentframe never infers from a Git remote. An undeclared repository gets no system scope, and an unknown value is a hard error. |
-| D21 | **Memory scopes follow the catalog: `system`, `domain`, `org`.** Agents write only to the system of their component. Humans publish to the domain and organization scopes. A search reads system, then domain, then organization. Component level is not a scope, so the components of one system share one memory space. |
+| D21 | **Memory scopes follow the catalog: `component`, `system`, `domain`, `org`.** One scope exists per catalog level. A search reads component, then system, then domain, then organization. |
+| D22 | **Agent writes default to `component`, with confirmed promotion to `system`.** The extractor classifies each memory. A system classification is a proposal: the interactive agent asks its engineer in session. A background process never asks. A timeout or an uncertain classification falls back to `component`. A fact can land too low, never too high. |
+| D23 | **Writes to `domain` and `org` are gated by the catalog.** A `domain` write requires membership in the owner group of that Domain. An `org` write requires the org-owner annotation on the User entity. Several users may carry the flag. Group membership lives only in the catalog, and `users.yaml` holds only `username` and `tokenHash`. The gate restricts publication, never collaboration (D15). |
 
 ### Why D9 and D10 matter
 
@@ -489,7 +491,7 @@ fifteen engineers total.
 | Shared layer | **1**, not one per team | Registry, memory, coordination, ingress, responder |
 
 Deploy one shared layer, not five. Scoping already separates the teams.
-Memory scopes by project. Coordination scopes by project and branch.
+Memory scopes by catalog level. Coordination scopes by system and branch.
 Five deployments would multiply the operations work by five, for fifteen
 people. Five deployments would also block every cross-team benefit.
 
@@ -512,15 +514,16 @@ Authorization: Bearer <user token>
 ```
 
 The request carries the user token of the engineer. The shared layer
-resolves the token through `users.yaml`, finds the teams of that
-engineer, and returns `registry.base.yaml` merged with each
-`registry.team.<team>.yaml`. A team layer wins over the base layer for
-the same namespace. The validation command prints the effective
-registry.
+resolves the token through `users.yaml`, reads the group membership of
+that engineer from the catalog, and returns `registry.base.yaml` merged
+with each `registry.team.<team>.yaml`. A team layer wins over the base
+layer for the same namespace. The validation command prints the
+effective registry.
 
-Team membership therefore lives in **one place**: `users.yaml`. Move an
-engineer to a different team there, and the next registry refresh
-delivers the new tool set. No workstation config changes.
+Group membership therefore lives in **one place**: the catalog (D23).
+Move an engineer to a different group there, and the next registry
+refresh delivers the new tool set. No workstation config changes.
+`users.yaml` holds only the token binding.
 
 The registry selects **which upstreams appear**, for relevance. It is
 not a permission gate: local credentials decide which upstream actually
@@ -540,8 +543,9 @@ The workstation needs exactly two values:
 
 One user token authenticates the engineer to every shared service: the
 registry endpoint, the memory worker, and coordination. Each service
-derives the identity and the teams from `users.yaml`. Upstream MCP
-credentials stay separate and arrive per upstream (D10).
+derives the identity from `users.yaml`, and the group membership from
+the catalog. Upstream MCP credentials stay separate and arrive per
+upstream (D10).
 
 Onboarding and offboarding are one operator procedure: edit
 `users.yaml` and `catalog.yaml`, issue or revoke one token, and run the
@@ -550,21 +554,24 @@ validation command.
 ### Cross-Team Knowledge
 
 Teams interface with each other. Each team therefore needs a small,
-reliable view of the other teams. Memory uses **two scopes** for this.
+reliable view of the other teams. Memory uses **four scopes**, one per
+catalog level (D21–D23).
 
 | Scope | Written by | Visible to | Content |
 |---|---|---|---|
-| `project:<key>` | Agents, automatically | The team of that project | Working memory: decisions, facts, and people |
-| `org` | Humans, by publication | Every team | The public interface of a team |
+| `component:<name>` | Agents, automatically | Everyone in that component | Working memory about one repository |
+| `system:<name>` | Agents, after a confirmed promotion | Everyone in that system | Working memory about one project |
+| `domain:<name>` | The owner group of that Domain | Every system in that domain | Reviewed domain conventions |
+| `org` | Users with the org-owner flag | Every team | The public interface of a team |
 
-A memory search covers the own project scope plus the `org` scope by
-default. One team therefore never reads the working memory of another
-team.
+A memory search covers the cascade of the caller: component, system,
+domain, `org`. One team therefore never reads the working memory of
+another team by default.
 
 **Publication is explicit and human-owned.** Each team repository holds
 one file, `.agentframe/public.md`. The team writes the file. The team
 reviews each change in a pull request. The shared layer ingests the file
-into the `org` scope, with the source `team:<key>`.
+into the `org` scope, with the source `group:<group>`.
 
 The file states the contract of a team, not its history. Good content:
 
@@ -620,7 +627,7 @@ then follows from the deployment, not from a permission model.
 
 NOTE: A softer alternative exists. One shared layer could bind each
 bearer token to a set of allowed memory scopes. The agency would then
-lose access to the `org` scope, but keep its own project scope. That
+lose access to the `org` scope, but keep its own system scope. That
 alternative adds an authorization model to the memory worker.
 Agentframe does not build it. Choose the second deployment instead.
 
