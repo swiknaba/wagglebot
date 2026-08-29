@@ -239,18 +239,46 @@ Without the key, the service omits fingerprints.
 
 ## C3. Memory worker contract
 
-**Pipeline:**
+**Two write paths, and only one of them ever calls a model.**
+
+**Path 1 — session memory (D24).** The agent extracts, so the worker
+receives finished facts:
 
 ```
-POST /memory/proposals
-  → filesystem queue ($MEMORY_STORAGE_ROOT/memory-queue/{queued,running,done,failed})
-    → poll loop (3 s) claims via atomic rename(queued→running)
-      → LLM extract() → {candidates[], patterns[]}
+propose_memory({ facts: [...] })   → POST /memory/proposals
+  → scrub secrets (server-side, always)
+    → filesystem queue ($MEMORY_STORAGE_ROOT/memory-queue/{queued,running,done,failed})
+      → poll loop (3 s) claims via atomic rename(queued→running)
         → normalize → reconcile against manifest.json / patterns.json
           → preflight Chroma query (skip if content_hash matches and active)
             → shadow-deactivate superseded records → upsert
               → save manifests → complete()
 ```
+
+No model call appears in that path, so the old extractor bottleneck is
+gone. A backlog can still form under load, but nothing slow blocks a
+single write.
+
+**Path 2 — document ingestion (D25).** A human names a source. The
+extract step is pluggable:
+
+```
+ingest_document({ source: "<url>", scope: "domain:payments" })
+  → fetch content through an MCP tool
+    → extract:  mode "agent"      → the calling agent extracts
+                mode "local_llm"  → batch OpenAI-compatible call (D2)
+      → [ the same normalize → reconcile → upsert path as above ]
+```
+
+The default mode is `agent`, which needs no extra container. The
+`local_llm` mode earns its container only at bulk volume. Ingestion
+inherits the authorization of its caller: a write to `domain:payments`
+still requires membership in the owner group of that Domain (D23).
+
+**The client is never a security boundary.** Whatever the path, the
+server always owns secret scrubbing, canonicalization, deduplication by
+content hash, embedding, and storage. A frontier model on a workstation
+does not replace any of those.
 
 **Queue semantics:** a claim is an atomic `rename`, which is safe across
 processes. Writes go through `<jobId>.tmp.json` + rename. Job ids sort
@@ -258,15 +286,24 @@ lexically, which approximates FIFO. Each job gets 3 attempts. A
 malformed job goes to `failed/` with a synthesized record. Garbage
 collection removes old entries from `done/` and `failed/`.
 
-**Extraction taxonomy:** durable kinds are
+**Extraction taxonomy.** The same taxonomy governs both paths, so a
+memory looks identical whoever extracted it. Durable kinds are
 `fact | decision | person | preference`. The `comm_mirror` preference
 subtype has a qualifier allow-list. Pattern kinds are
 `repeated_question | repeated_blocker | manual_status_work |
-missing_doc_candidate | support_gap`. The prompt bans transcripts,
-secrets, jokes, and personality inference. Prompt = fixed rules + the
-policy file (clipped to 8 k) + the job JSON (clipped to 12 k). The
-extraction timeout is 120 s. A non-JSON completion fails the job into
-the normal retry path.
+missing_doc_candidate | support_gap`. Transcripts, secrets, jokes, and
+personality inference are banned.
+
+The worker validates every submitted fact against this taxonomy, and
+rejects an unknown kind. Validation is not optional, because the agent
+is a client.
+
+**Where the rules live.** The agent extracts session memory, so the
+rules must reach the agent: `AGENTS.base.md` carries the taxonomy and
+the bans (D24). The server no longer mounts a policy file for the
+session path. The `local_llm` ingestion mode still builds a prompt from
+fixed rules plus the job JSON (clipped to 12 k), with a 120 s timeout.
+A non-JSON completion fails the job into the normal retry path.
 
 **Canonicalization:**
 - `canonicalKey = kind:subject:relation:value` (all parts slugged).
@@ -342,13 +379,13 @@ policy is therefore never empty and never undefined (guards F32).
 on the agent surface. `POST /memories/upsert` and
 `POST /memories/invalidate` accept two callers (guards F07, D23):
 
-1. The **administrator principal**. The publication ingestion job is
+1. The **administrator principal**. The `wagglebot publish` command is
    the intended caller.
-2. A **user token**, checked against the catalog. A write to
-   `domain:<name>` requires membership in the owner group of that
-   Domain. A write to `org` requires the org-owner flag on the User
-   entity. The service reads both from the catalog, never from a
-   request field.
+2. A **session token** from the SSH key challenge (D26), checked
+   against the catalog. A write to `domain:<name>` requires membership
+   in the owner group of that Domain. A write to `org` requires the
+   org-owner flag on the User entity. The service reads both from the
+   catalog, never from a request field.
 
 The service derives the allowed scopes from the caller, and it rejects
 a caller-supplied scope outside that set.
@@ -473,8 +510,9 @@ spec:
   memberOf: [team-payments]
 ```
 
-Group membership lives in **one place**: the catalog. `users.yaml`
-holds only the token binding, `username` and `tokenHash` (D23).
+Identity lives in **one place**: the catalog. The User entity carries
+the username, the public key, the group membership, and the org-owner
+flag. No `users.yaml` exists (D26).
 
 **Each repository declares its components.** The component is the unit
 of declaration, so the file lives with the code:
@@ -546,7 +584,7 @@ Rules:
 repository may hold one file, `.wagglebot/public.md`. An ingestion job
 reads each file and upserts its content into the `org` scope, with the
 source `group:<group>`. A domain publication uses the direct endpoints
-with a user token, gated by the owner group of that Domain (D23).
+with a session token, gated by the owner group of that Domain (D23).
 
 * The file states a contract, not a history.
 * A pull request reviews each change.

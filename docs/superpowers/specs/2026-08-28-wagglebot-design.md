@@ -62,7 +62,7 @@ and deploy. No team must fork the internals of a different company.
 | # | Decision |
 |---|---|
 | D1 | The full stack is **TypeScript (Bun)**. The hub is built on `@modelcontextprotocol/sdk`. |
-| D2 | The memory extractor uses **OpenAI-compatible HTTP only**. It does not load models in-process. The compose stack ships a `llama.cpp` server container with a small Qwen GGUF (~1.1 GB, CPU-friendly). A remote endpoint needs only a different `EXTRACTOR_API_BASE` value, no code change. |
+| D2 | **An extractor serves document ingestion only, never the session path (D24).** When a deployment enables the batch mode, the extractor uses **OpenAI-compatible HTTP only**. It does not load models in-process. The optional compose profile ships a `llama.cpp` server container with a small Qwen GGUF (~1.1 GB, CPU-friendly). A remote endpoint needs only a different `EXTRACTOR_API_BASE` value, no code change. |
 | D3 | There is **no MCP wrapper service in front of Chroma**. The memory worker uses the official Chroma JS client. The memory worker also exposes a first-party MCP surface for search and proposals. The hub registers that surface like any upstream (guards P17). |
 | D4 | Coordination runs as a **standalone container**. The hub registers it via `registry.yaml` like any other upstream. It never embeds in the hub. |
 | D5 | Task board: **FIFO claiming with an optional integer `priority`** (default 0, order `priority DESC, created_at ASC`). No deadlines, no scheduler. Each claim carries a **lease with a heartbeat and a monotonic fencing token**. An expired lease returns the task to the board. Delivery is **at-least-once**: completion requires the current fence, and external effects deduplicate on an idempotency key. |
@@ -82,8 +82,12 @@ and deploy. No team must fork the internals of a different company.
 | D19 | **Embeddings use the Chroma built-in default** (`all-MiniLM-L6-v2`, 384 dimensions, cosine distance). No second model service, no extra container, no GPU. Chroma persists the embedding function in the collection configuration, so every deployment stays consistent. Each collection still records the provider, the model, the dimension, the distance function, and a schema version, because a later model change needs a full re-embed. |
 | D20 | **Catalog files use Backstage YAML.** The central `catalog.yaml` holds Domain, System, and Group entities. Each repository declares its components in `catalog-info.yaml`, or in `.wagglebot/catalog.yaml` with the identical schema. An organization already running Backstage points wagglebot at its existing files. Wagglebot never infers from a Git remote. An undeclared repository gets no system scope, and an unknown value is a hard error. |
 | D21 | **Memory scopes follow the catalog: `component`, `system`, `domain`, `org`.** One scope exists per catalog level. A search reads component, then system, then domain, then organization. |
-| D22 | **Agent writes default to `component`, with confirmed promotion to `system`.** The extractor classifies each memory. A system classification is a proposal: the interactive agent asks its engineer in session. A background process never asks. A timeout or an uncertain classification falls back to `component`. A fact can land too low, never too high. |
-| D23 | **Writes to `domain` and `org` are gated by the catalog.** A `domain` write requires membership in the owner group of that Domain. An `org` write requires the org-owner annotation on the User entity. Several users may carry the flag. Group membership lives only in the catalog, and `users.yaml` holds only `username` and `tokenHash`. The gate restricts publication, never collaboration (D15). |
+| D22 | **Agent writes default to `component`, with confirmed promotion to `system`.** The agent classifies each memory. A system classification is a proposal: the interactive agent asks its engineer in session. A background process never asks. A timeout or an uncertain classification falls back to `component`. A fact can land too low, never too high. |
+| D23 | **Writes to `domain` and `org` are gated by the catalog.** A `domain` write requires membership in the owner group of that Domain. An `org` write requires the org-owner annotation on the User entity. Several users may carry the flag. Group membership lives only in the catalog. The gate restricts publication, never collaboration (D15). |
+| D24 | **The agent extracts its own session memory.** It sends finished facts, never a transcript. The agent already holds the session context, and it is a stronger model than any bundled extractor. No model runs on the session write path, so the extractor stops being a bottleneck. The server still owns what a client must not: secret scrubbing, canonicalization, deduplication by content hash, embedding, and storage. A client is never a security boundary. |
+| D25 | **Document ingestion is a separate pipeline with a pluggable extract step.** A human names a source, for example a Confluence page. The pipeline fetches the content through an MCP tool, extracts facts, and writes them to a named scope. Two extract modes exist: `agent` (the default, and no extra container) and `local_llm` (an opt-in batch mode for bulk volume, D2). Ingestion inherits the authorization of its caller, so a write to `domain` still requires the owner group (D23). |
+| D26 | **Authentication uses an SSH public key challenge, not a distributed token.** The agent signs a server nonce with the existing SSH key of the engineer, and receives a short-lived session token. The default key source is the `wagglebot.dev/ssh-key` annotation on the User entity in the catalog, added by pull request. That works with every Git host, including Bitbucket Server. An optional `github` source fetches `<host>/<username>.keys` instead. No token needs delivery or rotation, and `users.yaml` therefore does not exist: identity lives in the catalog. |
+| D27 | **The validation command rejects every duplicate.** Two entities of one kind sharing a name, a component naming an unknown system, and two channel routes matching one event are all hard errors. The message names the file and the value. Wagglebot never picks a winner silently (P35). |
 
 ### Why D9 and D10 matter
 
@@ -159,7 +163,7 @@ graph TB
     AGENT -->|"MCP: coordination_*"| COORD
 
     HUB -.->|reads at startup| CREDS
-    HUB -->|"GET /registry<br/>Bearer user token"| REG
+    HUB -->|"GET /registry<br/>Bearer session token"| REG
     HUB -->|proxies| REMOTE
     HUB -->|proxies| STDIO
 
@@ -185,7 +189,7 @@ talks to three things, and always by MCP. Credentials touch one box.
 | `coordination_*` (six tools) | MCP tool | The agent (Phase 2, task board Phase 1) |
 | `GET /registry` | HTTP | The hub only, never the agent |
 | `POST /memory/proposals` | HTTP | The memory MCP surface, internally |
-| `POST /memories/upsert`, `/memories/invalidate` | HTTP | Humans and the publication job (D23) |
+| `POST /memories/upsert`, `/memories/invalidate` | HTTP | Humans and `wagglebot publish` (D23) |
 | `POST /run-once` | HTTP | An operator, to drain the queue |
 | `GET /livez`, `GET /readyz` | HTTP | The container runtime |
 
@@ -266,31 +270,46 @@ implementation explicitly.
 TypeScript/Bun. The team deploys one instance. Each local hub registers
 it as an upstream, so agents reach memory through their own hub.
 
-- **Extractor:** an OpenAI-compatible HTTP client (D2). Env:
-  `EXTRACTOR_API_BASE`, `EXTRACTOR_API_KEY` (optional),
-  `EXTRACTOR_MODEL`. The extraction prompt, the taxonomy, and the 120 s
-  timeout follow contracts §C3. The worker parses each completion
-  defensively. A non-JSON completion fails the job into the normal retry
-  path.
+- **No model on the session write path (D24).** The agent sends
+  finished facts. The worker never re-reads a transcript.
+- **Server-side duties, because a client is not a security boundary:**
+  secret scrubbing, canonicalization, deduplication by content hash,
+  embedding, and storage. The worker runs these on every write,
+  whatever the source.
+- **Document ingestion (D25):** a separate pipeline. It fetches a named
+  source through an MCP tool, extracts facts, and writes them to a
+  named scope. The extract step is pluggable: `agent` by default, and
+  `local_llm` for the opt-in batch mode. The batch mode uses an
+  OpenAI-compatible HTTP client (D2). Env: `EXTRACTOR_API_BASE`,
+  `EXTRACTOR_API_KEY` (optional), `EXTRACTOR_MODEL`. The worker parses
+  each completion defensively. A non-JSON completion fails the job into
+  the normal retry path.
 - **Storage:** Chroma via the official JS client (D3). Collection
   routing, tombstone and supersede conventions, and preflight dedup
   follow contracts §C3.
-- **Auth:** a bearer token is required (D7).
+- **Auth:** an SSH key challenge issues a session token (D26). Every
+  request then carries that token.
 - **API:** `POST /memory/proposals` (agents), `POST /memories/upsert`
-  and `POST /memories/invalidate` (**administrator principal only** —
-  the publication job), `POST /run-once`, `GET /livez`, and
+  and `POST /memories/invalidate` (humans and the publication command,
+  gated by the catalog per D23), `POST /run-once`, `GET /livez`, and
   `GET /readyz`. An MCP surface adds `memory_search`, `memory_query`,
-  and `propose_memory`. Agents reach memory through the hub.
+  `propose_memory`, and `ingest_document`. Agents reach memory through
+  the hub.
 - **Queue:** a filesystem state machine (atomic rename claim,
   `queued/running/done/failed`, 3 attempts). Garbage collection removes
-  old entries from `done/` and `failed/`.
+  old entries from `done/` and `failed/`. Session writes pass through
+  quickly, because no model call blocks them.
 - **Concurrency:** exactly one worker instance per storage root. The
   manifest files are read-modify-write under an in-process lock (P4).
   Document this limit. Move the manifests to SQLite only when scale
   demands it.
-- **Policy:** one Markdown policy file with one default path, mounted at
-  `/policy/MEMORY.md`. A missing file causes a startup warning, not a
-  silent empty policy (P6).
+- **Memory rules live in the base prompt, not in a server policy file
+  (D24).** The agent decides what deserves memory, so the rules must
+  reach the agent. `AGENTS.base.md` carries them.
+- **Persistence:** named Docker volumes hold Chroma (`/chroma/chroma`)
+  and the coordination SQLite file. A volume survives a restart, but
+  not a disk loss or a bad migration. The stack therefore ships `dump`
+  and `restore` commands for both stores.
 
 ### 3. Ingress Channels (shared layer)
 
@@ -413,8 +432,7 @@ wagglebot/
 │   ├── responder/               # Minimal reference responder (D18)
 │   └── coordination/            # Task board (Ph. 1) + collab (Ph. 2)
 ├── central/                     # Operator-maintained, versioned
-│   ├── users.yaml               # username → tokenHash, teams
-│   ├── catalog.yaml             # domains, systems, groups, users
+│   ├── catalog.yaml             # domains, systems, groups, users (+ssh keys)
 │   ├── channels.yaml            # ingress source → group, system, responder
 │   ├── registry.base.yaml
 │   └── registry.team.<team>.yaml
@@ -570,20 +588,24 @@ URL**, and the shared layer composes the response from the principal:
 
 ```
 MCP_HUB_CONFIG_URL=https://shared.internal/registry
-Authorization: Bearer <user token>
+Authorization: Bearer <session token>
 ```
 
-The request carries the user token of the engineer. The shared layer
-resolves the token through `users.yaml`, reads the group membership of
-that engineer from the catalog, and returns `registry.base.yaml` merged
-with each `registry.team.<team>.yaml`. A team layer wins over the base
-layer for the same namespace. The validation command prints the
+The request carries the session token from the SSH key challenge
+(D26). The shared layer reads the group membership of that engineer
+from the catalog, and returns `registry.base.yaml` merged with each
+`registry.team.<team>.yaml`. The validation command prints the
 effective registry.
+
+**The merge is shallow.** A team entry replaces a base entry with the
+same namespace, field for field. A team file therefore writes the
+complete entry. A deep merge would let a partial entry inherit half its
+behavior from another file, and no reader could tell what one namespace
+actually does.
 
 Group membership therefore lives in **one place**: the catalog (D23).
 Move an engineer to a different group there, and the next registry
 refresh delivers the new tool set. No workstation config changes.
-`users.yaml` holds only the token binding.
 
 The registry selects **which upstreams appear**, for relevance. It is
 not a permission gate: local credentials decide which upstream actually
@@ -594,22 +616,21 @@ curates one team file. No engineer edits a registry.
 
 ### Onboarding An Engineer
 
-The workstation needs exactly two values:
+The workstation needs exactly **one** value: the shared layer URL. That
+value is the same for the whole company, and it ships in the
+provisioning defaults.
 
-1. The shared layer URL (one value for the whole company, part of the
-   provisioning defaults).
-2. The **user token** of the engineer, from the operator, into the
-   gitignored `.env.credentials` file.
+No credential is delivered. The engineer signs in with the SSH key they
+already have (D26), and receives a short-lived session token. That
+token authenticates them to every shared service: the registry
+endpoint, the memory worker, and coordination. Each service reads the
+identity and the group membership from the catalog. Upstream MCP
+credentials stay separate and arrive per upstream (D10).
 
-One user token authenticates the engineer to every shared service: the
-registry endpoint, the memory worker, and coordination. Each service
-derives the identity from `users.yaml`, and the group membership from
-the catalog. Upstream MCP credentials stay separate and arrive per
-upstream (D10).
-
-Onboarding and offboarding are one operator procedure: edit
-`users.yaml` and `catalog.yaml`, issue or revoke one token, and run the
-validation command.
+Onboarding is one pull request: add a User entity with the username,
+the public key, and the group membership. Offboarding removes it. Run
+the validation command, and the change takes effect. Nothing to
+generate, deliver, or rotate.
 
 ### Cross-Team Knowledge
 

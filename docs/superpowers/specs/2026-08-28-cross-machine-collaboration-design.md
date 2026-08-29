@@ -31,25 +31,47 @@ Two authenticated roles exist, and only two:
 
 | Role | Token | May |
 |---|---|---|
-| Engineer | One user token, all shared services | Register agents, use channels and the task board, propose memory, publish for the own team |
-| Operator | One operator token | Edit the central files, rotate a token, call the direct memory endpoints |
+| Engineer | An SSH key signature, exchanged for a session token | Register agents, use channels and the task board, propose memory, publish for the own team |
+| Operator | Write access to the central repository | Edit the central files, remove a user, call the direct memory endpoints |
 
 ## Central Files
 
-Engineering managers maintain three small files in one central
+Engineering managers maintain two small files in one central
 repository. Repository write access is the only permission system.
 
+**There is no user token, and no `users.yaml` (D26).** An engineer
+authenticates with the SSH key they already have:
+
+1. The agent asks the shared layer for a nonce.
+2. The agent signs the nonce through `ssh-agent`.
+3. The shared layer verifies the signature against the registered
+   public key, and returns a short-lived session token.
+
+The default key source is the catalog, so the key travels by pull
+request:
+
 ```yaml
-# users.yaml — the token binding, nothing else (D23)
-users:
-  - username: alice          # company Git username, lowercase
-    tokenHash: "..."
+# catalog.yaml
+apiVersion: backstage.io/v1alpha1
+kind: User
+metadata:
+  name: alice                # company Git username, lowercase
+  annotations:
+    wagglebot.dev/ssh-key: "ssh-ed25519 AAAAC3Nza..."
+    wagglebot.dev/org-owner: "true"    # optional, D23
+spec:
+  memberOf: [team-payments]
 ```
+
+A public key is public, so the repository holds no secret. This source
+works with every Git host, including Bitbucket Server. A deployment on
+GitHub or GitLab may instead set the `github` source, which fetches
+`<host>/<username>.keys` and caches the result.
 
 `catalog.yaml` holds the Backstage entities: Domain, System, Group, and
 User. Group membership lives only there (`Group.spec.members`). The
-org-owner annotation on a User entity grants publication to the `org`
-memory scope (D23). `channels.yaml` holds the ingress routes. The
+org-owner annotation grants publication to the `org` memory scope
+(D23). `channels.yaml` holds the ingress routes. The
 [service contracts](2026-08-28-service-contracts.md) give both schemas.
 
 Each repository declares its components in `catalog-info.yaml`, or in
@@ -57,21 +79,26 @@ Each repository declares its components in `catalog-info.yaml`, or in
 
 Rules:
 
-1. The operator issues one **user token** per engineer. The token binds
-   to one `username`. Each shared service derives the identity from the
-   token, never from a request field. This prevents impersonation and
-   gives correct attribution.
-2. `username` is the company Git username, in lowercase.
-3. A service reads the identity from `users.yaml`, and the group
-   membership and hierarchy from `catalog.yaml`. Group values select
-   defaults and routes. They never deny an operation between registered
-   users. The one exception: publication into the `domain` and `org`
-   memory scopes is gated by the catalog (D23).
+1. An engineer proves identity with an **SSH key signature**, and
+   receives a short-lived session token (D26). Each shared service
+   derives the identity from that token, never from a request field.
+   This prevents impersonation and gives correct attribution. No
+   operator delivers a credential, and no credential needs rotation.
+2. `username` is the company Git username, in lowercase. It is the
+   `metadata.name` of the User entity.
+3. A service reads the identity, the public key, the group membership,
+   and the hierarchy from `catalog.yaml`. Group values select defaults
+   and routes. They never deny an operation between registered users.
+   The one exception: publication into the `domain` and `org` memory
+   scopes is gated by the catalog (D23).
 4. An agent registers under its user. A second registration with the
    same `agentId` and a different user is rejected.
 5. Operator actions need the operator token.
 6. One validation command checks all central files, prints the
-   effective configuration, and reports conflicts.
+   effective configuration, and **rejects every duplicate** (D27). Two
+   entities of one kind sharing a name, a component naming an unknown
+   system, and two routes matching one event are hard errors. The
+   message names the file and the value.
 
 NOTE: An earlier review asked for project-level authorization. That
 request assumed an untrusted multi-tenant deployment. This deployment is
@@ -90,7 +117,7 @@ remote. The catalog declares everything (D20).
 | `system` | `catalog.yaml` | The project. Promoted memory scope, channel key. |
 | `component` | The repository declaration | The unit of work. Default memory write scope, attribution. |
 | `group` | `catalog.yaml`, `parent` for subteams | Routing, registry selection, ownership |
-| `username` | `users.yaml` | Attribution, direct messages |
+| `username` | `catalog.yaml`, the User entity | Attribution, direct messages |
 | `agentId` | Generated per agent process | Presence, claims |
 
 Ownership is separate from grouping: every entity names an owning group.
@@ -151,7 +178,7 @@ collaborate, so the design never blocks that path.
 | Other domain | Discoverable and reachable. No channel joins automatically. |
 
 Enablement is **opt-in per engineer**. An agent joins coordination only
-when its operator sets `COORD_URL` and the user token. Each message
+when its operator sets `COORD_URL` and signs in with the SSH key. Each message
 carries the user identity. The humans stay in the loop.
 
 ## Components
