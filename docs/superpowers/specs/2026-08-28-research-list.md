@@ -13,7 +13,12 @@
 **Why it is here.** The reference codebase used Flue to build custom
 agents for one company. That is a job wagglebot does not do today.
 
-**Status: researched. It sits above wagglebot.**
+**Status: researched. Parked as a nice-to-have.**
+
+Flue sits above wagglebot, and needs no design change. It stays here
+because its cost is real: one API key per engineer. A Markdown
+subagent has no such cost, so it is the default (D33, R2). Revisit
+Flue when a specific job needs durability or a sandbox.
 
 ### What Flue is
 

@@ -17,8 +17,11 @@ ayghri/i-have-adhd@<pinned-ref>
 wagglebot/skills@<pinned-ref>        # first-party, D33
 ```
 
-An unpinned entry is rejected. An unpinned entry would execute whatever
-the repository publishes next, on every workstation (P31, D13).
+**One pin rule covers every list** (D32). An entry outside your
+organization **must** carry a pin, because a third party controls what
+that repository publishes next (P31, D13). An entry inside your
+organization **may** carry one, and a pull request already reviews it.
+Every seed entry above is third-party, so every seed entry pins.
 
 ### First-party skills (D33)
 
@@ -118,26 +121,28 @@ appears on every workstation.
 `install-agents` still exists, for a first setup and for a manual
 refresh. It is not the normal path.
 
-### Why automatic here, and pinned for skills
+### Agents work the same way as skills
 
-The two lists point at different things:
+Both are Markdown in a git repository, curated centrally, installed on
+every workstation. The mechanism is therefore the same, and one pin
+rule covers both:
 
-| List | Points at | Published by |
-|---|---|---|
-| `skills.list` | `obra/superpowers` and similar | **Third parties** |
-| `agents.*.list` | Your own repositories | **You** |
+| Entry points at | Pin |
+|---|---|
+| A third party, for example `obra/superpowers` | **Required.** They control the next release. |
+| Your own organization | Optional. A pull request already reviews it. |
 
-A pin on `skills.list` protects you from the next release of somebody
-else's repository. A pin on your own agents would protect you from your
-own colleagues, which contradicts D15. The organization is trusted, and
-a pull request already reviews every change.
+That rule replaces the earlier split between the two lists. A pin on
+your own repository would guard against your own colleagues, which
+contradicts D15.
 
-Two rules still apply, and both are cheap:
+Two differences remain, and both are small:
 
-1. **An entry outside your organization must carry a pin.** That entry
-   is a third party again, so the `skills.list` rule returns.
-2. **A team may pin its own entry when it wants a stable release.** The
-   pin is available, and it is never required.
+1. **Destination.** A skill goes to the skill directory. A subagent
+   goes to a harness directory, so the installer reuses the target
+   table from `sync-agents`.
+2. **Refresh.** The hub carries the agent list on its registry refresh,
+   so a shared agent arrives without a command.
 
 ### Contribution
 
