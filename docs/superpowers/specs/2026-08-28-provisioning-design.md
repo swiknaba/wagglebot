@@ -14,6 +14,7 @@ ref is a tag or a commit hash. Comments are allowed. Seed content:
 ```
 obra/superpowers@<pinned-ref>
 ayghri/i-have-adhd@<pinned-ref>
+wagglebot/writing-a-custom-agent@<pinned-ref>   # bundled, D33
 ```
 
 An unpinned entry is rejected. An unpinned entry would execute whatever
@@ -35,6 +36,112 @@ the repository publishes next, on every workstation (P31, D13).
 Behavior: colored section output, and counters for installed, updated,
 ok, and failed items. When a dependency (npm, skills) is absent, the
 script warns and continues. The script exits non-zero on failures.
+
+## Custom Agent Distribution
+
+A team writes its own agents, in a runtime such as
+[Flue](2026-08-28-research-list.md) or any other. Wagglebot
+**distributes** those agents. It never runs one (D31).
+
+### Two kinds, two mechanisms
+
+| Kind | Lives in | Distributed by |
+|---|---|---|
+| **Component agent** — useful for one repository | `.wagglebot/agents/` in that repository | Git. Nothing to do. |
+| **Shared agent** — useful for a team or the organization | A repository of its own | The list below |
+
+A component agent needs no wagglebot feature. Git already gives it to
+everyone who clones the repository, a pull request reviews each change,
+and the history is free. This mirrors component memory (D29).
+
+### The lists
+
+Two layers, which compose the same way the registry does:
+
+```
+central/agents.base.list          # every engineer
+central/agents.team.<team>.list   # one team
+```
+
+One entry per line, `owner/repo`, with an optional `@<ref>`. Comments
+are allowed.
+
+Wagglebot ships the mechanism and an **empty** list with commented
+examples. The content belongs to one installation, so this repository
+never carries it. That matches `registry.yaml`.
+
+### Distribution is automatic (D32)
+
+The hub already fetches the registry from the shared layer on refresh.
+It carries the agent list on the same request, and **installs or
+updates each agent without asking**.
+
+An engineer therefore does nothing. A team publishes an agent, and it
+appears on every workstation.
+
+`install-agents` still exists, for a first setup and for a manual
+refresh. It is not the normal path.
+
+### Why automatic here, and pinned for skills
+
+The two lists point at different things:
+
+| List | Points at | Published by |
+|---|---|---|
+| `skills.list` | `obra/superpowers` and similar | **Third parties** |
+| `agents.*.list` | Your own repositories | **You** |
+
+A pin on `skills.list` protects you from the next release of somebody
+else's repository. A pin on your own agents would protect you from your
+own colleagues, which contradicts D15. The organization is trusted, and
+a pull request already reviews every change.
+
+Two rules still apply, and both are cheap:
+
+1. **An entry outside your organization must carry a pin.** That entry
+   is a third party again, so the `skills.list` rule returns.
+2. **A team may pin its own entry when it wants a stable release.** The
+   pin is available, and it is never required.
+
+### Contribution
+
+A team contributes an agent in three steps:
+
+1. Write the agent in its own repository.
+2. Open a pull request that adds the entry to `agents.base.list`, or to
+   a team list.
+3. On merge, every workstation picks it up at the next hub refresh.
+
+Review of that pull request is the control. Repository write access
+stays the only permission system (D15).
+
+### The bundled skill (D33)
+
+Wagglebot ships one skill, `writing-a-custom-agent`, in the curated
+set. It teaches an agent how to help an engineer write a new custom
+agent.
+
+The skill covers:
+
+1. **The runtime.** How to write a Flue agent: the file shape, the
+   hooks, and how to reach the local hub over MCP.
+2. **The placement question, asked before any code.** The skill must
+   ask the engineer:
+
+   > Is this agent for this repository only, or for the whole team?
+
+   | Answer | Where it goes |
+   |---|---|
+   | This repository | `.wagglebot/agents/` in this repository |
+   | The team or the organization | Its own repository, plus a pull request on `agents.base.list` |
+
+3. **The consequences of each answer**, so the engineer chooses well. A
+   local agent needs no review from another team, and it disappears
+   when somebody clones a different repository. A shared agent reaches
+   every workstation, so a second person reviews it.
+
+The skill never chooses for the engineer. It asks, and it explains the
+trade.
 
 ## Agent Base Template + Distribution
 
@@ -351,11 +458,17 @@ to point `EXTRACTOR_API_BASE` at an existing local server (llama.cpp
 1. `provisioning/bin/install-skills` installs the `skills` CLI and every
    entry in `skills.list` on a clean machine. A second run reports every
    item as already installed.
-2. `provisioning/bin/sync-agents` writes one rendered template to every
+2. A team merges a new entry into `agents.base.list`. The next hub
+   refresh installs that agent on a different workstation, with no
+   command from its engineer (D32).
+3. An engineer asks an agent to write a custom agent. The
+   `writing-a-custom-agent` skill asks where the agent belongs, before
+   it writes any code (D33).
+4. `provisioning/bin/sync-agents` writes one rendered template to every
    harness target. It creates missing directories. It reports the
    synced, already-ok, and failed counts.
-3. Edit `AGENTS.base.md` and run `sync-agents` again. Every target then
+5. Edit `AGENTS.base.md` and run `sync-agents` again. Every target then
    has the new content.
-4. `sync-agents` merges the hook fragments into each supported harness
+6. `sync-agents` merges the hook fragments into each supported harness
    config and preserves the other keys. A second run reports the hooks
    as already installed.

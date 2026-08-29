@@ -62,6 +62,9 @@ and deploy. No team must fork the internals of a different company.
   that starts an agent). A local agent with an MCP server already does
   this, under supervision. See the
   [descoped ideas](2026-08-28-descoped-ideas.md).
+- **Running an agent on the shared server** (D31). Wagglebot
+  distributes custom agents. Each one runs on a workstation, with the
+  credentials of its engineer. Hosting them would break D9.
 
 ---
 
@@ -96,6 +99,9 @@ and deploy. No team must fork the internals of a different company.
 | D28 | **Every memory write passes a credential scan.** Two layers run server-side: a **gitleaks** rule scan for known provider formats, and the entropy check for the formats no rule set knows. A match is redacted, and a mostly-matching write is rejected. The error names the rule, never the content. `wagglebot rescan` re-applies current rules to stored memory, because new rules arrive after old writes. Memory outlives logs, so a credential stored here would surface for years. |
 | D29 | **Component memory is a local Markdown file, not a vector record.** The agent writes `.wagglebot/memory.md` in the repository. Git already distributes a file inside one repository, a pull request reviews each change, and the history is free. The shared store therefore holds only what crosses a repository boundary: `system`, `domain`, and `org`. A search still reads the local file first, then the three shared scopes. |
 | D30 | **A human can commit a memory directly, with `remember`.** The MCP tool `remember({ text, scope })` and the command `wagglebot remember` write one fact to a named scope. This path is explicit, so the agent never judges the importance and never asks for a promotion confirmation (D22). The named scope still needs authorization (D23), the text still passes the credential scan (D28), and a `component` scope still writes the local file (D29). The matching `forget` tool invalidates a record the same way. |
+| D31 | **Wagglebot distributes custom agents, and never runs one.** A shared agent runs on a workstation, with the credentials of its engineer, so D9 holds. Hosting agents would put engineer credentials on the shared server, make wagglebot a compute platform, and create the unattended operation that the MVP deliberately excludes. Distribution uses `agents.base.list` and `agents.team.<team>.list`, composed like the registry. A component agent needs no distribution: it lives in `.wagglebot/agents/` and travels with the repository. |
+| D32 | **Shared agents install automatically, and pins are optional.** The hub carries the agent list on its registry refresh, and installs or updates each entry without asking. `skills.list` points at third-party repositories, so it pins. The agent lists point at your own repositories, so a pin there would guard against your own colleagues and contradict D15. A pull request already reviews every change. Two rules remain: an entry outside the organization must carry a pin, and a team may pin its own entry for a stable release. |
+| D33 | **Wagglebot ships one skill for writing a custom agent.** The `writing-a-custom-agent` skill teaches the runtime, and asks one question before any code: is this agent for this repository, or for the whole team? It explains the trade and never chooses. A local agent needs no outside review and stays with its repository. A shared agent reaches every workstation, so a second person reviews it. |
 
 ### Why D9 and D10 matter
 
@@ -395,6 +401,8 @@ wagglebot/
 │   └── coordination/            # Presence, messaging, tasks (Phase 2)
 ├── central/                     # Operator-maintained, versioned
 │   ├── catalog.yaml             # domains, systems, groups, users (+ssh keys)
+│   ├── agents.base.list         # shared custom agents (D31, D32)
+│   ├── agents.team.<team>.list
 │   ├── registry.base.yaml
 │   └── registry.team.<team>.yaml
 ├── packages/
@@ -402,6 +410,7 @@ wagglebot/
 ├── provisioning/
 │   ├── skills.list              # Curated skill packages
 │   ├── bin/install-skills
+│   ├── bin/install-agents       # Shared custom agents (D31)
 │   ├── bin/sync-agents
 │   └── templates/
 │       ├── AGENTS.base.md       # Shared agent base template
