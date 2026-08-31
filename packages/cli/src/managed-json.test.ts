@@ -33,3 +33,18 @@ test("mergeHooks replaces only wagglebot-marked entries and keeps foreign hooks"
   const twice = mergeHooks(once.next, fragment);
   expect(twice.changed).toBe(false);
 });
+
+test("mergeHooks does not misclassify a foreign entry whose matcher contains the marker", () => {
+  const existing = JSON.stringify({
+    hooks: {
+      PostToolUse: [{ matcher: "wagglebot:decoy", hooks: [{ type: "command", command: "my-own-hook" }] }],
+    },
+  });
+  const fragment = {
+    hooks: { PostToolUse: [{ matcher: "Write|Edit", hooks: [{ type: "command", command: "echo wagglebot:ste" }] }] },
+  };
+  const result = mergeHooks(existing, fragment);
+  const doc = JSON.parse(result.next);
+  expect(doc.hooks.PostToolUse).toHaveLength(2);
+  expect(JSON.stringify(doc.hooks.PostToolUse)).toContain("my-own-hook");
+});
