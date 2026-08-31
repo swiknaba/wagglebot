@@ -1,4 +1,4 @@
-# Workstation Provisioning
+# Phase 1 — Workstation Provisioning
 
 > Companion to the [wagglebot design spec](2026-08-28-wagglebot-design.md).
 > One team shares one curated agent environment: the same skills and the
@@ -520,32 +520,67 @@ adapters.
 NOTE: The base template is the portable layer and reaches every
 harness. Hooks are a per-harness reinforcement, not a replacement.
 
-## Local LLM Provisioning
+## Component Memory Is A Local File (D29)
 
-Local LLM provisioning needs no script. Three facts shape the stack. The
-`llama-server` API is OpenAI-compatible out of the box. Models download
-automatically by `-hf` reference on the first run. A small Qwen instruct
-model runs on a CPU. The compose stack applies these facts directly
-(D2). The README documents the model cache paths. It also documents how
-to point `EXTRACTOR_API_BASE` at an existing local server (llama.cpp
-:8080, Ollama :11434, LM Studio :1234) instead of the bundled container.
+Not every memory belongs on a server. A fact about one repository
+belongs **in** that repository:
+
+```
+.wagglebot/memory.md
+```
+
+Git already distributes that file to everyone who clones the
+repository. A pull request reviews each change, and the history is
+free. A server adds nothing.
+
+The shared store therefore holds only what crosses a repository
+boundary:
+
+| Scope | Where it lives |
+|---|---|
+| `component` | `.wagglebot/memory.md`, in the repository |
+| `system`, `domain`, `org` | The shared memory worker |
+
+A search reads the local file first, then the three shared scopes.
+
+This also makes the common case reviewable. A pull request that says
+"the agent wants to remember this" beats a silent write into a vector
+store.
+
+NOTE: The superpowers skill set already works this way. It writes specs
+and plans into `docs/superpowers/specs/`, in git. Component memory
+follows the same pattern.
 
 ## Success Criteria
 
-1. `provisioning/bin/install-skills` installs the `skills` CLI and every
+1. A clean machine clones the central repository and runs
+   `wagglebot update`. The skills, the subagents, the base prompts, and
+   the MCP configs land in every harness. No service starts, and no
+   credential is configured (D14, D34).
+2. `wagglebot update --help` explains what the command touches. A
+   second run reports every item as already current, and a
+   `git pull --ff-only` keeps the command itself current.
+3. An operator merges a registry change. The next `wagglebot update` on
+   any workstation rewrites the managed block in each harness config,
+   and content outside the block stays untouched.
+4. `provisioning/bin/install-skills` installs the `skills` CLI and every
    entry in `skills.list` on a clean machine. A second run reports every
    item as already installed.
-2. A team merges a new entry into `agents.base.list`. The next
+5. A team merges a new entry into `agents.base.list`. The next
    `wagglebot update` (Phase 1) or hub refresh (Phase 2) installs that
    agent on a different workstation (D32).
-3. An engineer asks an agent to write a custom agent. The
+6. An engineer asks an agent to write a custom agent. The
    `writing-a-custom-agent` skill asks where the agent belongs, before
    it writes any code (D33).
-4. `provisioning/bin/sync-agents` writes one rendered template to every
+7. `provisioning/bin/sync-agents` writes one rendered template to every
    harness target. It creates missing directories. It reports the
    synced, already-ok, and failed counts.
-5. Edit `AGENTS.base.md` and run `sync-agents` again. Every target then
+8. Edit `AGENTS.base.md` and run `sync-agents` again. Every target then
    has the new content.
-6. `sync-agents` merges the hook fragments into each supported harness
+9. `sync-agents` merges the hook fragments into each supported harness
    config and preserves the other keys. A second run reports the hooks
    as already installed.
+10. **Local component memory.** An agent records a repository fact in
+    `.wagglebot/memory.md` (D29). The file appears in `git status`, so
+    a human reviews it. A later `memory_search` finds it without a
+    server call.

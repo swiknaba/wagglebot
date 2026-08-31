@@ -8,8 +8,8 @@
 
 - `2026-08-28-wagglebot-design.md`
 - `2026-08-28-service-contracts.md`
-- `2026-08-28-cross-machine-collaboration-design.md`
-- `2026-08-28-provisioning-design.md`
+- `2026-08-28-phase-3-collaboration.md`
+- `2026-08-28-phase-1-provisioning.md`
 - `README.md`
 
 The review covers internal consistency, security, failure behavior, API completeness, operations, and testability.

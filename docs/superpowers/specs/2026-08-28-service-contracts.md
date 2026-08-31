@@ -259,21 +259,10 @@ No model call appears in that path, so the old extractor bottleneck is
 gone. A backlog can still form under load, but nothing slow blocks a
 single write.
 
-**Path 2 — document ingestion (D25).** A human names a source. The
-extract step is pluggable:
-
-```
-ingest_document({ source: "<url>", scope: "domain:payments" })
-  → fetch content through an MCP tool
-    → extract:  mode "agent"      → the calling agent extracts
-                mode "local_llm"  → batch OpenAI-compatible call (D2)
-      → [ the same normalize → reconcile → upsert path as above ]
-```
-
-The default mode is `agent`, which needs no extra container. The
-`local_llm` mode earns its container only at bulk volume. Ingestion
-inherits the authorization of its caller: a write to `domain:payments`
-still requires membership in the owner group of that Domain (D23).
+**Path 2 — document ingestion — is Phase 4** (D25). Its pipeline
+lives in the [phase 4 spec](2026-08-28-phase-4-document-ingestion.md).
+It reuses the normalize → reconcile → upsert path above, and every
+rule in this section applies to it.
 
 **Path 3 — a human commits a memory directly (D30).** You tell the
 agent, and the agent writes it:

@@ -75,10 +75,12 @@ service bearer tokens.
 
 | Spec | Content |
 |---|---|
-| [Design](docs/superpowers/specs/2026-08-28-wagglebot-design.md) | Goals, decisions, architecture, and the compose stack. |
+| [Design](docs/superpowers/specs/2026-08-28-wagglebot-design.md) | Goals, decisions, architecture, and the phase index. |
+| [Phase 1 — provisioning](docs/superpowers/specs/2026-08-28-phase-1-provisioning.md) | One command: skills, subagents, base prompts, MCP configs, local memory. |
+| [Phase 2 — shared layer](docs/superpowers/specs/2026-08-28-phase-2-shared-layer.md) | The memory worker, the hub, auth, and the compose stack. |
+| [Phase 3 — collaboration](docs/superpowers/specs/2026-08-28-phase-3-collaboration.md) | Cross-machine agent collaboration. |
+| [Phase 4 — ingestion](docs/superpowers/specs/2026-08-28-phase-4-document-ingestion.md) | Documents into memory, with an optional batch extractor. |
 | [Service contracts](docs/superpowers/specs/2026-08-28-service-contracts.md) | Behavior contracts for each service, and the pitfall register. |
-| [Collaboration](docs/superpowers/specs/2026-08-28-cross-machine-collaboration-design.md) | Cross-machine agent collaboration. |
-| [Provisioning](docs/superpowers/specs/2026-08-28-provisioning-design.md) | Curated skills, the base prompt, and harness hooks. |
 
 ## License
 
