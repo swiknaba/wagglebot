@@ -5,7 +5,7 @@
 >   contracts for the hub and the memory worker. The pitfall register
 >   (P-numbers) is also there.
 > - [Cross-machine collaboration](2026-08-28-cross-machine-collaboration-design.md)
->   — the Phase 2 coordination service.
+>   — the Phase 3 coordination service.
 > - [Workstation provisioning](2026-08-28-provisioning-design.md) —
 >   the curated skill list and the shared agent base template.
 > - [Descoped ideas](2026-08-28-descoped-ideas.md) — what we removed
@@ -27,17 +27,20 @@ and deploy. No team must fork the internals of a different company.
 
 ## Goals
 
-1. **MCP Hub** — One `/mcp` endpoint that proxies requests to any number
-   of upstream MCP servers. The hub has zero hardcoded upstreams. A
-   user-supplied JSON config defines the full surface.
-2. **Durable Memory** — An async pipeline that accepts structured facts.
-   The agent extracts them, so no model runs on the write path (D24).
-   The pipeline scans each write for credentials, deduplicates it, and
+1. **Agent Environment Provisioning** (Phase 1) — One central
+   repository and one update command install the curated skills, the
+   subagents, one base instruction template, and the MCP configs, on
+   every workstation and in every harness. Zero services (D34).
+2. **Durable Memory** (local files in Phase 1, shared store in
+   Phase 2) — An async pipeline that accepts structured facts. The
+   agent extracts them, so no model runs on the write path (D24). The
+   pipeline scans each write for credentials, deduplicates it, and
    stores it as a vector embedding for later retrieval.
-3. **Agent Environment Provisioning** — Shared tooling that installs a
-   curated skill set. The same tooling distributes one base instruction
-   template across every agent harness on a workstation.
-4. **Cross-Machine Collaboration** (Phase 2) — A coordination layer for
+3. **MCP Hub** (Phase 2) — One `/mcp` endpoint that proxies requests to
+   any number of upstream MCP servers. The hub has zero hardcoded
+   upstreams. In Phase 1, the update command writes the same curated
+   registry into each harness config directly.
+4. **Cross-Machine Collaboration** (Phase 3) — A coordination layer for
    agents on different machines. Agents discover each other, share
    memory, and hand off tasks. The scope is the system and branch of
    their humans.
@@ -84,7 +87,7 @@ and deploy. No team must fork the internals of a different company.
 | D10 | **The config splits in two.** The shared registry declares each upstream and names its credential. It stores no secret. The local hub resolves each credential from the workstation. A team-wide token uses the same mechanism, with different distribution. |
 | D12 | **People connect by username, never by address.** Each engineer registers with the company username (SSO name). All agent traffic flows outbound through the shared coordination service. A direct connection between two people requires an approval: the receiver sees who asks and accepts or rejects. No VPN, tunnel, or IP exchange exists in this design. |
 | D13 | **Every executable dependency is pinned.** `stdio_npx` packages carry exact versions, container images pin digests, and `skills.list` pins revisions. Nothing installs `latest`. |
-| D14 | **Phase 1 ships three things: the MCP hub, shared memory, and provisioning.** Each one is useful while an engineer works, and none is possible without a shared layer. The task board, presence, messaging, and collaboration stay Phase 2, because each needs two agents running at one time. |
+| D14 | **Three phases, each with a clean trigger.** **Phase 1 is provisioning:** one central git repository and one update command install the skills, the base prompts, the subagents, the MCP configs, and the local memory files. Zero services run, and no authentication exists, because git access is the access control (D15). **Phase 2 is the shared layer:** the memory worker with Chroma, the SSH auth (D26), registry serving, and the MCP hub. Its trigger: a team wants cross-repository memory search, or the tool count needs aggregation. **Phase 3 is collaboration:** presence, messaging, and the task board. Its trigger: two agents need to run at one time. Document ingestion (D25) follows Phase 3, or later. |
 | D15 | **Trusted coworkers.** Every registered engineer is trusted. Identity serves routing, context, and attribution. Teams and scopes never deny an operation between registered users. Git and the company identity provider control code access. Only impersonation protection and operator actions stay restricted (P34). |
 | D16 | **The catalog uses the full Backstage entity model.** Component (one repository or subtree) sits in a System (one project), which sits in a Domain (a business area). A Group owns each entity, with `parent` for subteams. Ownership stays separate from grouping, so a reorganization edits one `owner` field. A branch is context, never identity (P33). |
 | D19 | **Embeddings use the Chroma built-in default** (`all-MiniLM-L6-v2`, 384 dimensions, cosine distance). No second model service, no extra container, no GPU. Chroma persists the embedding function in the collection configuration, so every deployment stays consistent. Each collection still records the provider, the model, the dimension, the distance function, and a schema version, because a later model change needs a full re-embed. |
@@ -93,8 +96,8 @@ and deploy. No team must fork the internals of a different company.
 | D22 | **Agent writes default to `component`, with confirmed promotion to `system`.** The agent classifies each memory. A system classification is a proposal: the interactive agent asks its engineer in session. A background process never asks. A timeout or an uncertain classification falls back to `component`. A fact can land too low, never too high. |
 | D23 | **Writes to `domain` and `org` are gated by the catalog.** A `domain` write requires membership in the owner group of that Domain. An `org` write requires the org-owner annotation on the User entity. Several users may carry the flag. Group membership lives only in the catalog. The gate restricts publication, never collaboration (D15). |
 | D24 | **The agent extracts its own session memory.** It sends finished facts, never a transcript. The agent already holds the session context, and it is a stronger model than any bundled extractor. No model runs on the session write path, so the extractor stops being a bottleneck. The server still owns what a client must not: secret scrubbing, canonicalization, deduplication by content hash, embedding, and storage. A client is never a security boundary. |
-| D25 | **Document ingestion is a separate pipeline with a pluggable extract step.** A human names a source, for example a Confluence page. The pipeline fetches the content through an MCP tool, extracts facts, and writes them to a named scope. Two extract modes exist: `agent` (the default, and no extra container) and `local_llm` (an opt-in batch mode for bulk volume, D2). Ingestion inherits the authorization of its caller, so a write to `domain` still requires the owner group (D23). |
-| D26 | **Authentication uses an SSH public key challenge, not a distributed token.** The agent signs a server nonce with the existing SSH key of the engineer, and receives a short-lived session token. The default key source is the `wagglebot.dev/ssh-key` annotation on the User entity in the catalog, added by pull request. That works with every Git host, including Bitbucket Server. An optional `github` source fetches `<host>/<username>.keys` instead. No token needs delivery or rotation, and `users.yaml` therefore does not exist: identity lives in the catalog. |
+| D25 | **(Phase 3 or later) Document ingestion is a separate pipeline with a pluggable extract step.** A human names a source, for example a Confluence page. The pipeline fetches the content through an MCP tool, extracts facts, and writes them to a named scope. Two extract modes exist: `agent` (the default, and no extra container) and `local_llm` (an opt-in batch mode for bulk volume, D2). Ingestion inherits the authorization of its caller, so a write to `domain` still requires the owner group (D23). |
+| D26 | **(From Phase 2) Authentication uses an SSH public key challenge, not a distributed token.** Phase 1 has no shared service, so it needs no authentication at all. The agent signs a server nonce with the existing SSH key of the engineer, and receives a short-lived session token. The default key source is the `wagglebot.dev/ssh-key` annotation on the User entity in the catalog, added by pull request. That works with every Git host, including Bitbucket Server. An optional `github` source fetches `<host>/<username>.keys` instead. No token needs delivery or rotation, and `users.yaml` therefore does not exist: identity lives in the catalog. |
 | D27 | **The validation command rejects every duplicate.** Two entities of one kind sharing a name, a component naming an unknown system, and two channel routes matching one event are all hard errors. The message names the file and the value. Wagglebot never picks a winner silently (P35). |
 | D28 | **Every memory write passes a credential scan.** Two layers run server-side: a **gitleaks** rule scan for known provider formats, and the entropy check for the formats no rule set knows. A match is redacted, and a mostly-matching write is rejected. The error names the rule, never the content. `wagglebot rescan` re-applies current rules to stored memory, because new rules arrive after old writes. Memory outlives logs, so a credential stored here would surface for years. |
 | D29 | **Component memory is a local Markdown file, not a vector record.** The agent writes `.wagglebot/memory.md` in the repository. Git already distributes a file inside one repository, a pull request reviews each change, and the history is free. The shared store therefore holds only what crosses a repository boundary: `system`, `domain`, and `org`. A search still reads the local file first, then the three shared scopes. |
@@ -102,6 +105,7 @@ and deploy. No team must fork the internals of a different company.
 | D31 | **Wagglebot distributes custom agents, and never runs one.** A shared agent runs on a workstation, with the credentials of its engineer, so D9 holds. Hosting agents would put engineer credentials on the shared server, make wagglebot a compute platform, and create the unattended operation that the MVP deliberately excludes. Distribution uses `agents.base.list` and `agents.team.<team>.list`, composed like the registry. A component agent needs no distribution: it lives in `.wagglebot/agents/` and travels with the repository. **Distribution is runtime-neutral.** A list entry may hold a Markdown subagent, a Flue agent, or any other shape. An agent declares the credentials it needs, by name, and follows D10. A missing credential marks that one agent unavailable with a clear reason, and never blocks the others. |
 | D32 | **Agents distribute the same way as skills, and one pin rule covers both.** An entry pointing outside the organization **must** pin, because a third party controls its next release. An entry inside the organization **may** pin, because a pull request already reviews it, and a required pin there would guard against your own colleagues (D15). Two differences remain: a subagent installs to a harness directory rather than the skill directory, and the hub carries the agent list on its registry refresh, so a shared agent arrives without a command. |
 | D33 | **Wagglebot ships first-party skills for its own toolset**, in one repository, `wagglebot/skills`. They version with wagglebot, because a format change breaks a skill on the same day. The set is `writing-a-custom-agent`, `adding-an-mcp-server`, and `onboarding-a-repository`. The first asks where an agent belongs before writing code, and explains the trade rather than choosing. **The split rule:** what the agent always needs goes in `AGENTS.base.md`, and what it needs occasionally becomes a skill. The memory rules are always needed. Everything else is occasional. |
+| D34 | **One update command provisions a workstation, and nothing runs as a service in Phase 1.** `wagglebot update` does three things: `git pull --ff-only` on the central repository (the command updates itself this way), then the install and sync scripts (skills, subagents, base prompts, MCP configs), then a summary. `--help` explains what it touches. The MCP servers reach each harness as **written config**, in a managed block, composed locally: the script reads `catalog.yaml`, finds the team of the engineer by git username, and merges the registry layers on the workstation. The hub becomes the Phase 2 upgrade for aggregation and CodeMode. |
 
 ### Why D9 and D10 matter
 
@@ -134,18 +138,23 @@ P29).
 
 ## Architecture
 
-### Two Layers
+### Two Layers, Three Phases
 
 Wagglebot uses two layers. The split follows one rule: **credentials
 stay on the workstation.**
 
-| Layer | Runs where | Holds |
-|---|---|---|
-| **Local** | Each engineer workstation | The MCP hub, the engineer credentials, the stdio upstream subprocesses, the skills, and the base prompt |
-| **Shared** | Deployed one time for the team | The registry, memory, and (Phase 2) coordination |
+| Layer | Runs where | Holds | Arrives |
+|---|---|---|---|
+| **Local** | Each engineer workstation | The engineer credentials, the skills, the subagents, the base prompt, the MCP configs, and the local memory files | **Phase 1** |
+| **Shared** | Deployed one time for the team | The registry serving, memory, the auth, and (Phase 3) coordination | Phase 2, coordination Phase 3 |
 
-A solo engineer runs both layers on one machine. The compose profiles
-support that without a change (see the compose section).
+**Phase 1 runs no service.** The local layer is files, installed by one
+command from one central git repository (D34, D14). An engineer clones,
+runs `wagglebot update`, and works. The local MCP hub is a Phase 2
+option, for aggregation and CodeMode.
+
+A solo engineer never needs more than Phase 1. The compose profiles
+serve the later phases (see the compose section).
 
 ### Interfaces At A Glance
 
@@ -198,7 +207,7 @@ talks to three things, and always by MCP. Credentials touch one box.
 | `propose_memory` | MCP tool | The agent, from its own judgment (D24) |
 | `remember`, `forget` | MCP tool | **You**, by telling the agent (D30) |
 | `ingest_document` | MCP tool | You, to pull a page into memory (D25) |
-| `coordination_*` (six tools) | MCP tool | The agent (Phase 2, task board Phase 1) |
+| `coordination_*` (six tools) | MCP tool | The agent (Phase 3) |
 | `GET /registry` | HTTP | The hub only, never the agent |
 | `POST /memory/proposals` | HTTP | The memory MCP surface, internally |
 | `POST /memories/upsert`, `/memories/invalidate` | HTTP | Humans and `wagglebot publish` (D23) |
@@ -219,7 +228,7 @@ talks to three things, and always by MCP. Credentials touch one box.
  │      ├──────────────┐        │      │    └ extractor (optional)  │
  │      ▼              ▼        │      └────────────────────────────┘
  │  stdio MCP     remote MCP    │      ┌────────────────────────────┐
- │  subprocesses  upstreams     │─────▶│  coordination :3020 (Ph. 2)│
+ │  subprocesses  upstreams     │─────▶│  coordination :3020 (Ph. 3)│
  └──────────────────────────────┘ MCP  │  presence · log · tasks    │
                                        └────────────────────────────┘
 ```
@@ -227,7 +236,7 @@ talks to three things, and always by MCP. Credentials touch one box.
 The shared layer never calls an upstream MCP server. Only the local hub
 does that.
 
-### 1. MCP Hub (local layer)
+### 1. MCP Hub (local layer, Phase 2)
 
 A TypeScript service on `@modelcontextprotocol/sdk`. It runs on the
 engineer workstation (D9). The
@@ -266,7 +275,7 @@ engineer workstation (D9). The
 The CodeMode transform is the most difficult part. Plan its
 implementation explicitly.
 
-### 2. Memory Worker (shared layer)
+### 2. Memory Worker (shared layer, Phase 2)
 
 TypeScript/Bun. The team deploys one instance. Each local hub registers
 it as an upstream, so agents reach memory through their own hub.
@@ -312,7 +321,7 @@ it as an upstream, so agents reach memory through their own hub.
   not a disk loss or a bad migration. The stack therefore ships `dump`
   and `restore` commands for both stores.
 
-### 3. Component Memory Is A Local File (D29)
+### 3. Component Memory Is A Local File (D29, Phase 1)
 
 Not every memory belongs on a server. A fact about one repository
 belongs **in** that repository:
@@ -343,7 +352,7 @@ NOTE: The superpowers skill set already works this way. It writes specs
 and plans into `docs/superpowers/specs/`, in git. Component memory
 follows the same pattern.
 
-### 4. How The Agent Knows Which Upstream To Use
+### 4. How The Agent Knows Which Upstream To Use (Phase 2)
 
 The agent never reads the shared registry. The agent talks only to its
 local hub. Two centrally curated files answer the question, and the hub
@@ -376,11 +385,11 @@ The hub re-pulls the registry on the interval
 `MCP_HUB_CONFIG_REFRESH_SECONDS`. Tool schemas refresh on the existing
 background cycle.
 
-### 5. Coordination (Phase 2)
+### 5. Coordination (Phase 3)
 
 A standalone MCP + SSE service, scoped by system and branch.
 
-All of it is Phase 2 (D14), because every part needs two agents
+All of it is Phase 3 (D14), because every part needs two agents
 running at one time: the task board, presence, messaging, and username
 connections with approval (D12).
 
@@ -398,7 +407,7 @@ wagglebot/
 ├── services/
 │   ├── mcp-hub/                 # MCP aggregation proxy (TypeScript/Bun)
 │   ├── memory-worker/           # Durable memory pipeline (TypeScript/Bun)
-│   └── coordination/            # Presence, messaging, tasks (Phase 2)
+│   └── coordination/            # Presence, messaging, tasks (Phase 3)
 ├── central/                     # Operator-maintained, versioned
 │   ├── catalog.yaml             # domains, systems, groups, users (+ssh keys)
 │   ├── agents.base.list         # shared custom agents (D31, D32)
@@ -409,6 +418,7 @@ wagglebot/
 │   └── types/                   # Shared types (MemoryProvider, JobSpec, ...)
 ├── provisioning/
 │   ├── skills.list              # Curated skill packages
+│   ├── bin/update               # The one Phase 1 command (D34)
 │   ├── bin/install-skills
 │   ├── bin/install-agents       # Shared custom agents (D31)
 │   ├── bin/sync-agents
@@ -429,7 +439,7 @@ wagglebot/
 
 ---
 
-## Docker Compose — Two Profiles
+## Docker Compose — Two Profiles (Phase 2)
 
 One compose file carries both layers. The `local` profile runs on each
 workstation. The `shared` profile runs one time for the team. A solo
@@ -488,7 +498,7 @@ services:
     depends_on: [chroma-db]
     ports: ["3011:3011"]
 
-  coordination:                    # Phase 2 (D14)
+  coordination:                    # Phase 3 (D14)
     build: ./services/coordination
     profiles: [collab]
     environment:
@@ -509,7 +519,7 @@ Start commands:
 * The team deployment: `docker compose --profile shared up`
 * One solo engineer: `docker compose --profile local --profile shared up`
 * Batch document ingestion, when wanted: add `--profile ingest`
-* Collaboration, in Phase 2: add `--profile collab`
+* Collaboration, in Phase 3: add `--profile collab`
 
 There are no vendor-specific services. Users add upstreams to
 `registry.yaml`. Users extend the stack with
@@ -544,7 +554,15 @@ registry.base.yaml      → memory, coordination, org-wide tools (all teams)
 registry.team.<team>.yaml → the upstreams of one team
 ```
 
-The workstation never selects a team. Every hub pulls **one identical
+The workstation never selects a team by hand. Composition happens in
+two places, one per phase:
+
+**Phase 1: locally (D34).** The update command reads `catalog.yaml`
+from the central repository, finds the team of the engineer by git
+username, merges the layers on the workstation, and writes the result
+into each harness config. No server, no auth.
+
+**Phase 2: on the shared layer.** Every hub pulls **one identical
 URL**, and the shared layer composes the response from the principal:
 
 ```
@@ -557,6 +575,9 @@ The request carries the session token from the SSH key challenge
 from the catalog, and returns `registry.base.yaml` merged with each
 `registry.team.<team>.yaml`. The validation command prints the
 effective registry.
+
+Both paths produce the identical effective registry, because both run
+the identical merge over the identical files.
 
 **The merge is shallow.** A team entry replaces a base entry with the
 same namespace, field for field. A team file therefore writes the
@@ -577,21 +598,21 @@ curates one team file. No engineer edits a registry.
 
 ### Onboarding An Engineer
 
-The workstation needs exactly **one** value: the shared layer URL. That
-value is the same for the whole company, and it ships in the
-provisioning defaults.
+**Phase 1:** clone the central repository, run `wagglebot update`, and
+work. Git access is the whole permission system, so nothing else
+exists to configure (D14, D34).
 
-No credential is delivered. The engineer signs in with the SSH key they
-already have (D26), and receives a short-lived session token. That
-token authenticates them to every shared service: the registry
-endpoint, the memory worker, and coordination. Each service reads the
-identity and the group membership from the catalog. Upstream MCP
-credentials stay separate and arrive per upstream (D10).
+**Phase 2 adds** one value and one pull request. The value is the
+shared layer URL, the same for the whole company, shipped in the
+provisioning defaults. The pull request adds a User entity with the
+username, the public key, and the group membership (D26). No credential
+is delivered. The engineer signs in with the SSH key they already have,
+and receives a short-lived session token for every shared service.
+Upstream MCP credentials stay separate and arrive per upstream (D10).
 
-Onboarding is one pull request: add a User entity with the username,
-the public key, and the group membership. Offboarding removes it. Run
-the validation command, and the change takes effect. Nothing to
-generate, deliver, or rotate.
+Offboarding removes the User entity, and in Phase 1 removes the git
+access. Run the validation command, and the change takes effect.
+Nothing to generate, deliver, or rotate.
 
 ### Cross-Team Knowledge
 
@@ -633,17 +654,14 @@ reviewable. Prefer publication.
 
 | Component | Behavior at 15 | First real limit |
 |---|---|---|
+| Phase 1 files | No shared state | None |
 | Local hubs | No shared state | None |
 | Coordination | Small payloads, low rate | Far beyond 15 |
-| Memory worker | One instance per storage root. It processes the queue in sequence (P4). | Near 50 engineers |
-| **Extractor LLM** | **The first bottleneck.** One CPU model serves every proposal. | Bursts, for example many session compactions at one time |
-
-The extractor already has an escape hatch. D2 makes it an
-OpenAI-compatible endpoint. Point `EXTRACTOR_API_BASE` at a larger host
-or a GPU machine. No code changes.
+| Memory worker | One instance per storage root. It processes the queue in sequence (P4). No model runs on the write path (D24), so writes stay fast. | Near 50 engineers |
 
 Memory runs asynchronously. A queue backlog delays new facts. A backlog
-never blocks an engineer.
+never blocks an engineer. The optional batch extractor (D2, D25) serves
+only bulk ingestion, so a slow batch bothers nobody.
 
 ### When To Split The Shared Layer
 
@@ -677,41 +695,59 @@ Wagglebot does not build it. Choose the second deployment instead.
 
 ## Success Criteria
 
-1. Both profiles start a working stack on one machine. The required
-   inputs are an empty `registry.yaml` and the generated service bearer
-   tokens (D7). No model download is needed, because no model runs on
-   the default path (D24).
-2. A user adds an upstream to `registry.yaml` and restarts the hub. The
-   new tools appear in `list_available_mcps`.
-3. An agent calls `propose_memory` with a fact. The fact passes the
-   credential scan (D28), deduplicates, and reaches Chroma. No model
-   runs on that path.
-4. **Credential scan.** A fact containing an AWS key is redacted before
-   storage. A fact that is mostly key material is rejected. Neither
-   error message echoes the content.
-5. **Direct commit.** An engineer says "remember this for the system".
-   The agent calls `remember` with that scope, and the fact is stored
-   without a promotion question (D30). A `forget` call on the same
-   record removes it from later searches.
-6. `provisioning/bin/sync-agents` writes one rendered template to every
-   harness target. `install-skills` installs the curated list on a clean
-   machine (see the provisioning spec).
-7. **Credential isolation.** Two engineers pull the same registry. Each
-   hub authenticates as its own engineer. No engineer credential and no
-   upstream MCP credential appears in the shared layer, in the
-   registry, or in any log. The shared layer holds only its own service
-   bearer tokens (D9).
-8. **Graceful skip.** An engineer lacks the credential for one upstream.
-   That namespace is absent from `list_available_mcps`. Every other
-   namespace still works.
-9. **Scope isolation.** Team A publishes a fact through
-   `.wagglebot/public.md`. Team B finds it in a memory search. Team B
-   never finds a working-memory record of Team A.
-10. **Local component memory.** An agent records a repository fact in
+**Phase 1 — provisioning, zero services:**
+
+1. A clean machine clones the central repository and runs
+   `wagglebot update`. The skills, the subagents, the base prompts, and
+   the MCP configs land in every harness. No service starts, and no
+   credential is configured (D14, D34).
+2. `wagglebot update --help` explains what the command touches. A
+   second run reports every item as already current, and a
+   `git pull --ff-only` keeps the command itself current.
+3. An operator merges a registry change. The next `wagglebot update` on
+   any workstation rewrites the managed block in each harness config,
+   and content outside the block stays untouched.
+4. `sync-agents` writes one rendered template to every harness target.
+   `install-skills` installs the curated list on a clean machine (see
+   the provisioning spec).
+5. **Local component memory.** An agent records a repository fact in
    `.wagglebot/memory.md` (D29). The file appears in `git status`, so a
    human reviews it. A later `memory_search` finds it without a server
    call.
-11. (Phase 2) The success criteria in the collaboration spec pass:
+
+**Phase 2 — the shared layer:**
+
+6. Both profiles start a working stack on one machine. The required
+   inputs are an empty `registry.yaml` and the generated service bearer
+   tokens (D7). No model download is needed, because no model runs on
+   the default path (D24).
+7. A user adds an upstream to `registry.yaml` and restarts the hub. The
+   new tools appear in `list_available_mcps`.
+8. An agent calls `propose_memory` with a fact. The fact passes the
+   credential scan (D28), deduplicates, and reaches Chroma. No model
+   runs on that path.
+9. **Credential scan.** A fact containing an AWS key is redacted before
+   storage. A fact that is mostly key material is rejected. Neither
+   error message echoes the content.
+10. **Direct commit.** An engineer says "remember this for the system".
+    The agent calls `remember` with that scope, and the fact is stored
+    without a promotion question (D30). A `forget` call on the same
+    record removes it from later searches.
+11. **Credential isolation.** Two engineers pull the same registry.
+    Each hub authenticates as its own engineer. No engineer credential
+    and no upstream MCP credential appears in the shared layer, in the
+    registry, or in any log. The shared layer holds only its own
+    service bearer tokens (D9).
+12. **Graceful skip.** An engineer lacks the credential for one
+    upstream. That namespace is absent from `list_available_mcps`.
+    Every other namespace still works.
+13. **Scope isolation.** Team A publishes a fact through
+    `.wagglebot/public.md`. Team B finds it in a memory search. Team B
+    never finds a working-memory record of Team A.
+
+**Phase 3 — collaboration:**
+
+14. The success criteria in the collaboration spec pass:
     same-system and same-branch agents collaborate, other-branch agents
     are discoverable only, and an expired claim lease returns its task
     to the board.

@@ -29,7 +29,7 @@
   = short SHA + branch tag, no deploy of a bare `:latest` tag, and a
   `[skip ci]` guard.
 
-## C2. MCP Hub contract
+## C2. MCP Hub contract (Phase 2)
 
 **Proxy config shape** (an entry of the `proxies` list in `registry.yaml`):
 
@@ -237,7 +237,7 @@ deployment-local `LOG_FINGERPRINT_KEY`. A plain hash prefix would allow
 cross-log correlation and offline checks of weak secrets (guards F28).
 Without the key, the service omits fingerprints.
 
-## C3. Memory worker contract
+## C3. Memory worker contract (Phase 2; component memory is a Phase 1 local file, D29)
 
 **Two write paths, and only one of them ever calls a model.**
 
@@ -653,10 +653,10 @@ with a session token, gated by the owner group of that Domain (D23).
 * Publication skips the LLM extractor. The team already wrote the
   facts, so extraction would only add loss.
 
-## C4. Task envelope and delegated-job vocabulary (Phase 2)
+## C4. Task envelope and delegated-job vocabulary (Phase 3)
 
-NOTE: The task board is Phase 2 (D14). Event-triggered flows left the
-MVP, so nothing in Phase 1 posts a task. See the
+NOTE: The task board is Phase 3 (D14). Event-triggered flows left the
+MVP, so nothing earlier posts a task. See the
 [descoped ideas](2026-08-28-descoped-ideas.md).
 
 Every entry on the task board uses **one versioned envelope**

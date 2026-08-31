@@ -23,18 +23,25 @@ You keep your internals.
 
 Wagglebot uses two layers.
 
-**Local, on each engineer workstation:**
+**Phase 1 — local, zero services.** One central git repository and one
+command, `wagglebot update`, install on every workstation:
 
-* The MCP hub. It proxies requests to your tool servers.
-* Your credentials. They never leave your machine.
-* The curated skills and the base prompt, in every agent harness.
+* The curated skills and subagents.
+* The base prompt, in every agent harness.
+* The MCP server configs, from one curated registry.
+* Your credentials stay on your machine, in one gitignored file.
 
-**Shared, deployed one time for the team:**
+An engineer clones, runs one command, and works. Nothing listens on a
+port, and git access is the whole permission system.
 
-* The upstream registry. It lists the MCP servers. It names each
-  credential, but it stores no secret.
+**Phase 2 — shared, deployed one time for the team:**
+
 * Durable memory for the whole team.
-* Agent collaboration, scoped by system and branch (Phase 2).
+* The registry served per team, and the MCP hub as an upgrade.
+
+**Phase 3 — collaboration:** agents on different machines discover each
+other, exchange findings, and hand off tasks, scoped by system and
+branch.
 
 The shared layer holds no engineer credentials and no tool-server
 credentials. It never calls a tool server. It holds only its own
@@ -44,10 +51,10 @@ service bearer tokens.
 
 | Component | Purpose |
 |---|---|
-| MCP hub | One endpoint for every tool server. Add an upstream in the registry, not in code. |
-| Memory | The agent writes facts about one repository to a local file, in git. Facts that cross a repository go to the shared store. The team searches both. |
-| Collaboration | Two agents on the same system and branch exchange findings and hand off tasks. (Phase 2) |
-| Provisioning | One command installs the curated skills and writes the base prompt to each harness. |
+| Provisioning | One command installs the curated skills, the subagents, and the base prompt in each harness. |
+| MCP configs | One curated registry writes each harness config. The hub (Phase 2) upgrades that to one endpoint. |
+| Memory | The agent writes facts about one repository to a local file, in git (Phase 1). Facts that cross a repository go to the shared store (Phase 2). |
+| Collaboration | Two agents on the same system and branch exchange findings and hand off tasks. (Phase 3) |
 
 ## Design Principles
 

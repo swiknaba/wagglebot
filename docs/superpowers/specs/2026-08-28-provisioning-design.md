@@ -4,6 +4,40 @@
 > One team shares one curated agent environment: the same skills and the
 > same base instructions, on every workstation and in every agent
 > harness. This tooling ships under `provisioning/`.
+>
+> **This is the whole of Phase 1 (D14).** Zero services run. One
+> central git repository and one command provision a workstation.
+
+## The Update Command (D34)
+
+`wagglebot update` is the one command an engineer runs. An alias or a
+small shell function is enough:
+
+1. `git pull --ff-only` on the central repository. The command lives in
+   that repository, so this step updates the command itself.
+2. Run the installers: `install-skills`, `install-agents`,
+   `sync-agents`, and the MCP config writer.
+3. Print a summary: current, updated, and failed items.
+
+`wagglebot update --help` explains what the command touches, file by
+file, and where the managed blocks live.
+
+Rules:
+
+* **Idempotent.** A second run changes nothing and says so.
+* **Non-destructive.** Every harness file is written inside a managed
+  block. Content outside the block stays untouched (F22).
+* **No service.** Phase 1 installs files. Nothing listens on a port.
+* **No auth.** Git access to the central repository is the whole
+  permission system (D14, D15).
+
+**MCP configs are written, not proxied (Phase 1).** The update command
+reads `registry.base.yaml` and the team layers, finds the team of the
+engineer in `catalog.yaml` by git username, merges shallowly, and
+writes the result into each harness MCP config, inside the managed
+block. Credentials resolve locally per D10, exactly as with the hub.
+The hub replaces this written config in Phase 2, when aggregation or
+CodeMode earns it.
 
 ## Curated Skills List
 
@@ -111,12 +145,13 @@ never carries it. That matches `registry.yaml`.
 
 ### Distribution is automatic (D32)
 
-The hub already fetches the registry from the shared layer on refresh.
-It carries the agent list on the same request, and **installs or
-updates each agent without asking**.
+In Phase 1, `wagglebot update` installs and updates the list — one
+command, run by the engineer or a shell hook.
 
-An engineer therefore does nothing. A team publishes an agent, and it
-appears on every workstation.
+From Phase 2, the hub fetches the registry from the shared layer on
+refresh, carries the agent list on the same request, and **installs or
+updates each agent without asking**. An engineer then does nothing: a
+team publishes an agent, and it appears on every workstation.
 
 `install-agents` still exists, for a first setup and for a manual
 refresh. It is not the normal path.
@@ -141,8 +176,9 @@ Two differences remain, and both are small:
 1. **Destination.** A skill goes to the skill directory. A subagent
    goes to a harness directory, so the installer reuses the target
    table from `sync-agents`.
-2. **Refresh.** The hub carries the agent list on its registry refresh,
-   so a shared agent arrives without a command.
+2. **Refresh.** In Phase 1, `wagglebot update` installs the list. From
+   Phase 2, the hub carries it on the registry refresh, so a shared
+   agent arrives without any command.
 
 ### Contribution
 
@@ -499,9 +535,9 @@ to point `EXTRACTOR_API_BASE` at an existing local server (llama.cpp
 1. `provisioning/bin/install-skills` installs the `skills` CLI and every
    entry in `skills.list` on a clean machine. A second run reports every
    item as already installed.
-2. A team merges a new entry into `agents.base.list`. The next hub
-   refresh installs that agent on a different workstation, with no
-   command from its engineer (D32).
+2. A team merges a new entry into `agents.base.list`. The next
+   `wagglebot update` (Phase 1) or hub refresh (Phase 2) installs that
+   agent on a different workstation (D32).
 3. An engineer asks an agent to write a custom agent. The
    `writing-a-custom-agent` skill asks where the agent belongs, before
    it writes any code (D33).

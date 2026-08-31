@@ -1,4 +1,4 @@
-# Cross-Machine Agent Collaboration (Phase 2)
+# Cross-Machine Agent Collaboration (Phase 3)
 
 > Companion to the [wagglebot design spec](2026-08-28-wagglebot-design.md).
 > Decisions D4–D6 apply: a standalone container, a FIFO + priority task
