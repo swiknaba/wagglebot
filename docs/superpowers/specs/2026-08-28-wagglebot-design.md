@@ -293,6 +293,21 @@ wagglebot/
 
 ---
 
+## Before Implementation
+
+One document is still missing, and it gates the Phase 2 code:
+`api-reference.md`. It must give, for every HTTP endpoint and every MCP
+tool:
+
+* The request and response shape, versioned.
+* The error codes, the size limits, and the rate limits.
+* The idempotency rules per mutation.
+* Every persisted record type and its collection.
+* The publication flow: discovery, revision key, atomic replacement.
+
+Phase 1 needs no API document. The provisioning spec alone is enough to
+start that implementation.
+
 ## Open Questions
 
 - Does the Chroma JS client require a scope fan-out workaround for
@@ -301,6 +316,9 @@ wagglebot/
 - Does the pinned Chroma JS client resolve the persisted embedding
   function on `getCollection`, or does it still require the function as
   a parameter (D19)? Verify before the first write.
+- (Phase 3) What does the message bus return for an expired replay
+  cursor, and how does a client resynchronize? Define the ordering and
+  the backpressure behavior with the Phase 3 API shapes.
 
 ## Parking Lot — Ideas to Discuss
 
