@@ -8,16 +8,36 @@
 > **This is the whole of Phase 1 (D14).** Zero services run. One
 > central git repository and one command provision a workstation.
 
-## The Update Command (D34)
+## The Update Command (D34, D35)
 
-`wagglebot update` is the one command an engineer runs. An alias or a
-small shell function is enough:
+Wagglebot arrives as a **pinned npm dependency** of the company
+repository, never as cloned source (D35). The engineer flow is three
+commands, and only the last repeats:
 
-1. `git pull --ff-only` on the central repository. The command lives in
-   that repository, so this step updates the command itself.
-2. Run the installers: `install-skills`, `install-agents`,
+```
+git clone <company repo>
+yarn install            # materializes the pinned wagglebot CLI
+yarn update:wagglebot    # the package script alias for `wagglebot update`
+```
+
+The scaffolded `package.json` carries the alias:
+
+```json
+{
+  "dependencies": { "wagglebot": "1.4.2" },
+  "scripts": { "update:wagglebot": "wagglebot update" }
+}
+```
+
+`wagglebot update` does four things:
+
+1. `git pull --ff-only` on the company repository.
+2. `yarn install`, when the wagglebot pin moved. The CLI therefore
+   updates itself through the normal dependency path, and the pin bump
+   is a reviewed pull request, never a silent upgrade.
+3. Run the installers: `install-skills`, `install-agents`,
    `sync-agents`, and the MCP config writer.
-3. Print a summary: current, updated, and failed items.
+4. Print a summary: current, updated, and failed items.
 
 `wagglebot update --help` explains what the command touches, file by
 file, and where the managed blocks live.
@@ -28,8 +48,12 @@ Rules:
 * **Non-destructive.** Every harness file is written inside a managed
   block. Content outside the block stays untouched (F22).
 * **No service.** Phase 1 installs files. Nothing listens on a port.
-* **No auth.** Git access to the central repository is the whole
+* **No auth.** Git access to the company repository is the whole
   permission system (D14, D15).
+* **No fork.** The installers, the base template, and the harness
+  target table live in the package. The company repository holds only
+  company content, so a wagglebot upgrade is a one-line pin bump
+  (D35).
 
 **MCP configs are written, not proxied (Phase 1).** The update command
 reads `registry.base.yaml` and the team layers, finds the team of the
@@ -41,7 +65,7 @@ CodeMode earns it.
 
 ## Curated Skills List
 
-`provisioning/skills.list` is a versioned list of skill packages. The
+`skills.list`, in the company repository, is a versioned list of skill packages. The
 format is one **pinned** entry per line: `owner/repo@<ref>`, where the
 ref is a tag or a commit hash. Comments are allowed. Seed content:
 
@@ -95,7 +119,7 @@ appended to the base template, and the template stops being readable.
 
 ## Skills Installer
 
-`provisioning/bin/install-skills` is idempotent and reproducible:
+`install-skills` (part of the wagglebot package, D35) is idempotent and reproducible:
 
 1. Install the `skills` npm CLI at the **pinned version** from
    `provisioning/versions.env` when it is missing or differs
@@ -132,8 +156,8 @@ and the history is free. This mirrors component memory (D29).
 Two layers, which compose the same way the registry does:
 
 ```
-central/agents.base.list          # every engineer
-central/agents.team.<team>.list   # one team
+agents.base.list                  # every engineer, in the company repository
+agents.team.<team>.list           # one team
 ```
 
 One entry per line, `owner/repo`, with an optional `@<ref>`. Comments
@@ -222,13 +246,16 @@ trade.
 
 ## Agent Base Template + Distribution
 
-`provisioning/templates/AGENTS.base.md` is the **shared agent base
-template**. It contains harness-independent instructions plus an
+`AGENTS.base.md` ships inside the wagglebot package (D35) as the
+**shared agent base template**. It contains harness-independent instructions plus an
 wagglebot connection block. The connection block covers three topics:
 how to reach the hub, the propose-not-write memory rule, and
-coordination etiquette. Teams append overlays. Composition is plain
-concatenation: `AGENTS.base.md` + `overlays/*.md` → the rendered
-template. YAGNI: no templating engine.
+coordination etiquette. Teams append overlays from the
+company repository. Composition is plain concatenation:
+`AGENTS.base.md` + `overlays/*.md` → the rendered template. YAGNI: no
+templating engine. The base is never edited in place: a company
+extends through overlays, so a wagglebot upgrade never conflicts
+(D35).
 
 The base template carries three sections: a delegation policy, a
 writing baseline, and a memory policy. All three are portable across
@@ -505,7 +532,8 @@ Hooks are harness-specific, so the mechanism mirrors the template
 distribution: one fragment per harness, one sync script, per-harness
 adapters.
 
-- `provisioning/templates/hooks/<harness>.json` — the hook fragments.
+- `templates/hooks/<harness>.json`, inside the package — the hook
+  fragments.
   The seed fragment reminds the agent of the STE rules on each Markdown
   write.
 - `sync-agents` merges each fragment into its harness config. The
@@ -553,34 +581,37 @@ follows the same pattern.
 
 ## Success Criteria
 
-1. A clean machine clones the central repository and runs
-   `wagglebot update`. The skills, the subagents, the base prompts, and
-   the MCP configs land in every harness. No service starts, and no
-   credential is configured (D14, D34).
+1. A clean machine runs `git clone <company repo>`, `yarn install`,
+   and `yarn update:wagglebot`. The skills, the subagents, the base
+   prompts, and the MCP configs land in every harness. No service
+   starts, and no credential is configured (D14, D34, D35).
 2. `wagglebot update --help` explains what the command touches. A
-   second run reports every item as already current, and a
-   `git pull --ff-only` keeps the command itself current.
-3. An operator merges a registry change. The next `wagglebot update` on
+   second run reports every item as already current.
+3. **The pin bump upgrades everything.** The company merges a
+   `package.json` change from `wagglebot 1.4.2` to `1.5.0`. The next
+   `yarn update:wagglebot` on any workstation pulls, reinstalls the
+   CLI at the new pin, and re-renders every managed block (D35).
+4. An operator merges a registry change. The next `wagglebot update` on
    any workstation rewrites the managed block in each harness config,
    and content outside the block stays untouched.
-4. `provisioning/bin/install-skills` installs the `skills` CLI and every
+5. `install-skills` installs the `skills` CLI and every
    entry in `skills.list` on a clean machine. A second run reports every
    item as already installed.
-5. A team merges a new entry into `agents.base.list`. The next
+6. A team merges a new entry into `agents.base.list`. The next
    `wagglebot update` (Phase 1) or hub refresh (Phase 2) installs that
    agent on a different workstation (D32).
-6. An engineer asks an agent to write a custom agent. The
+7. An engineer asks an agent to write a custom agent. The
    `writing-a-custom-agent` skill asks where the agent belongs, before
    it writes any code (D33).
-7. `provisioning/bin/sync-agents` writes one rendered template to every
+8. `sync-agents` writes one rendered template to every
    harness target. It creates missing directories. It reports the
    synced, already-ok, and failed counts.
-8. Edit `AGENTS.base.md` and run `sync-agents` again. Every target then
+9. Edit `AGENTS.base.md` and run `sync-agents` again. Every target then
    has the new content.
-9. `sync-agents` merges the hook fragments into each supported harness
+10. `sync-agents` merges the hook fragments into each supported harness
    config and preserves the other keys. A second run reports the hooks
    as already installed.
-10. **Local component memory.** An agent records a repository fact in
+11. **Local component memory.** An agent records a repository fact in
     `.wagglebot/memory.md` (D29). The file appears in `git status`, so
     a human reviews it. A later `memory_search` finds it without a
     server call.

@@ -105,7 +105,8 @@ and deploy. No team must fork the internals of a different company.
 | D31 | **Wagglebot distributes custom agents, and never runs one.** A shared agent runs on a workstation, with the credentials of its engineer, so D9 holds. Hosting agents would put engineer credentials on the shared server, make wagglebot a compute platform, and create the unattended operation that the MVP deliberately excludes. Distribution uses `agents.base.list` and `agents.team.<team>.list`, composed like the registry. A component agent needs no distribution: it lives in `.wagglebot/agents/` and travels with the repository. **Distribution is runtime-neutral.** A list entry may hold a Markdown subagent, a Flue agent, or any other shape. An agent declares the credentials it needs, by name, and follows D10. A missing credential marks that one agent unavailable with a clear reason, and never blocks the others. |
 | D32 | **Agents distribute the same way as skills, and one pin rule covers both.** An entry pointing outside the organization **must** pin, because a third party controls its next release. An entry inside the organization **may** pin, because a pull request already reviews it, and a required pin there would guard against your own colleagues (D15). Two differences remain: a subagent installs to a harness directory rather than the skill directory, and the hub carries the agent list on its registry refresh, so a shared agent arrives without a command. |
 | D33 | **Wagglebot ships first-party skills for its own toolset**, in one repository, `wagglebot/skills`. They version with wagglebot, because a format change breaks a skill on the same day. The set is `writing-a-custom-agent`, `adding-an-mcp-server`, and `onboarding-a-repository`. The first asks where an agent belongs before writing code, and explains the trade rather than choosing. **The split rule:** what the agent always needs goes in `AGENTS.base.md`, and what it needs occasionally becomes a skill. The memory rules are always needed. Everything else is occasional. |
-| D34 | **One update command provisions a workstation, and nothing runs as a service in Phase 1.** `wagglebot update` does three things: `git pull --ff-only` on the central repository (the command updates itself this way), then the install and sync scripts (skills, subagents, base prompts, MCP configs), then a summary. `--help` explains what it touches. The MCP servers reach each harness as **written config**, in a managed block, composed locally: the script reads `catalog.yaml`, finds the team of the engineer by git username, and merges the registry layers on the workstation. The hub becomes the Phase 2 upgrade for aggregation and CodeMode. |
+| D34 | **One update command provisions a workstation, and nothing runs as a service in Phase 1.** The engineer flow is three commands, and only the last repeats: `git clone <company repo>`, `yarn install`, `yarn update:wagglebot`. The update script does three things: `git pull --ff-only` on the company repository, then the installers (skills, subagents, base prompts, MCP configs), then a summary. `yarn install` re-runs when the wagglebot pin moved, so the CLI updates itself through the normal dependency path. `--help` explains what the command touches. The MCP servers reach each harness as **written config**, in a managed block, composed locally: the script reads `catalog.yaml`, finds the team of the engineer by git username, and merges the registry layers on the workstation. The hub becomes the Phase 2 upgrade for aggregation and CodeMode. |
+| D35 | **Wagglebot is a package, never a fork.** Wagglebot publishes two artifacts: Docker images (pinned by digest, D13) and one npm package that holds the CLI, the installers, the base template, and the harness target table. A company runs `bunx wagglebot@<version> init` one time, which scaffolds the **company repository**: their catalog, registries, lists, overlays, compose override, and a `package.json` that pins the wagglebot version. Not one file in that repository comes from the wagglebot source, so an upgrade is a one-line pin bump, reviewed in one pull request. Package content is never edited in place: extension happens through the company files and the overlays. The changelog must call out every base-template change, because overlays build on it. |
 
 ### Why D9 and D10 matter
 
@@ -254,42 +255,70 @@ live in each phase document.
 
 ## Repository Structure
 
+Two repositories exist, and the fork line between them is absolute
+(D35): wagglebot publishes a package, and a company owns its content.
+
+**The wagglebot repository (open source, published as images + one npm
+package):**
+
 ```
 wagglebot/
 ├── services/
-│   ├── mcp-hub/                 # MCP aggregation proxy (TypeScript/Bun)
-│   ├── memory-worker/           # Durable memory pipeline (TypeScript/Bun)
-│   └── coordination/            # Presence, messaging, tasks (Phase 3)
-├── central/                     # Operator-maintained, versioned
-│   ├── catalog.yaml             # domains, systems, groups, users (+ssh keys)
-│   ├── agents.base.list         # shared custom agents (D31, D32)
-│   ├── agents.team.<team>.list
-│   ├── registry.base.yaml
-│   └── registry.team.<team>.yaml
+│   ├── mcp-hub/                 # MCP aggregation proxy (TypeScript/Bun) → image
+│   ├── memory-worker/           # Durable memory pipeline (TypeScript/Bun) → image
+│   └── coordination/            # Presence, messaging, tasks (Phase 3) → image
 ├── packages/
+│   ├── cli/                     # `wagglebot` npm package: update, init,
+│   │   ├── bin/update           #   the installers, the harness target
+│   │   ├── bin/install-skills   #   table, and the templates
+│   │   ├── bin/install-agents
+│   │   ├── bin/sync-agents
+│   │   └── templates/
+│   │       ├── AGENTS.base.md   # Shared agent base template
+│   │       ├── hooks/           # Per-harness hook fragments
+│   │       └── init/            # The `wagglebot init` scaffold
 │   └── types/                   # Shared types (MemoryProvider, JobSpec, ...)
-├── provisioning/
-│   ├── skills.list              # Curated skill packages
-│   ├── bin/update               # The one Phase 1 command (D34)
-│   ├── bin/install-skills
-│   ├── bin/install-agents       # Shared custom agents (D31)
-│   ├── bin/sync-agents
-│   └── templates/
-│       ├── AGENTS.base.md       # Shared agent base template
-│       └── hooks/               # Per-harness hook fragments
-├── templates/
-│   └── starter/                 # Scaffold for new projects
-│       ├── agent/               # Skeleton agent (connects to hub)
-│       ├── registry.yaml        # Empty upstream registry with examples
-│       ├── tool_catalog.yaml    # Empty routing guide with one example family
-│       └── docker-compose.override.yml
-├── models/                      # GGUF cache (gitignored, documented)
-├── docker-compose.yml           # Both profiles: local and shared
+├── docker-compose.yml           # Base compose, extended by the company override
 ├── .env.example
 └── README.md
 ```
 
----
+**The company repository (scaffolded once by
+`bunx wagglebot@<version> init`, owned by the company):**
+
+```
+acme-wagglebot/
+├── package.json                 # "wagglebot": "1.4.2" ← THE pin, plus
+│                                #   "scripts": { "update:wagglebot": "wagglebot update" }
+├── catalog.yaml                 # domains, systems, groups, users (+ssh keys)
+├── registry.base.yaml           # MCP upstreams, all teams
+├── registry.team.<team>.yaml
+├── tool_catalog.yaml            # routing advice
+├── skills.list                  # third-party pins + own skills (D32)
+├── agents.base.list             # shared custom agents (D31, D32)
+├── agents.team.<team>.list
+├── overlays/                    # additions to AGENTS.base.md, append-only
+├── docker-compose.override.yml  # Phase 2 deployment choices
+└── README.md                    # generated: the three-command engineer flow
+```
+
+Not one file in the company repository comes from the wagglebot
+source. The engineer flow:
+
+```
+git clone <company repo>
+yarn install            # materializes the pinned wagglebot CLI
+yarn update:wagglebot    # provisions the workstation (D34)
+```
+
+The company upgrade flow is one line: bump the pin in `package.json`,
+review the changelog, merge. Every workstation upgrades at its next
+`yarn update:wagglebot`, because the update script re-runs
+`yarn install` when the pin moved.
+
+The scaffold command carries a version for the same reason every other
+executable is pinned (P31, D13): `bunx wagglebot@<version> init`,
+never a floating `bunx wagglebot init`.
 
 ---
 

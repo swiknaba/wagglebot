@@ -23,16 +23,20 @@ You keep your internals.
 
 Wagglebot uses two layers.
 
-**Phase 1 — local, zero services.** One central git repository and one
-command, `wagglebot update`, install on every workstation:
+**Phase 1 — local, zero services.** Wagglebot is a pinned npm package
+inside one company repository (like React, or Backstage). Three
+commands — `git clone <company repo>`, `yarn install`,
+`yarn update:wagglebot` — install on every workstation:
 
 * The curated skills and subagents.
 * The base prompt, in every agent harness.
 * The MCP server configs, from one curated registry.
 * Your credentials stay on your machine, in one gitignored file.
 
-An engineer clones, runs one command, and works. Nothing listens on a
-port, and git access is the whole permission system.
+An engineer clones, installs, runs the update, and works. Nothing
+listens on a port, and git access is the whole permission system. A
+wagglebot upgrade is a one-line version bump in the company
+`package.json`, reviewed like any pull request.
 
 **Phase 2 — shared, deployed one time for the team:**
 
