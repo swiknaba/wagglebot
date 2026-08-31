@@ -1,8 +1,10 @@
 import { expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { newestBackupSet, restoreSet } from "../backup";
 import type { Exec } from "../exec";
+import { resolvePaths } from "../paths";
 import { createReporter } from "../report";
 import { runUpdate } from "./update";
 
@@ -74,4 +76,38 @@ test("a moved pin triggers yarn install and a re-exec, once", async () => {
   expect(code).toBe(0);
   expect(calls).toContainEqual(["yarn", "install"]);
   expect(calls).toContainEqual(["yarn", "wagglebot", "update", "--skip-self-update"]);
+});
+
+test("one runUpdate makes a single backup set that restores both CLAUDE.md and .claude.json", async () => {
+  const root = scaffoldCompany();
+  const home = mkdtempSync(join(tmpdir(), "wgl-home-"));
+  mkdirSync(join(home, ".claude"), { recursive: true });
+  writeFileSync(join(home, ".claude/CLAUDE.md"), "# my personal rules\n");
+  writeFileSync(join(home, ".claude.json"), JSON.stringify({ mcpServers: { personal: { command: "my-mcp" } } }));
+
+  const code = await runUpdate({
+    cwd: root,
+    home,
+    exec: gitExec([]),
+    ask: async () => "alice",
+    reporter: createReporter(() => {}, false),
+    write: () => {},
+    skillsBin: "/bin/skills",
+  });
+  expect(code).toBe(0);
+
+  const paths = resolvePaths(home);
+  expect(readdirSync(paths.backupsDir)).toHaveLength(1);
+
+  // Overwrite both files, then restore the newest (only) backup set and confirm both come back.
+  writeFileSync(join(home, ".claude/CLAUDE.md"), "# clobbered\n");
+  writeFileSync(join(home, ".claude.json"), JSON.stringify({ mcpServers: {} }));
+  const set = newestBackupSet(paths.backupsDir);
+  expect(set).toBeDefined();
+  const restored = restoreSet(set ?? "");
+  expect(restored).toContain(join(home, ".claude/CLAUDE.md"));
+  expect(restored).toContain(join(home, ".claude.json"));
+  expect(readFileSync(join(home, ".claude/CLAUDE.md"), "utf8")).toBe("# my personal rules\n");
+  const doc: { mcpServers: { personal?: unknown } } = JSON.parse(readFileSync(join(home, ".claude.json"), "utf8"));
+  expect(doc.mcpServers.personal).toBeDefined();
 });

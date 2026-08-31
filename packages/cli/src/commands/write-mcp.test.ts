@@ -51,6 +51,15 @@ test("writes managed entries, preserves foreign entries, removes stale ones", ()
   expect(doc2.mcpServers.personal).toBeDefined();
 });
 
+test("a corrupt target file reports failed and exits 1 without crashing", () => {
+  const home = mkdtempSync(join(tmpdir(), "wgl-"));
+  writeFileSync(join(home, ".claude.json"), "{ not valid json");
+  const r = createReporter(() => {}, false);
+  const code = runWriteMcp({ home, proxies: [remote], reporter: r });
+  expect(code).toBe(1);
+  expect(r.counts().failed).toBe(1);
+});
+
 test("second identical run reports ok", () => {
   const home = mkdtempSync(join(tmpdir(), "wgl-"));
   runWriteMcp({ home, proxies: [remote], reporter: quiet() });

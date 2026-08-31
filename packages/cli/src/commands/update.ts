@@ -1,9 +1,11 @@
 import { join } from "node:path";
+import { startBackupSet } from "../backup";
 import { loadCatalog, teamsOf } from "../catalog";
 import { findCompanyRoot, loadCompanyRepo } from "../company";
 import type { Exec } from "../exec";
 import type { Ask } from "../identity";
 import { getUsername } from "../identity";
+import { resolvePaths } from "../paths";
 import { loadRegistry, mergeRegistries } from "../registry";
 import type { Reporter } from "../report";
 import { runInstallAgents } from "./install-agents";
@@ -49,6 +51,10 @@ export async function runUpdate(deps: {
   const username = await getUsername(exec, deps.ask, catalog);
   const teams = teamsOf(catalog, username);
 
+  // One backup set for the whole update, so `sync-agents --restore` restores everything this
+  // run touched instead of only whichever command happened to run last.
+  const backups = startBackupSet(resolvePaths(deps.home).backupsDir);
+
   await runInstallSkills({
     listText: company.skillsListText,
     listPath: join(root, "skills.list"),
@@ -56,8 +62,8 @@ export async function runUpdate(deps: {
     reporter,
     skillsBin: deps.skillsBin,
   });
-  await runInstallAgents({ home: deps.home, listTexts: company.agentListTexts(teams), exec, reporter });
-  runSyncAgents({ home: deps.home, overlaysDir: company.overlaysDir, reporter });
+  await runInstallAgents({ home: deps.home, listTexts: company.agentListTexts(teams), exec, reporter, backups });
+  runSyncAgents({ home: deps.home, overlaysDir: company.overlaysDir, reporter, backups });
 
   const base =
     company.registryBaseText === undefined ? [] : loadRegistry(company.registryBaseText, "registry.base.yaml");
@@ -65,7 +71,7 @@ export async function runUpdate(deps: {
     const text = company.registryTeamText(team);
     return text === undefined ? acc : mergeRegistries(acc, loadRegistry(text, `registry.team.${team}.yaml`));
   }, base);
-  runWriteMcp({ home: deps.home, proxies: merged, reporter });
+  runWriteMcp({ home: deps.home, proxies: merged, reporter, backups });
 
   write(reporter.summary());
   return reporter.failed() ? 1 : 0;

@@ -1,5 +1,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { basename, join } from "node:path";
+import type { BackupSet } from "../backup";
+import { startBackupSet } from "../backup";
 import type { Exec } from "../exec";
 import { HARNESSES } from "../harness";
 import { parseList } from "../lists";
@@ -12,10 +14,12 @@ export async function runInstallAgents(deps: {
   listTexts: { path: string; text: string }[];
   exec: Exec;
   reporter: Reporter;
+  backups?: BackupSet;
 }): Promise<number> {
   const { home, exec, reporter } = deps;
   const paths = resolvePaths(home);
   const state = loadState(paths.managedFile);
+  const backups = deps.backups ?? startBackupSet(paths.backupsDir);
   reporter.section("Custom agents");
 
   const entries = deps.listTexts.flatMap(({ text }) => parseList(text).entries);
@@ -24,7 +28,9 @@ export async function runInstallAgents(deps: {
     reporter.item(h.name, "skipped", "no subagent support in Phase 1 (R2)");
 
   const produced: string[] = [];
+  const failedPrefixes: string[] = [];
   for (const entry of entries) {
+    const prefix = `${entry.repo.replace("/", "__")}__`;
     const cacheDir = join(paths.agentsCacheDir, entry.repo.replace("/", "__"));
     const git = async (...args: string[]) => exec("git", args);
     const materialize = async (): Promise<boolean> => {
@@ -47,6 +53,7 @@ export async function runInstallAgents(deps: {
     };
     if (!(await materialize())) {
       reporter.item(entry.raw, "failed", "git sync failed");
+      failedPrefixes.push(prefix);
       continue;
     }
     const files = readdirSync(cacheDir).filter((f) => f.endsWith(".md"));
@@ -54,7 +61,7 @@ export async function runInstallAgents(deps: {
       const dir = join(home, harness.subagentDir ?? "");
       mkdirSync(dir, { recursive: true });
       for (const file of files) {
-        const dest = join(dir, `${entry.repo.replace("/", "__")}__${file}`);
+        const dest = join(dir, `${prefix}${file}`);
         const content = readFileSync(join(cacheDir, file), "utf8");
         produced.push(dest);
         if (existsSync(dest) && readFileSync(dest, "utf8") === content) {
@@ -68,7 +75,16 @@ export async function runInstallAgents(deps: {
     }
   }
 
+  // A failed entry (transient git error) must not uninstall its previously installed files —
+  // carry them forward as still-produced so the stale sweep below leaves them alone.
+  for (const file of state.agentFiles) {
+    if (!produced.includes(file) && failedPrefixes.some((prefix) => basename(file).startsWith(prefix))) {
+      produced.push(file);
+    }
+  }
+
   for (const stale of state.agentFiles.filter((f) => !produced.includes(f) && existsSync(f))) {
+    backups.backup(stale);
     rmSync(stale);
     reporter.item(stale, "updated", "removed — no longer listed");
   }

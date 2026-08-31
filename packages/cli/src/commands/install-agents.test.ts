@@ -49,7 +49,7 @@ test("second run reports ok; a removed entry uninstalls its files", async () => 
   expect(existsSync(join(home, ".claude/agents/acme__agents__reviewer.md"))).toBe(false);
 });
 
-test("a failing pull on an unpinned, already-cached entry reports failed and copies nothing new", async () => {
+test("a failing pull on an unpinned, already-cached entry reports failed and keeps the file installed", async () => {
   const home = mkdtempSync(join(tmpdir(), "wgl-"));
   const unpinned = [{ path: "agents.base.list", text: "acme/agents\n" }];
   // First run: clone succeeds, materializing reviewer.md and installing it.
@@ -58,7 +58,7 @@ test("a failing pull on an unpinned, already-cached entry reports failed and cop
   expect(existsSync(installed)).toBe(true);
 
   // Second run: the cache dir already exists, so materialize() takes the "pull" branch,
-  // which now fails.
+  // which now fails. A transient git failure must not uninstall the previously installed file.
   const failingPull: Exec = async (cmd, args) => {
     if (cmd === "git" && args.includes("pull")) return { code: 1, stdout: "", stderr: "not fast-forward" };
     return fakeGit(cmd, args);
@@ -68,8 +68,7 @@ test("a failing pull on an unpinned, already-cached entry reports failed and cop
   expect(code).toBe(1);
   expect(r.counts().failed).toBe(1);
   expect(r.counts().installed).toBe(0);
-  // The previously installed file becomes stale (materialize failed, so nothing was
-  // produced this run) and is removed — that removal is reported separately as
-  // "updated" by the (unrelated, parked) stale-deletion status.
-  expect(existsSync(installed)).toBe(false);
+  expect(existsSync(installed)).toBe(true);
+  const state: { agentFiles: string[] } = JSON.parse(readFileSync(join(home, ".wagglebot/managed.json"), "utf8"));
+  expect(state.agentFiles).toContain(installed);
 });

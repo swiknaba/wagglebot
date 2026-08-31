@@ -1,5 +1,6 @@
 import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import type { BackupSet } from "../backup";
 import { newestBackupSet, restoreSet, startBackupSet } from "../backup";
 import { HARNESSES, templatesDir } from "../harness";
 import { renderManagedBlock } from "../managed-block";
@@ -17,6 +18,7 @@ export function runSyncAgents(deps: {
   overlaysDir?: string;
   reporter: Reporter;
   options?: SyncOptions;
+  backups?: BackupSet;
 }): number {
   const { home, reporter } = deps;
   const options = deps.options ?? {};
@@ -43,7 +45,7 @@ export function runSyncAgents(deps: {
           .map((f) => readFileSync(join(overlaysDir, f), "utf8"))
       : [];
   const rendered = renderTemplate(base, overlays);
-  const backups = startBackupSet(paths.backupsDir);
+  const backups = deps.backups ?? startBackupSet(paths.backupsDir);
 
   const writeTarget = (
     relative: string,

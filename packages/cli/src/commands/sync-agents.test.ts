@@ -50,6 +50,19 @@ test("content outside the managed block survives, and --restore brings the old f
   expect(readFileSync(join(home, ".claude/CLAUDE.md"), "utf8")).toBe("# My personal rules\n");
 });
 
+test("a corrupt settings.json fails the hooks merge but other targets still get written", () => {
+  const { home, overlaysDir } = setup();
+  mkdirSync(join(home, ".claude"), { recursive: true });
+  writeFileSync(join(home, ".claude/settings.json"), "{ not valid json");
+  const r = createReporter(() => {}, false);
+  const code = runSyncAgents({ home, overlaysDir, reporter: r });
+  expect(code).toBe(1);
+  expect(r.counts().failed).toBeGreaterThan(0);
+  // The CLAUDE.md target (a separate harness target) still gets written.
+  expect(existsSync(join(home, ".claude/CLAUDE.md"))).toBe(true);
+  expect(existsSync(join(home, ".gemini/config/rules/global.md"))).toBe(true);
+});
+
 test("--dry-run changes nothing", () => {
   const { home, overlaysDir } = setup();
   runSyncAgents({ home, overlaysDir, reporter: quiet(), options: { dryRun: true } });

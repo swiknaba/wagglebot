@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import type { BackupSet } from "../backup";
 import { startBackupSet } from "../backup";
 import { HARNESSES } from "../harness";
 import { mergeManagedSection } from "../managed-json";
@@ -45,11 +46,12 @@ export function runWriteMcp(deps: {
   proxies: ProxyConfig[];
   reporter: Reporter;
   dryRun?: boolean;
+  backups?: BackupSet;
 }): number {
   const { home, proxies, reporter } = deps;
   const paths = resolvePaths(home);
   const state = loadState(paths.managedFile);
-  const backups = startBackupSet(paths.backupsDir);
+  const backups = deps.backups ?? startBackupSet(paths.backupsDir);
   reporter.section("MCP configs");
 
   for (const harness of HARNESSES) {
@@ -58,35 +60,39 @@ export function runWriteMcp(deps: {
       reporter.item(harness.name, "skipped", "no MCP config adapter in Phase 1 (R2)");
       continue;
     }
-    const target = join(home, mcpTarget.path);
-    const usable = proxies.filter((p) => !(p.auth !== undefined && p.auth.source.from === "file"));
-    for (const p of proxies.filter((x) => !usable.includes(x))) {
-      reporter.item(p.namespace, "skipped", "file credential source arrives with the Phase 2 hub");
+    try {
+      const target = join(home, mcpTarget.path);
+      const usable = proxies.filter((p) => !(p.auth !== undefined && p.auth.source.from === "file"));
+      for (const p of proxies.filter((x) => !usable.includes(x))) {
+        reporter.item(p.namespace, "skipped", "file credential source arrives with the Phase 2 hub");
+      }
+      const entries = Object.fromEntries(usable.map((p) => [p.namespace, proxyToClaudeEntry(p)]));
+      const prefix = `${mcpTarget.parentKey}/`;
+      const previouslyOwned = (state.jsonKeys[target] ?? [])
+        .filter((k) => k.startsWith(prefix))
+        .map((k) => k.slice(prefix.length));
+      const existing = existsSync(target) ? readFileSync(target, "utf8") : "";
+      const result = mergeManagedSection(existing, mcpTarget.parentKey, entries, previouslyOwned);
+      if (!result.changed) {
+        reporter.item(mcpTarget.path, "ok", "already ok");
+        continue;
+      }
+      if (deps.dryRun === true) {
+        reporter.item(mcpTarget.path, "skipped", "would write (dry run)");
+        continue;
+      }
+      backups.backup(target);
+      mkdirSync(dirname(target), { recursive: true });
+      writeFileSync(target, result.next);
+      state.jsonKeys[target] = [
+        ...(state.jsonKeys[target] ?? []).filter((k) => !k.startsWith(prefix)),
+        ...result.ownedNow.map((k) => `${prefix}${k}`),
+      ];
+      saveState(paths.managedFile, state);
+      reporter.item(mcpTarget.path, "updated", `${result.ownedNow.length} managed entries`);
+    } catch (error) {
+      reporter.item(mcpTarget.path, "failed", error instanceof Error ? error.message : String(error));
     }
-    const entries = Object.fromEntries(usable.map((p) => [p.namespace, proxyToClaudeEntry(p)]));
-    const prefix = `${mcpTarget.parentKey}/`;
-    const previouslyOwned = (state.jsonKeys[target] ?? [])
-      .filter((k) => k.startsWith(prefix))
-      .map((k) => k.slice(prefix.length));
-    const existing = existsSync(target) ? readFileSync(target, "utf8") : "";
-    const result = mergeManagedSection(existing, mcpTarget.parentKey, entries, previouslyOwned);
-    if (!result.changed) {
-      reporter.item(mcpTarget.path, "ok", "already ok");
-      continue;
-    }
-    if (deps.dryRun === true) {
-      reporter.item(mcpTarget.path, "skipped", "would write (dry run)");
-      continue;
-    }
-    backups.backup(target);
-    mkdirSync(dirname(target), { recursive: true });
-    writeFileSync(target, result.next);
-    state.jsonKeys[target] = [
-      ...(state.jsonKeys[target] ?? []).filter((k) => !k.startsWith(prefix)),
-      ...result.ownedNow.map((k) => `${prefix}${k}`),
-    ];
-    saveState(paths.managedFile, state);
-    reporter.item(mcpTarget.path, "updated", `${result.ownedNow.length} managed entries`);
   }
   return reporter.failed() ? 1 : 0;
 }
