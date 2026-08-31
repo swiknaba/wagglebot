@@ -28,7 +28,7 @@
     "skills": "1.5.23"
   },
   "devDependencies": {
-    "yaml": "2.8.0"
+    "yaml": "2.8.3"
   },
   "keywords": [
     "ai",

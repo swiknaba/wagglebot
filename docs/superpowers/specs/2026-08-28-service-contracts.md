@@ -30,7 +30,7 @@
   `.github/workflows/release.yml` (CI): on the published release,
   verify tag = package version, then `npm publish --provenance` via
   npm trusted publishing. No npm token exists anywhere. Actions are
-  pinned by commit SHA (D13).
+  pinned by exact release tag, for example `actions/checkout@v7.0.1` (D13).
 - CI: OSV scans per lockfile, `bun audit --audit-level high`, image tags
   = short SHA + branch tag, no deploy of a bare `:latest` tag, and a
   `[skip ci]` guard.
