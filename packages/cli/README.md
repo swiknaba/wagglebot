@@ -14,7 +14,7 @@ An engineer runs three commands.
 ```sh
 git clone <company repo>
 yarn install
-yarn wagglebot update
+yarn update:wagglebot
 ```
 
 The `update` command pulls the company repository, then reinstalls the

@@ -2,7 +2,7 @@
 
 One AI agent setup for a whole engineering team.
 
-> **Status.** Phase 1 is implemented, in
+> **Status.** Phase 1 is implemented in
 > [`packages/cli`](packages/cli/). Phases 2–4 stay at the specification
 > stage. The [design specs](docs/superpowers/specs/) define the whole
 > system.
