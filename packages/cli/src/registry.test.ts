@@ -28,5 +28,9 @@ test("team layer wins per namespace, shallow merge", () => {
     "team",
   );
   const merged = mergeRegistries(base, team);
-  expect(merged.map((p) => `${p.namespace}:${p.endpoint}`)).toEqual(["a:https://a/mcp", "b:https://b2/mcp", "c:https://c/mcp"]);
+  expect(merged.map((p) => `${p.namespace}:${p.endpoint}`)).toEqual([
+    "a:https://a/mcp",
+    "b:https://b2/mcp",
+    "c:https://c/mcp",
+  ]);
 });

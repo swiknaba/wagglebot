@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node -e \"const i=require('fs').readFileSync(0,'utf8');const p=JSON.parse(i);const f=(p.tool_input&&p.tool_input.file_path)||'';if(f.endsWith('.md')){console.log(JSON.stringify({hookSpecificOutput:{hookEventName:'PostToolUse',additionalContext:'wagglebot:ste-reminder — You edited a Markdown file. Re-read the Baseline section and apply ASD-STE100 to the prose.'}}))}\""
+          }
+        ]
+      }
+    ]
+  }
+}

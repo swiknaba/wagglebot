@@ -6,7 +6,10 @@ export type AuthScheme =
   | { kind: "header"; name: string; prefix?: string }
   | { kind: "basic"; username: string }
   | { kind: "env"; map: Record<string, string> };
-export type CredentialSource = { from: "env"; var: string } | { from: "file"; path: string } | { from: "literal"; value: string };
+export type CredentialSource =
+  | { from: "env"; var: string }
+  | { from: "file"; path: string }
+  | { from: "literal"; value: string };
 export type ProxyConfig = {
   namespace: string;
   mode: "remote_http" | "remote_sse" | "stdio_npx" | "stdio_cmd";
@@ -49,13 +52,20 @@ export function loadRegistry(text: string, fileName: string): ProxyConfig[] {
     const mode = p.mode ?? "";
     if (!MODES.has(mode)) fail(fileName, ns, `unknown mode "${mode}"`);
     if (mode === "remote_http" || mode === "remote_sse") {
-      if (p.endpoint === undefined || !/^https?:\/\//.test(p.endpoint)) fail(fileName, ns, "an absolute http(s) endpoint is required");
+      if (p.endpoint === undefined || !/^https?:\/\//.test(p.endpoint))
+        fail(fileName, ns, "an absolute http(s) endpoint is required");
     }
     if (mode === "stdio_npx" && (p.command === undefined || !EXACT_VERSION.test(p.command))) {
-      fail(fileName, ns, `stdio_npx requires an exact pinned package, for example "@example/mcp@1.4.2" (P31); got "${p.command ?? ""}"`);
+      fail(
+        fileName,
+        ns,
+        `stdio_npx requires an exact pinned package, for example "@example/mcp@1.4.2" (P31); got "${p.command ?? ""}"`,
+      );
     }
-    if (mode === "stdio_cmd" && (p.command === undefined || p.command === "")) fail(fileName, ns, "stdio_cmd requires a command");
-    if (p.auth?.source.from === "literal") fail(fileName, ns, "a literal credential source is forbidden — a shared registry must never carry a secret");
+    if (mode === "stdio_cmd" && (p.command === undefined || p.command === ""))
+      fail(fileName, ns, "stdio_cmd requires a command");
+    if (p.auth?.source.from === "literal")
+      fail(fileName, ns, "a literal credential source is forbidden — a shared registry must never carry a secret");
   }
   return rawProxies as ProxyConfig[];
 }
