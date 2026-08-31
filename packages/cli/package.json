@@ -24,6 +24,9 @@
   "scripts": {
     "build": "bun build src/index.ts --target=node --outdir dist"
   },
+  "dependencies": {
+    "skills": "1.5.23"
+  },
   "devDependencies": {
     "yaml": "2.8.0"
   },
