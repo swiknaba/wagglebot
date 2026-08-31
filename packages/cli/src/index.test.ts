@@ -1,4 +1,7 @@
 import { expect, test } from "bun:test";
+import { mkdirSync, mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { main } from "./index";
 
 test("--version prints the package version and exits 0", async () => {
@@ -44,4 +47,14 @@ test("update --help prints the same help", async () => {
   const lines: string[] = [];
   expect(await main(["update", "--help"], { write: (l) => lines.push(l) })).toBe(0);
   expect(lines.join("\n")).toContain("managed");
+});
+
+test("update outside a company repo fails cleanly with guidance, no thrown stack trace", async () => {
+  const deep = mkdtempSync(join(tmpdir(), "wgl-deep-"));
+  const nested = join(deep, "a", "b", "c");
+  mkdirSync(nested, { recursive: true });
+  const lines: string[] = [];
+  const code = await main(["update"], { write: (l) => lines.push(l), cwd: nested });
+  expect(code).toBe(1);
+  expect(lines.join("\n")).toContain("init");
 });

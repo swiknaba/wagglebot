@@ -20,7 +20,7 @@ import { getUsername } from "./identity";
 import { loadRegistry, mergeRegistries } from "./registry";
 import { createReporter } from "./report";
 
-export type CliDeps = { write: (line: string) => void };
+export type CliDeps = { write: (line: string) => void; cwd?: string };
 
 const version = (): string => {
   const require = createRequire(import.meta.url);
@@ -117,95 +117,99 @@ export async function main(argv: string[], deps: CliDeps = { write: console.log 
     return answer;
   };
   const reporter = createReporter(deps.write);
-  const skillsBin = resolveSkillsBin();
-  const cwd = process.cwd();
+  const cwd = deps.cwd ?? process.cwd();
 
-  if (command === "update") {
-    const { values } = parseArgs({ args: rest, options: { "skip-self-update": { type: "boolean" } } });
-    return runUpdate({
-      cwd,
-      home,
-      exec,
-      ask,
-      reporter,
-      write: deps.write,
-      skillsBin,
-      skipSelfUpdate: values["skip-self-update"] === true,
-    });
-  }
-
-  if (command === "init") {
-    const { positionals } = parseArgs({ args: rest, allowPositionals: true });
-    const targetDir = positionals[0] ?? ".";
-    return runInit({ targetDir, version: version(), reporter });
-  }
-
-  if (command === "install-skills") {
-    const { values } = parseArgs({ args: rest, options: { update: { type: "boolean" } } });
-    const root = findCompanyRoot(cwd);
-    const company = loadCompanyRepo(root);
-    const listPath = `${root}/skills.list`;
-    const code = await runInstallSkills({
-      listText: company.skillsListText,
-      listPath,
-      exec,
-      reporter,
-      skillsBin,
-      update: values.update === true,
-      writeList: values.update === true ? (text) => writeFileSync(listPath, text) : undefined,
-    });
-    deps.write(reporter.summary());
-    return code;
-  }
-
-  if (command === "install-agents") {
-    const { company, teams } = await companyContext(cwd, exec, ask);
-    const code = await runInstallAgents({ home, listTexts: company.agentListTexts(teams), exec, reporter });
-    deps.write(reporter.summary());
-    return code;
-  }
-
-  if (command === "sync-agents") {
-    const { values, positionals } = parseArgs({
-      args: rest,
-      allowPositionals: true,
-      options: { "dry-run": { type: "boolean" }, restore: { type: "boolean" } },
-    });
-    let overlaysDir: string | undefined;
-    try {
-      const root = findCompanyRoot(cwd);
-      overlaysDir = loadCompanyRepo(root).overlaysDir;
-    } catch {
-      overlaysDir = undefined;
+  try {
+    if (command === "update") {
+      const { values } = parseArgs({ args: rest, options: { "skip-self-update": { type: "boolean" } } });
+      return await runUpdate({
+        cwd,
+        home,
+        exec,
+        ask,
+        reporter,
+        write: deps.write,
+        skillsBin: resolveSkillsBin(),
+        skipSelfUpdate: values["skip-self-update"] === true,
+      });
     }
-    const code = runSyncAgents({
-      home,
-      overlaysDir,
-      reporter,
-      options: {
-        dryRun: values["dry-run"] === true,
-        restore: values.restore === true,
-        restoreTarget: positionals[0],
-      },
-    });
-    deps.write(reporter.summary());
-    return code;
-  }
 
-  if (command === "write-mcp") {
-    const { values } = parseArgs({ args: rest, options: { "dry-run": { type: "boolean" } } });
-    const { company, teams } = await companyContext(cwd, exec, ask);
-    const base =
-      company.registryBaseText === undefined ? [] : loadRegistry(company.registryBaseText, "registry.base.yaml");
-    const merged = teams.reduce((acc, team) => {
-      const text = company.registryTeamText(team);
-      return text === undefined ? acc : mergeRegistries(acc, loadRegistry(text, `registry.team.${team}.yaml`));
-    }, base);
-    const code = runWriteMcp({ home, proxies: merged, reporter, dryRun: values["dry-run"] === true });
-    deps.write(reporter.summary());
-    return code;
-  }
+    if (command === "init") {
+      const { positionals } = parseArgs({ args: rest, allowPositionals: true });
+      const targetDir = positionals[0] ?? ".";
+      return await runInit({ targetDir, version: version(), reporter });
+    }
 
-  deps.write(`wagglebot: unknown command "${command ?? ""}". Run: wagglebot --help`);
-  return 2;
+    if (command === "install-skills") {
+      const { values } = parseArgs({ args: rest, options: { update: { type: "boolean" } } });
+      const root = findCompanyRoot(cwd);
+      const company = loadCompanyRepo(root);
+      const listPath = `${root}/skills.list`;
+      const code = await runInstallSkills({
+        listText: company.skillsListText,
+        listPath,
+        exec,
+        reporter,
+        skillsBin: resolveSkillsBin(),
+        update: values.update === true,
+        writeList: values.update === true ? (text) => writeFileSync(listPath, text) : undefined,
+      });
+      deps.write(reporter.summary());
+      return code;
+    }
+
+    if (command === "install-agents") {
+      const { company, teams } = await companyContext(cwd, exec, ask);
+      const code = await runInstallAgents({ home, listTexts: company.agentListTexts(teams), exec, reporter });
+      deps.write(reporter.summary());
+      return code;
+    }
+
+    if (command === "sync-agents") {
+      const { values, positionals } = parseArgs({
+        args: rest,
+        allowPositionals: true,
+        options: { "dry-run": { type: "boolean" }, restore: { type: "boolean" } },
+      });
+      let overlaysDir: string | undefined;
+      try {
+        const root = findCompanyRoot(cwd);
+        overlaysDir = loadCompanyRepo(root).overlaysDir;
+      } catch {
+        overlaysDir = undefined;
+      }
+      const code = runSyncAgents({
+        home,
+        overlaysDir,
+        reporter,
+        options: {
+          dryRun: values["dry-run"] === true,
+          restore: values.restore === true,
+          restoreTarget: positionals[0],
+        },
+      });
+      deps.write(reporter.summary());
+      return code;
+    }
+
+    if (command === "write-mcp") {
+      const { values } = parseArgs({ args: rest, options: { "dry-run": { type: "boolean" } } });
+      const { company, teams } = await companyContext(cwd, exec, ask);
+      const base =
+        company.registryBaseText === undefined ? [] : loadRegistry(company.registryBaseText, "registry.base.yaml");
+      const merged = teams.reduce((acc, team) => {
+        const text = company.registryTeamText(team);
+        return text === undefined ? acc : mergeRegistries(acc, loadRegistry(text, `registry.team.${team}.yaml`));
+      }, base);
+      const code = runWriteMcp({ home, proxies: merged, reporter, dryRun: values["dry-run"] === true });
+      deps.write(reporter.summary());
+      return code;
+    }
+
+    deps.write(`wagglebot: unknown command "${command ?? ""}". Run: wagglebot --help`);
+    return 2;
+  } catch (error) {
+    deps.write(`wagglebot: ${error instanceof Error ? error.message : String(error)}`);
+    return 1;
+  }
 }
