@@ -491,7 +491,7 @@ git. Component memory follows the same pattern, at a smaller size.
 
 ### Distribution
 
-`provisioning/bin/sync-agents` renders the template and writes it to
+`sync-agents` renders the template and writes it to
 every agent harness location. One file then governs all agents:
 
 | Harness | Target |
