@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ensureBuilt, repoRoot, runCli } from "./helper";
@@ -34,6 +34,15 @@ test("wagglebot init matches the committed test-app/ reference, file by file", (
   const result = runCli(["init", "test-app"], { cwd: scratchDir });
   expect(result.status).toBe(0);
   expect(statSync(target).isDirectory()).toBe(true);
+
+  // The committed test-app/ intentionally deviates from the scaffold in one place: it
+  // installs the CLI from this repo (file:../packages/cli) instead of the registry pin,
+  // so tests exercise the current branch. Apply the same rewrite the regen script
+  // (scripts/regen-test-app.mjs) applies before diffing — keep the two in sync.
+  const pkgPath = join(target, "package.json");
+  const pkg = JSON.parse(readFileSync(pkgPath, "utf8"));
+  pkg.dependencies.wagglebot = "file:../packages/cli";
+  writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`);
 
   const expectedFiles = walk(testAppDir);
   const actualFiles = walk(target);

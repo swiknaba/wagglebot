@@ -2,7 +2,7 @@
   "name": "company-wagglebot",
   "private": true,
   "dependencies": {
-    "wagglebot": "0.0.1"
+    "wagglebot": "file:../packages/cli"
   },
   "scripts": {
     "update:wagglebot": "wagglebot update"

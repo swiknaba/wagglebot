@@ -22,6 +22,7 @@ test("scaffolds the company repository with the version substituted", () => {
     "skills.list",
     "agents.base.list",
     ".gitignore",
+    ".nvmrc",
     ".env.credentials.example",
     "docker-compose.override.yml",
     "README.md",
