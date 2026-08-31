@@ -3,7 +3,7 @@
 > Companion to the [wagglebot design spec](2026-08-28-wagglebot-design.md).
 > One team shares one curated agent environment: the same skills and the
 > same base instructions, on every workstation and in every agent
-> harness. This tooling ships under `provisioning/`.
+> harness. This tooling ships inside the `wagglebot` npm package (D35).
 >
 > **This is the whole of Phase 1 (D14).** Zero services run. One
 > central git repository and one command provision a workstation.
@@ -55,13 +55,29 @@ Rules:
   company content, so a wagglebot upgrade is a one-line pin bump
   (D35).
 
+**The engineer identity is stored, never guessed.** `wagglebot update`
+needs the company Git username to find the team in `catalog.yaml`.
+`git config user.name` is a display name and `user.email` is an email,
+so neither is that username. The first run asks once, validates the
+answer against the User entities in `catalog.yaml`, and stores it:
+
+```
+git config --global wagglebot.username alice
+```
+
+Every later run reads that key. An answer that matches no User entity
+is rejected with the list of near matches, never accepted silently
+(P35).
+
 **MCP configs are written, not proxied (Phase 1).** The update command
 reads `registry.base.yaml` and the team layers, finds the team of the
 engineer in `catalog.yaml` by git username, merges shallowly, and
 writes the result into each harness MCP config, inside the managed
-block. Credentials resolve locally per D10, exactly as with the hub.
-The hub replaces this written config in Phase 2, when aggregation or
-CodeMode earns it.
+block. Credentials resolve locally per D10: the config names an
+environment variable, and the value stays in `.env.credentials`.
+The Phase 2 hub replaces this written config when the tool count needs
+aggregation (see the
+[phase 2 spec](2026-08-28-phase-2-shared-layer.md)).
 
 ## Curated Skills List
 
@@ -121,9 +137,9 @@ appended to the base template, and the template stops being readable.
 
 `install-skills` (part of the wagglebot package, D35) is idempotent and reproducible:
 
-1. Install the `skills` npm CLI at the **pinned version** from
-   `provisioning/versions.env` when it is missing or differs
-   (`npm install -g skills@<version>`).
+1. Install the `skills` npm CLI at the **pinned version** that the
+   wagglebot package declares in its own dependencies, when it is
+   missing or differs.
 2. Run `skills add <entry> -g -y` for every pinned line in
    `skills.list`.
 3. Never auto-update. Updates happen through one explicit command,
@@ -198,8 +214,10 @@ contradicts D15.
 Two differences remain, and both are small:
 
 1. **Destination.** A skill goes to the skill directory. A subagent
-   goes to a harness directory, so the installer reuses the target
-   table from `sync-agents`.
+   goes to the subagent directory of each harness. For Claude Code
+   that is `~/.claude/agents/`. The other harness locations are open
+   ([research list R2](2026-08-28-research-list.md)), and a harness
+   with no subagent support is skipped with one log line.
 2. **Refresh.** In Phase 1, `wagglebot update` installs the list. From
    Phase 2, the hub carries it on the registry refresh, so a shared
    agent arrives without any command.
@@ -509,15 +527,21 @@ non-zero on failure. The target list lives in one place: the script.
 
 The sync is **non-destructive** (guards F22):
 
-1. Write into a managed block
-   (`<!-- wagglebot:begin -->` ... `<!-- wagglebot:end -->`) where the
-   harness format permits. Content outside the block stays untouched.
+1. Write into a managed block. Markdown targets use comment markers
+   (`<!-- wagglebot:begin -->` ... `<!-- wagglebot:end -->`). JSON
+   targets have no comment syntax, so ownership is per entry: the tool
+   records every key it wrote in a local state file,
+   `~/.wagglebot/managed.json`, and it only ever rewrites those keys.
+   Content outside the block, and every JSON key it did not write,
+   stays untouched. The same rule covers the MCP config writer and
+   `install-agents`.
 2. Merge hook fragments per entry. Never replace a `hooks` key that
    contains entries this tool did not write.
 3. Back up each target file before the first mutation, under
    `~/.wagglebot/backups/<timestamp>/`.
 4. Provide `--dry-run` (show the diff, change nothing) and `--restore`
-   (write the newest backup back).
+   (write the newest backup set back, every file in it; `--restore
+   <path>` restores one target file from that set).
 
 Secret distribution is **out of scope for this tool**. Tokens travel
 through a secret manager or the company password manager, into the

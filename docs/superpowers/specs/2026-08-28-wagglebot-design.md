@@ -100,12 +100,12 @@ and deploy. No team must fork the internals of a different company.
 | D26 | **(From Phase 2) Authentication uses an SSH public key challenge, not a distributed token.** Phase 1 has no shared service, so it needs no authentication at all. The agent signs a server nonce with the existing SSH key of the engineer, and receives a short-lived session token. The default key source is the `wagglebot.dev/ssh-key` annotation on the User entity in the catalog, added by pull request. That works with every Git host, including Bitbucket Server. An optional `github` source fetches `<host>/<username>.keys` instead. No token needs delivery or rotation, and `users.yaml` therefore does not exist: identity lives in the catalog. |
 | D27 | **The validation command rejects every duplicate.** Two entities of one kind sharing a name, a component naming an unknown system, and two channel routes matching one event are all hard errors. The message names the file and the value. Wagglebot never picks a winner silently (P35). |
 | D28 | **Every memory write passes a credential scan.** Two layers run server-side: a **gitleaks** rule scan for known provider formats, and the entropy check for the formats no rule set knows. A match is redacted, and a mostly-matching write is rejected. The error names the rule, never the content. `wagglebot rescan` re-applies current rules to stored memory, because new rules arrive after old writes. Memory outlives logs, so a credential stored here would surface for years. |
-| D29 | **Component memory is a local Markdown file, not a vector record.** The agent writes `.agents/memory.md` in the repository. The `.agents/` directory follows the emerging dotagents convention, and the name matters: an agent that never heard of wagglebot still recognizes `.agents/` from its training, even late in a polluted context. The rule: **agents read and write `.agents/`** (memory, component subagents), and **wagglebot tooling reads `.wagglebot/`** (`catalog.yaml`, `public.md`). One deliberate divergence from the draft convention: `memory.md` is **committed**, never gitignored, because the pull-request review is the feature. Git already distributes a file inside one repository, and the history is free. The shared store therefore holds only what crosses a repository boundary: `system`, `domain`, and `org`. A search still reads the local file first, then the three shared scopes. |
+| D29 | **Component memory is a local Markdown file, not a vector record.** The agent writes `.agents/memory.md` in the repository. The `.agents/` directory follows the emerging dotagents convention, and the name matters: an agent that never heard of wagglebot still recognizes `.agents/` from its training, even late in a polluted context. The rule: **agents read and write `.agents/`** (memory, component subagents), and **wagglebot tooling reads `.wagglebot/`** (`catalog.yaml`, `public.md`). One deliberate divergence from the draft convention: `memory.md` is **committed**, never gitignored, because the pull-request review is the feature. Git already distributes a file inside one repository, and the history is free. The shared store therefore holds only what crosses a repository boundary: `system`, `domain`, and `org`. The agent reads the local file directly — it is part of the repository — and `memory_search` covers the three shared scopes (Phase 2). |
 | D30 | **A human can commit a memory directly, with `remember`.** The MCP tool `remember({ text, scope })` and the command `wagglebot remember` write one fact to a named scope. This path is explicit, so the agent never judges the importance and never asks for a promotion confirmation (D22). The named scope still needs authorization (D23), the text still passes the credential scan (D28), and a `component` scope still writes the local file (D29). The matching `forget` tool invalidates a record the same way. |
 | D31 | **Wagglebot distributes custom agents, and never runs one.** A shared agent runs on a workstation, with the credentials of its engineer, so D9 holds. Hosting agents would put engineer credentials on the shared server, make wagglebot a compute platform, and create the unattended operation that the MVP deliberately excludes. Distribution uses `agents.base.list` and `agents.team.<team>.list`, composed like the registry. A component agent needs no distribution: it lives in `.agents/subagents/` and travels with the repository. **Distribution is runtime-neutral.** A list entry may hold a Markdown subagent, a Flue agent, or any other shape. An agent declares the credentials it needs, by name, and follows D10. A missing credential marks that one agent unavailable with a clear reason, and never blocks the others. |
 | D32 | **Agents distribute the same way as skills, and one pin rule covers both.** An entry pointing outside the organization **must** pin, because a third party controls its next release. An entry inside the organization **may** pin, because a pull request already reviews it, and a required pin there would guard against your own colleagues (D15). Two differences remain: a subagent installs to a harness directory rather than the skill directory, and the hub carries the agent list on its registry refresh, so a shared agent arrives without a command. |
 | D33 | **Wagglebot ships first-party skills for its own toolset**, in one repository, `wagglebot/skills`. They version with wagglebot, because a format change breaks a skill on the same day. The set is `writing-a-custom-agent`, `adding-an-mcp-server`, and `onboarding-a-repository`. The first asks where an agent belongs before writing code, and explains the trade rather than choosing. **The split rule:** what the agent always needs goes in `AGENTS.base.md`, and what it needs occasionally becomes a skill. The memory rules are always needed. Everything else is occasional. |
-| D34 | **One update command provisions a workstation, and nothing runs as a service in Phase 1.** The engineer flow is three commands, and only the last repeats: `git clone <company repo>`, `yarn install`, `yarn update:wagglebot`. The update script does three things: `git pull --ff-only` on the company repository, then the installers (skills, subagents, base prompts, MCP configs), then a summary. `yarn install` re-runs when the wagglebot pin moved, so the CLI updates itself through the normal dependency path. `--help` explains what the command touches. The MCP servers reach each harness as **written config**, in a managed block, composed locally: the script reads `catalog.yaml`, finds the team of the engineer by git username, and merges the registry layers on the workstation. The hub becomes the Phase 2 upgrade for aggregation and CodeMode. |
+| D34 | **One update command provisions a workstation, and nothing runs as a service in Phase 1.** The engineer flow is three commands, and only the last repeats: `git clone <company repo>`, `yarn install`, `yarn update:wagglebot`. The update script does four things: `git pull --ff-only` on the company repository, `yarn install` when the wagglebot pin moved, the installers (skills, subagents, base prompts, MCP configs), and a summary. `yarn install` re-runs when the wagglebot pin moved, so the CLI updates itself through the normal dependency path. `--help` explains what the command touches. The MCP servers reach each harness as **written config**, in a managed block, composed locally: the script reads `catalog.yaml`, finds the team of the engineer by the stored `wagglebot.username` git config key (asked once, validated against the catalog), and merges the registry layers on the workstation. The hub becomes the Phase 2 upgrade for aggregation and CodeMode. |
 | D35 | **Wagglebot is a package, never a fork.** Wagglebot publishes two artifacts: Docker images (pinned by digest, D13) and one npm package that holds the CLI, the installers, the base template, and the harness target table. A company runs `bunx wagglebot@<version> init` one time, which scaffolds the **company repository**: their catalog, registries, lists, overlays, compose override, and a `package.json` that pins the wagglebot version. Not one file in that repository comes from the wagglebot source, so an upgrade is a one-line pin bump, reviewed in one pull request. Package content is never edited in place: extension happens through the company files and the overlays. The changelog must call out every base-template change, because overlays build on it. |
 
 ### Why D9 and D10 matter
@@ -161,12 +161,14 @@ serve the later phases
 ### Interfaces At A Glance
 
 Most of the surface is MCP tools, not HTTP. Six HTTP endpoints exist.
+Every row below arrives with Phase 2 or later — **Phase 1 has no
+interface at all**, only files.
 
 ```mermaid
 graph TB
     subgraph WS["LOCAL — one per engineer workstation"]
         AGENT["Agent harness<br/>Claude Code, Codex, ..."]
-        HUB["MCP Hub<br/>:9000"]
+        HUB["MCP Hub :9000<br/>(Phase 2)"]
         CREDS[(".env.credentials<br/>never leaves the machine")]
         STDIO["stdio upstream<br/>subprocesses"]
     end
@@ -203,14 +205,14 @@ talks to three things, and always by MCP. Credentials touch one box.
 
 | Surface | Kind | Who calls it |
 |---|---|---|
-| `search`, `get_schema`, `execute` | MCP tool | The agent, for every upstream tool |
-| `list_available_mcps` | MCP tool | The agent, to see live namespaces |
-| `memory_search` | MCP tool | The agent |
-| `propose_memory` | MCP tool | The agent, from its own judgment (D24) |
-| `remember`, `forget` | MCP tool | **You**, by telling the agent (D30) |
-| `ingest_document` | MCP tool | You, to pull a page into memory (D25) |
+| `search`, `get_schema`, `execute` | MCP tool | The agent, for every upstream tool (Phase 2) |
+| `list_available_mcps` | MCP tool | The agent, to see live namespaces (Phase 2) |
+| `memory_search` | MCP tool | The agent (Phase 2) |
+| `propose_memory` | MCP tool | The agent, from its own judgment (D24, Phase 2) |
+| `remember`, `forget` | MCP tool | **You**, by telling the agent (D30, Phase 2) |
+| `ingest_document` | MCP tool | You, to pull a page into memory (D25, Phase 4) |
 | `coordination_*` (six tools) | MCP tool | The agent (Phase 3) |
-| `GET /registry` | HTTP | The hub only, never the agent |
+| `GET /registry` | HTTP | The hub only, never the agent (Phase 2) |
 | `POST /memory/proposals` | HTTP | The memory MCP surface, internally |
 | `POST /memories/upsert`, `/memories/invalidate` | HTTP | Humans and `wagglebot publish` (D23) |
 | `POST /run-once` | HTTP | An operator, to drain the queue |
@@ -224,7 +226,7 @@ talks to three things, and always by MCP. Credentials touch one box.
  │  Agent (any runtime)         │      │  registry (+ tool_catalog) │
  │      │ MCP_HUB_URL           │◄─────│  registry.yaml — NO secrets│
  │      ▼                       │ pull └────────────────────────────┘
- │  mcp-hub :9000               │      ┌────────────────────────────┐
+ │  mcp-hub :9000 (Ph. 2)       │      ┌────────────────────────────┐
  │  + engineer credentials      │─────▶│  memory-worker :3011       │
  │      │                       │ MCP  │    │ chroma-db :8000       │
  │      ├──────────────┐        │      │    └ extractor (optional)  │
