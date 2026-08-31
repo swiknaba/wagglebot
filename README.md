@@ -94,6 +94,26 @@ service bearer tokens.
 * GitHub releases serve as the changelog.
 * Run `bin/release` to do both.
 
+## Test App
+
+`test-app/` is a company repository. `wagglebot init` scaffolds it. It
+serves as the reference output of the CLI.
+
+An end-to-end test in CI checks the scaffold against `test-app/`. It
+also runs `sync-agents` against a sandboxed home directory. Together
+they verify the whole provisioning flow, from init through every agent
+harness.
+
+Regenerate `test-app/` after any change to the scaffold templates or
+the package version:
+
+```sh
+bun run regen:test-app
+```
+
+Commit the result. The end-to-end test fails, and names the drifted
+file, when `test-app/` falls behind the real scaffold output.
+
 ## License
 
 MIT
