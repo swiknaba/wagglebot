@@ -22,9 +22,15 @@
 - Recipe for a stdio MCP with conflicting dependencies: install the
   wrapped package into an isolated virtualenv or prefix. Invoke it by
   absolute path.
-- Release script: tag-based main→production promotion. The script
-  refuses a dirty worktree. A cleanup trap removes an unpushed tag and
-  restores the original branch.
+- Release flow, two halves. `bin/release` (local): refuse a dirty
+  worktree or a non-main branch, select major/minor/patch, verify the
+  version in `packages/cli/package.json` matches (the bump is a
+  reviewed commit), tag, push, create the GitHub release with generated
+  notes. A cleanup trap removes the local tag on failure.
+  `.github/workflows/release.yml` (CI): on the published release,
+  verify tag = package version, then `npm publish --provenance` via
+  npm trusted publishing. No npm token exists anywhere. Actions are
+  pinned by commit SHA (D13).
 - CI: OSV scans per lockfile, `bun audit --audit-level high`, image tags
   = short SHA + branch tag, no deploy of a bare `:latest` tag, and a
   `[skip ci]` guard.

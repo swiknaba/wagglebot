@@ -1,0 +1,118 @@
+#!/bin/bash
+set -euo pipefail
+
+# Release flow (two halves):
+#   1. This script (local): verify, tag, push, create the GitHub release.
+#   2. .github/workflows/release.yml (CI): publish to npm with provenance.
+# Provenance needs an OIDC-capable CI runner, so npm publish never runs here.
+
+MAIN_BRANCH="main"
+PACKAGE_JSON="packages/cli/package.json"
+
+if ! command -v git &> /dev/null; then
+  echo "git is not installed. Please run 'brew install git'."
+  exit 1
+fi
+
+if ! command -v gh &> /dev/null; then
+  echo "GitHub command-line tool is not installed. Please run 'brew install gh'."
+  exit 1
+fi
+
+if ! gh auth status &> /dev/null; then
+  echo "gh is not authenticated. Please run 'gh auth login'."
+  exit 1
+fi
+
+if ! command -v node &> /dev/null; then
+  echo "node is not installed. It is needed to read $PACKAGE_JSON."
+  exit 1
+fi
+
+if [[ $(git status --porcelain) ]]; then
+  echo "You have uncommitted changes."
+  exit 1
+fi
+
+if [[ $(git branch --show-current) != "$MAIN_BRANCH" ]]; then
+  echo "You must be on the $MAIN_BRANCH branch to release."
+  exit 1
+fi
+
+git pull > /dev/null 2>&1
+git fetch --tags > /dev/null 2>&1
+LATEST_TAG=$(git describe --tags "$(git rev-list --tags --max-count=1)" 2>/dev/null || echo "v0.0.0")
+
+echo "The latest tag is $LATEST_TAG."
+
+PS3='What kind of release do you want to create? '
+options=("major" "minor" "patch" "Quit")
+RELEASE_TYPE=""
+
+select opt in "${options[@]}"
+do
+    case $opt in
+        "major") RELEASE_TYPE="major"; break;;
+        "minor") RELEASE_TYPE="minor"; break;;
+        "patch") RELEASE_TYPE="patch"; break;;
+        "Quit") break;;
+        *) echo "Invalid option: $REPLY";;
+    esac
+done
+
+if [ -z "$RELEASE_TYPE" ]; then
+  echo "No release type selected, exiting."
+  exit 0
+fi
+
+LATEST_TAG=${LATEST_TAG#v}
+IFS='.' read -r -a array <<< "$LATEST_TAG"
+
+case $RELEASE_TYPE in
+  "major") ((array[0]++)); array[1]=0; array[2]=0;;
+  "minor") ((array[1]++)); array[2]=0;;
+  "patch") ((array[2]++));;
+esac
+
+NEW_TAG="v${array[0]}.${array[1]}.${array[2]}"
+NEW_VERSION=${NEW_TAG#v}
+
+echo "This release will be $NEW_TAG."
+
+# The version bump is a reviewed commit, so the script only verifies it.
+package_version=$(node -p "require('./$PACKAGE_JSON').version")
+if [ "$NEW_VERSION" != "$package_version" ]; then
+  echo "The package version ($package_version) does not match the release ($NEW_VERSION)."
+  echo "Please update the version in $PACKAGE_JSON in a reviewed commit first."
+  exit 1
+fi
+
+read -p "Everything is prepared to release '$NEW_TAG'. Are you sure? [y/N] " -n 1 -r
+echo # enforce a new line since read does not end in a new line char
+
+if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+  echo "Aborted."
+  exit 0
+fi
+
+git tag "$NEW_TAG"
+
+# Remove the local tag again when a later step fails.
+cleanup() {
+  if [ $? -ne 0 ]; then
+    git tag -d "$NEW_TAG" > /dev/null 2>&1 || true
+    echo "Release failed. The local tag $NEW_TAG was removed."
+  fi
+}
+trap cleanup EXIT
+
+git push origin "$NEW_TAG"
+release_url=$(gh release create "$NEW_TAG" --generate-notes)
+
+echo "🎉 Released $NEW_TAG 🎉"
+echo "$release_url"
+echo "CI now publishes wagglebot@$NEW_VERSION to npm, with provenance."
+echo "Watch it: gh run watch"
+echo
+
+git log --oneline -n 7
