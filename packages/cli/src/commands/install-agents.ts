@@ -33,9 +33,11 @@ export async function runInstallAgents(deps: {
         const clone = await git("clone", `https://github.com/${entry.repo}.git`, cacheDir);
         if (clone.code !== 0) return false;
       } else if (entry.ref !== undefined) {
-        await git("-C", cacheDir, "fetch", "--tags", "origin");
+        const fetch = await git("-C", cacheDir, "fetch", "--tags", "origin");
+        if (fetch.code !== 0) return false;
       } else {
-        await git("-C", cacheDir, "pull", "--ff-only");
+        const pull = await git("-C", cacheDir, "pull", "--ff-only");
+        if (pull.code !== 0) return false;
       }
       if (entry.ref !== undefined) {
         const co = await git("-C", cacheDir, "checkout", entry.ref);
@@ -44,7 +46,7 @@ export async function runInstallAgents(deps: {
       return true;
     };
     if (!(await materialize())) {
-      reporter.item(entry.raw, "failed", "git clone/checkout failed");
+      reporter.item(entry.raw, "failed", "git sync failed");
       continue;
     }
     const files = readdirSync(cacheDir).filter((f) => f.endsWith(".md"));

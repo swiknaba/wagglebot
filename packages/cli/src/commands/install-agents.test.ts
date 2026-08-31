@@ -48,3 +48,28 @@ test("second run reports ok; a removed entry uninstalls its files", async () => 
   });
   expect(existsSync(join(home, ".claude/agents/acme__agents__reviewer.md"))).toBe(false);
 });
+
+test("a failing pull on an unpinned, already-cached entry reports failed and copies nothing new", async () => {
+  const home = mkdtempSync(join(tmpdir(), "wgl-"));
+  const unpinned = [{ path: "agents.base.list", text: "acme/agents\n" }];
+  // First run: clone succeeds, materializing reviewer.md and installing it.
+  await runInstallAgents({ home, listTexts: unpinned, exec: fakeGit, reporter: quiet() });
+  const installed = join(home, ".claude/agents/acme__agents__reviewer.md");
+  expect(existsSync(installed)).toBe(true);
+
+  // Second run: the cache dir already exists, so materialize() takes the "pull" branch,
+  // which now fails.
+  const failingPull: Exec = async (cmd, args) => {
+    if (cmd === "git" && args.includes("pull")) return { code: 1, stdout: "", stderr: "not fast-forward" };
+    return fakeGit(cmd, args);
+  };
+  const r = createReporter(() => {}, false);
+  const code = await runInstallAgents({ home, listTexts: unpinned, exec: failingPull, reporter: r });
+  expect(code).toBe(1);
+  expect(r.counts().failed).toBe(1);
+  expect(r.counts().installed).toBe(0);
+  // The previously installed file becomes stale (materialize failed, so nothing was
+  // produced this run) and is removed — that removal is reported separately as
+  // "updated" by the (unrelated, parked) stale-deletion status.
+  expect(existsSync(installed)).toBe(false);
+});
