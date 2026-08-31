@@ -32,6 +32,9 @@ type RawProxy = {
 
 const MODES = new Set(["remote_http", "remote_sse", "stdio_npx", "stdio_cmd"]);
 const EXACT_VERSION = /@\d+\.\d+\.\d+([-+][\w.-]+)?$/;
+const SCHEME_KINDS = new Set(["none", "bearer", "header", "basic", "env"]);
+const SOURCE_FROM = new Set(["env", "file", "literal"]);
+const ENV_EXPANSION = /^\$\{[A-Za-z_][A-Za-z0-9_]*\}$/;
 
 const fail = (file: string, ns: string, message: string): never => {
   throw new Error(`${file}: proxy "${ns}": ${message}`);
@@ -64,15 +67,33 @@ export function loadRegistry(text: string, fileName: string): ProxyConfig[] {
     }
     if (mode === "stdio_cmd" && (p.command === undefined || p.command === ""))
       fail(fileName, ns, "stdio_cmd requires a command");
+    if (p.env !== undefined) {
+      for (const [key, value] of Object.entries(p.env)) {
+        if (typeof value !== "string" || !ENV_EXPANSION.test(value))
+          fail(
+            fileName,
+            ns,
+            `env.${key} must be a "\${VAR}" expansion, not a literal value — a shared registry must never carry a secret`,
+          );
+      }
+    }
     if (p.auth !== undefined) {
       if (
         typeof p.auth.scheme !== "object" ||
         p.auth.scheme === null ||
+        Array.isArray(p.auth.scheme) ||
         typeof p.auth.source !== "object" ||
-        p.auth.source === null
+        p.auth.source === null ||
+        Array.isArray(p.auth.source)
       )
         fail(fileName, ns, "auth requires both scheme and source");
-      if (p.auth.source.from === "literal")
+      const schemeKind: unknown = (p.auth.scheme as { kind?: unknown }).kind;
+      if (typeof schemeKind !== "string" || !SCHEME_KINDS.has(schemeKind))
+        fail(fileName, ns, `auth.scheme.kind must be one of ${[...SCHEME_KINDS].join(", ")}`);
+      const sourceFrom: unknown = (p.auth.source as { from?: unknown }).from;
+      if (typeof sourceFrom !== "string" || !SOURCE_FROM.has(sourceFrom))
+        fail(fileName, ns, `auth.source.from must be one of ${[...SOURCE_FROM].join(", ")}`);
+      if (sourceFrom === "literal")
         fail(fileName, ns, "a literal credential source is forbidden — a shared registry must never carry a secret");
     }
   }

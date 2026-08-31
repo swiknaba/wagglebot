@@ -23,6 +23,37 @@ test("rejects auth missing a source with a clean validation error", () => {
   expect(() => loadRegistry(text, "r.yaml")).toThrow(/r\.yaml.*y/);
 });
 
+test("rejects a literal env value on a registry proxy", () => {
+  const text = `proxies:\n  - namespace: x\n    mode: stdio_cmd\n    command: my-mcp\n    env:\n      API_KEY: hunter2\n`;
+  expect(() => loadRegistry(text, "r.yaml")).toThrow(/r\.yaml.*x.*literal/s);
+});
+
+test("accepts a \\${VAR} env expansion on a registry proxy", () => {
+  const text = `proxies:\n  - namespace: x\n    mode: stdio_cmd\n    command: my-mcp\n    env:\n      API_KEY: \${OK_VAR}\n`;
+  const proxies = loadRegistry(text, "r.yaml");
+  expect(proxies[0]?.env).toEqual({ API_KEY: "${OK_VAR}" });
+});
+
+test("rejects an unknown auth.scheme.kind", () => {
+  const text = `proxies:\n  - namespace: x\n    mode: remote_http\n    endpoint: https://x/mcp\n    auth:\n      scheme: { kind: made_up }\n      source: { from: env, var: X }\n`;
+  expect(() => loadRegistry(text, "r.yaml")).toThrow(/scheme\.kind/);
+});
+
+test("rejects an unknown auth.source.from", () => {
+  const text = `proxies:\n  - namespace: x\n    mode: remote_http\n    endpoint: https://x/mcp\n    auth:\n      scheme: { kind: bearer }\n      source: { from: made_up }\n`;
+  expect(() => loadRegistry(text, "r.yaml")).toThrow(/source\.from/);
+});
+
+test("rejects an empty-object auth source", () => {
+  const text = `proxies:\n  - namespace: x\n    mode: remote_http\n    endpoint: https://x/mcp\n    auth:\n      scheme: { kind: bearer }\n      source: {}\n`;
+  expect(() => loadRegistry(text, "r.yaml")).toThrow(/source\.from/);
+});
+
+test("rejects an array auth scheme", () => {
+  const text = `proxies:\n  - namespace: x\n    mode: remote_http\n    endpoint: https://x/mcp\n    auth:\n      scheme: []\n      source: { from: env, var: X }\n`;
+  expect(() => loadRegistry(text, "r.yaml")).toThrow(/auth requires both/);
+});
+
 test("team layer wins per namespace, shallow merge", () => {
   const base = loadRegistry(
     `proxies:\n  - { namespace: a, mode: remote_http, endpoint: https://a/mcp }\n  - { namespace: b, mode: remote_http, endpoint: https://b/mcp }\n`,
