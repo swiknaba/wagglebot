@@ -1,0 +1,28 @@
+{
+  "name": "wagglebot",
+  "version": "0.0.1",
+  "description": "One AI agent setup for a whole engineering team. Placeholder release: the specs are written, the code is not. See the repository.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/swiknaba/wagglebot.git"
+  },
+  "homepage": "https://github.com/swiknaba/wagglebot#readme",
+  "bin": {
+    "wagglebot": "bin/wagglebot.js"
+  },
+  "files": [
+    "bin/",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "ai",
+    "agents",
+    "mcp",
+    "provisioning",
+    "skills"
+  ]
+}
