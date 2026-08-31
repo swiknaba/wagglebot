@@ -88,24 +88,9 @@ service bearer tokens.
 
 ## Releasing
 
-Maintainers release with one command. CI does the publish.
-
-1. Bump the version in `packages/cli/package.json`, in a reviewed pull
-   request.
-2. Run `bin/release` on `main`, with a clean worktree.
-3. Select major, minor, or patch. Confirm.
-
-The script verifies the version, creates the git tag, pushes it, and
-creates the GitHub release with generated notes. The GitHub release
-triggers `.github/workflows/release.yml`, which publishes the package
-to npm with provenance.
-
-No npm token exists. The workflow authenticates through npm trusted
-publishing (OIDC): npm accepts the publish because the run comes from
-`release.yml` in this repository. A failed CI publish leaves the tag
-and the release in place — fix the cause and re-run the workflow.
-
-Watch the publish: `gh run watch`.
+* The package is published on [npm](https://www.npmjs.com/package/wagglebot).
+* GitHub releases serve as the changelog.
+* Run `bin/release` to do both.
 
 ## License
 
