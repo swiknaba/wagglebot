@@ -18,6 +18,11 @@ test("rejects a literal credential source", () => {
   expect(() => loadRegistry(text, "r.yaml")).toThrow(/literal/);
 });
 
+test("rejects auth missing a source with a clean validation error", () => {
+  const text = `proxies:\n  - namespace: y\n    mode: remote_http\n    endpoint: https://y/mcp\n    auth:\n      scheme: { kind: bearer }\n`;
+  expect(() => loadRegistry(text, "r.yaml")).toThrow(/r\.yaml.*y/);
+});
+
 test("team layer wins per namespace, shallow merge", () => {
   const base = loadRegistry(
     `proxies:\n  - { namespace: a, mode: remote_http, endpoint: https://a/mcp }\n  - { namespace: b, mode: remote_http, endpoint: https://b/mcp }\n`,

@@ -10,7 +10,7 @@ const catalog = loadCatalog(
 
 const fakeExec =
   (stored: string, writes: string[][]): Exec =>
-  async (cmd, args) => {
+  async (_cmd, args) => {
     if (args.includes("wagglebot.username") && args.length === 3)
       return { code: stored === "" ? 1 : 0, stdout: `${stored}\n`, stderr: "" };
     writes.push(args);

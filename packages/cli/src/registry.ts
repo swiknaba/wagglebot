@@ -64,8 +64,17 @@ export function loadRegistry(text: string, fileName: string): ProxyConfig[] {
     }
     if (mode === "stdio_cmd" && (p.command === undefined || p.command === ""))
       fail(fileName, ns, "stdio_cmd requires a command");
-    if (p.auth?.source.from === "literal")
-      fail(fileName, ns, "a literal credential source is forbidden — a shared registry must never carry a secret");
+    if (p.auth !== undefined) {
+      if (
+        typeof p.auth.scheme !== "object" ||
+        p.auth.scheme === null ||
+        typeof p.auth.source !== "object" ||
+        p.auth.source === null
+      )
+        fail(fileName, ns, "auth requires both scheme and source");
+      if (p.auth.source.from === "literal")
+        fail(fileName, ns, "a literal credential source is forbidden — a shared registry must never carry a secret");
+    }
   }
   return rawProxies as ProxyConfig[];
 }
