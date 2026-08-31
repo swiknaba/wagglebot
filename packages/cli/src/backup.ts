@@ -23,7 +23,7 @@ export function startBackupSet(backupsDir: string, now = new Date()): BackupSet 
 
 export function newestBackupSet(backupsDir: string): string | undefined {
   if (!existsSync(backupsDir)) return undefined;
-  const sets = readdirSync(backupsDir).toSorted();
+  const sets = [...readdirSync(backupsDir)].sort();
   const last = sets.at(-1);
   return last === undefined ? undefined : join(backupsDir, last);
 }
