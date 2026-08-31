@@ -131,5 +131,5 @@ vector store.
 ### The replacement
 
 Component memory is a Markdown file in the repository,
-`.wagglebot/memory.md` (D29). The shared store keeps the three scopes
+`.agents/memory.md` (D29). The shared store keeps the three scopes
 that cross a boundary.

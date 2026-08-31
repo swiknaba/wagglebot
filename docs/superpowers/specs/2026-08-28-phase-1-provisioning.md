@@ -144,7 +144,7 @@ A team writes its own agents, in a runtime such as
 
 | Kind | Lives in | Distributed by |
 |---|---|---|
-| **Component agent** — useful for one repository | `.wagglebot/agents/` in that repository | Git. Nothing to do. |
+| **Component agent** — useful for one repository | `.agents/subagents/` in that repository | Git. Nothing to do. |
 | **Shared agent** — useful for a team or the organization | A repository of its own | The list below |
 
 A component agent needs no wagglebot feature. Git already gives it to
@@ -233,7 +233,7 @@ The skill covers:
 
    | Answer | Where it goes |
    |---|---|
-   | This repository | `.wagglebot/agents/` in this repository |
+   | This repository | `.agents/subagents/` in this repository |
    | The team or the organization | Its own repository, plus a pull request on `agents.base.list` |
 
 3. **The consequences of each answer**, so the engineer chooses well. A
@@ -451,7 +451,7 @@ Four scopes exist. Pick the smallest one that fits.
 
 | Scope | Content | How to write |
 |---|---|---|
-| `component` | A fact about this one repository | Edit `.wagglebot/memory.md` |
+| `component` | A fact about this one repository | Edit `.agents/memory.md` |
 | `system` | A fact about the whole project | Propose, then ask your engineer |
 | `domain` | A convention across projects | A human publishes it |
 | `org` | A company-wide interface | A human publishes it |
@@ -554,19 +554,28 @@ Not every memory belongs on a server. A fact about one repository
 belongs **in** that repository:
 
 ```
-.wagglebot/memory.md
+.agents/memory.md
 ```
+
+The directory name matters (D29). `.agents/` follows the emerging
+dotagents convention, and it pairs with the `AGENTS.md` standard, so
+an agent that never heard of wagglebot still recognizes it — even late
+in a long session, when the base instructions have lost salience. The
+rule: agents read and write `.agents/`, and wagglebot tooling reads
+`.wagglebot/` (`catalog.yaml`, `public.md`).
 
 Git already distributes that file to everyone who clones the
 repository. A pull request reviews each change, and the history is
-free. A server adds nothing.
+free. A server adds nothing. One deliberate divergence from the draft
+convention: `memory.md` is **committed**, never gitignored, because
+the pull-request review is the feature.
 
 The shared store therefore holds only what crosses a repository
 boundary:
 
 | Scope | Where it lives |
 |---|---|
-| `component` | `.wagglebot/memory.md`, in the repository |
+| `component` | `.agents/memory.md`, in the repository |
 | `system`, `domain`, `org` | The shared memory worker |
 
 A search reads the local file first, then the three shared scopes.
@@ -612,6 +621,6 @@ follows the same pattern.
    config and preserves the other keys. A second run reports the hooks
    as already installed.
 11. **Local component memory.** An agent records a repository fact in
-    `.wagglebot/memory.md` (D29). The file appears in `git status`, so
+    `.agents/memory.md` (D29). The file appears in `git status`, so
     a human reviews it. A later `memory_search` finds it without a
     server call.
