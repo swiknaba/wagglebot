@@ -25,7 +25,7 @@ const scaffoldCompany = (): string => {
 
 const gitExec =
   (calls: string[][]): Exec =>
-  async (cmd, args, opts) => {
+  async (cmd, args, _opts) => {
     calls.push([cmd, ...args]);
     if (cmd === "git" && args.includes("wagglebot.username")) return { code: 0, stdout: "alice\n", stderr: "" };
     return { code: 0, stdout: "", stderr: "" };
@@ -54,7 +54,7 @@ test("a moved pin triggers yarn install and a re-exec, once", async () => {
   const root = scaffoldCompany();
   const home = mkdtempSync(join(tmpdir(), "wgl-home-"));
   const calls: string[][] = [];
-  const exec: Exec = async (cmd, args, opts) => {
+  const exec: Exec = async (cmd, args, _opts) => {
     calls.push([cmd, ...args]);
     if (cmd === "git" && args[0] === "pull") {
       // the pull moves the pin
