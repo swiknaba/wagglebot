@@ -16,7 +16,7 @@ test("scaffolds the company repository with the version substituted", () => {
   expect(pkg.dependencies.wagglebot).toBe("1.4.2");
   expect(pkg.scripts["update:wagglebot"]).toBe("wagglebot update");
   for (const f of [
-    "catalog.yaml",
+    "catalogs/team-payments.yaml",
     "registry.base.yaml",
     "tool_catalog.yaml",
     "skills.list",

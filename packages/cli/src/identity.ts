@@ -7,7 +7,7 @@ export type Ask = (question: string) => Promise<string>;
 const reject = (catalog: Catalog, value: string): never => {
   const near = nearMatches(catalog, value);
   const hint = near.length > 0 ? ` Near matches: ${near.join(", ")}.` : "";
-  throw new Error(`username "${value}" matches no User entity in catalog.yaml.${hint}`);
+  throw new Error(`username "${value}" matches no User entity in the catalog.${hint}`);
 };
 
 export async function getUsername(exec: Exec, ask: Ask, catalog: Catalog): Promise<string> {
@@ -17,7 +17,7 @@ export async function getUsername(exec: Exec, ask: Ask, catalog: Catalog): Promi
     if (findUser(catalog, current) === undefined) reject(catalog, current);
     return current;
   }
-  const answer = (await ask("Company Git username (as listed in catalog.yaml): ")).trim();
+  const answer = (await ask("Company Git username (as listed in the catalog): ")).trim();
   if (findUser(catalog, answer) === undefined) reject(catalog, answer);
   await exec("git", ["config", "--global", "wagglebot.username", answer]);
   return answer;

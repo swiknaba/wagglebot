@@ -25,3 +25,21 @@ test("finds the company root from a nested cwd and reads the pin", () => {
 test("no company repo above cwd throws with guidance", () => {
   expect(() => findCompanyRoot(mkdtempSync(join(tmpdir(), "wgl-none-")))).toThrow(/company repository/);
 });
+
+test("catalogs/ merges one file per team and wins over a root catalog.yaml", () => {
+  const root = scaffold();
+  mkdirSync(join(root, "catalogs"));
+  writeFileSync(join(root, "catalogs/team-a.yaml"), "kind: User\nmetadata: { name: bob }\nspec: { memberOf: [] }\n");
+  writeFileSync(join(root, "catalogs/team-b.yaml"), "kind: User\nmetadata: { name: carol }\nspec: { memberOf: [] }\n");
+  const company = loadCompanyRepo(root);
+  expect(company.catalogPath).toBe(join(root, "catalogs"));
+  expect(company.catalogText).toContain("bob");
+  expect(company.catalogText).toContain("carol");
+  expect(company.catalogText).not.toContain("alice"); // root catalog.yaml is ignored when catalogs/ exists
+});
+
+test("an empty catalogs/ directory throws", () => {
+  const root = scaffold();
+  mkdirSync(join(root, "catalogs"));
+  expect(() => loadCompanyRepo(root)).toThrow(/one catalog file per team/);
+});

@@ -1,5 +1,13 @@
-# Curated skill packages. One pinned entry per line: owner/repo@<tag-or-commit>.
-# A third-party entry MUST pin (D32). Replace <pin-me> with a real tag or commit.
+# Curated skill packages, one per line. The skills CLI installs each entry.
+#
+# "owner/repo" resolves against github.com. Pin each entry to a tag or a
+# commit: owner/repo@v1.2.3. Replace <pin-me> below with a real tag or commit.
+#
+# For a different git host, use a full URL. The URL names its own host, and a
+# ref travels inside the URL. Examples:
+#   https://git.my-company.local/platform/skills.git
+#   git@git.my-company.local:platform/skills.git
+#
 # obra/superpowers@<pin-me>
 # ayghri/i-have-adhd@<pin-me>
-# wagglebot/skills@<pin-me>        # first-party, D33
+# wagglebot/skills@<pin-me>

@@ -1,6 +1,6 @@
-# MCP upstreams for every team. The registry never carries a secret (D10).
-# Credentials: the entry names an environment variable; the value lives in
-# the gitignored .env.credentials file on each workstation.
+# MCP servers for every team. This file never contains a secret.
+# For a credential, an entry names an environment variable. The value lives
+# in the gitignored .env.credentials file on each workstation.
 proxies: []
 # Example:
 # proxies:

@@ -76,7 +76,7 @@ async function companyContext(
 }> {
   const root = findCompanyRoot(cwd);
   const company = loadCompanyRepo(root);
-  const catalog = loadCatalog(company.catalogText, `${root}/catalog.yaml`);
+  const catalog = loadCatalog(company.catalogText, company.catalogPath);
   const username = await getUsername(exec, ask, catalog);
   const teams = teamsOf(catalog, username);
   return { company, catalog, username, teams };

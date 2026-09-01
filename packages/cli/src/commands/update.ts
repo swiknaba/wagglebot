@@ -47,7 +47,7 @@ export async function runUpdate(deps: {
     return rerun.code;
   }
 
-  const catalog = loadCatalog(company.catalogText, join(root, "catalog.yaml"));
+  const catalog = loadCatalog(company.catalogText, company.catalogPath);
   const username = await getUsername(exec, deps.ask, catalog);
   const teams = teamsOf(catalog, username);
 

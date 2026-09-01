@@ -22,3 +22,15 @@ test("parses entries, comments, pins, and warns on unpinned lines", () => {
 test("a malformed line throws and names the line", () => {
   expect(() => parseList("not-a-repo")).toThrow("not-a-repo");
 });
+
+test("a full git URL passes through verbatim, without a pin warning", () => {
+  const text = [
+    "https://git.my-company.local/platform/skills.git",
+    "git@git.my-company.local:platform/skills.git",
+    "ssh://git@git.my-company.local/platform/skills.git",
+  ].join("\n");
+  const { entries, warnings } = parseList(text);
+  expect(entries.map((e) => e.raw)).toEqual(text.split("\n"));
+  expect(entries.every((e) => e.isUrl === true)).toBe(true);
+  expect(warnings).toHaveLength(0);
+});

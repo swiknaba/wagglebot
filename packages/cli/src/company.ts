@@ -1,10 +1,11 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
 export type CompanyRepo = {
   root: string;
   pin: string;
   catalogText: string;
+  catalogPath: string;
   registryBaseText?: string;
   registryTeamText: (team: string) => string | undefined;
   skillsListText?: string;
@@ -35,15 +36,37 @@ export function findCompanyRoot(cwd: string): string {
   }
 }
 
+// Each team maintains its own file in catalogs/. All files merge into one catalog.
+// A small team can keep a single catalog.yaml at the root instead. When both
+// exist, catalogs/ wins.
+const readCatalog = (root: string): { text: string; path: string } => {
+  const dir = join(root, "catalogs");
+  if (existsSync(dir)) {
+    const files = readdirSync(dir)
+      .filter((f) => f.endsWith(".yaml") || f.endsWith(".yml"))
+      .sort();
+    if (files.length === 0) throw new Error(`${dir} holds no .yaml file — add one catalog file per team`);
+    const text = files.map((f) => readFileSync(join(dir, f), "utf8")).join("\n---\n");
+    return { text, path: join(root, "catalogs") };
+  }
+  const single = readOptional(join(root, "catalog.yaml"));
+  if (single === undefined) {
+    throw new Error(
+      `${root} has no catalog — add one .yaml file per team in catalogs/, or a single catalog.yaml at the root`,
+    );
+  }
+  return { text: single, path: join(root, "catalog.yaml") };
+};
+
 export function loadCompanyRepo(root: string): CompanyRepo {
   const pin = pinOf(root);
   if (pin === undefined) throw new Error(`${root}/package.json does not pin the "wagglebot" dependency`);
-  const catalogText = readOptional(join(root, "catalog.yaml"));
-  if (catalogText === undefined) throw new Error(`${root}/catalog.yaml is missing — the catalog is required (D20)`);
+  const catalog = readCatalog(root);
   return {
     root,
     pin,
-    catalogText,
+    catalogText: catalog.text,
+    catalogPath: catalog.path,
     registryBaseText: readOptional(join(root, "registry.base.yaml")),
     registryTeamText: (team) => readOptional(join(root, `registry.team.${team}.yaml`)),
     skillsListText: readOptional(join(root, "skills.list")),

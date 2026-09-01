@@ -1,2 +1,4 @@
 node_modules/
 dist/
+# Install artifacts from a local "yarn install" inside the reference app.
+test-app/yarn.lock

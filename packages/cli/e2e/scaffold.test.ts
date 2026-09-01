@@ -11,8 +11,13 @@ import { ensureBuilt, repoRoot, runCli } from "./helper";
 const REGEN_HINT = "run: bun run regen:test-app";
 const testAppDir = join(repoRoot, "test-app");
 
+// A local "yarn install" inside test-app/ leaves artifacts the scaffold never
+// produces — ignore them, along with .git/ from a checkout.
+const IGNORED = new Set([".git", "node_modules", "yarn.lock"]);
+
 const walk = (dir: string, prefix = ""): string[] =>
   readdirSync(dir, { withFileTypes: true })
+    .filter((entry) => !IGNORED.has(entry.name))
     .flatMap((entry) =>
       entry.isDirectory() ? walk(join(dir, entry.name), `${prefix}${entry.name}/`) : [`${prefix}${entry.name}`],
     )

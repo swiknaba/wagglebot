@@ -25,11 +25,15 @@ export async function runInstallAgents(deps: {
   const entries = deps.listTexts.flatMap(({ text }) => parseList(text).entries);
   const targets = HARNESSES.filter((h) => h.subagentDir !== undefined);
   for (const h of HARNESSES.filter((x) => x.subagentDir === undefined))
-    reporter.item(h.name, "skipped", "no subagent support in Phase 1 (R2)");
+    reporter.item(h.name, "skipped", "no subagent support in Phase 1");
 
   const produced: string[] = [];
   const failedPrefixes: string[] = [];
   for (const entry of entries) {
+    if (entry.isUrl === true) {
+      reporter.item(entry.raw, "failed", "an agent list accepts owner/repo[@ref] only, not a full git URL");
+      continue;
+    }
     const prefix = `${entry.repo.replace("/", "__")}__`;
     const cacheDir = join(paths.agentsCacheDir, entry.repo.replace("/", "__"));
     const git = async (...args: string[]) => exec("git", args);

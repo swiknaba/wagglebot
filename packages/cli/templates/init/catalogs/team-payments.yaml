@@ -1,5 +1,8 @@
 # EDIT: replace every example entity with your own organization.
-# The catalog is authoritative. An unknown value is a hard error (D20, D27).
+# One file per team lives in catalogs/. wagglebot merges all files into one catalog.
+# A small team can delete catalogs/ and keep a single catalog.yaml at the
+# repository root instead.
+# The catalog is the single source of truth. An unknown name is a hard error.
 apiVersion: backstage.io/v1alpha1
 kind: Domain
 metadata:
