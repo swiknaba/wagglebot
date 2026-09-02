@@ -100,9 +100,10 @@ service bearer tokens.
 `test-app/` is a company repository. `wagglebot init` scaffolds it. It
 serves as the reference output of the CLI.
 
-An end-to-end test in CI runs the full provisioning flow — install,
-sync, and the shell block — against a sandboxed home directory, and
-`test-app/` serves as the drift gate for the scaffold output.
+An end-to-end test in CI runs the full provisioning flow against a
+sandboxed home directory. The flow covers install, sync, and the
+shell block. `test-app/` serves as the drift gate for the scaffold
+output.
 
 Regenerate `test-app/` after any change to the scaffold templates or
 the package version:

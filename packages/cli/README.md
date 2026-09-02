@@ -2,11 +2,12 @@
 
 One AI agent setup for a whole engineering team.
 
-This package installs the Phase 1 provisioning layer: the curated
-skills, the curated subagents, one base prompt in every agent harness,
-MCP server configs from a shared registry, and a shell block that
-loads the engineer's credentials. Every mutation lands inside a
-managed block. Content outside that block stays untouched.
+This package installs the Phase 1 provisioning layer. It installs the
+curated skills, the curated subagents, and one base prompt in every
+agent harness. It also installs MCP server configs from a shared
+registry, and a shell block that loads the engineer's credentials.
+Every mutation lands inside a managed block. Content outside that
+block stays untouched.
 
 Requires Node 22.20 or newer.
 
