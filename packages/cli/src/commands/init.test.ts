@@ -16,18 +16,19 @@ test("scaffolds the company repository with the version substituted", () => {
   expect(pkg.dependencies.wagglebot).toBe("1.4.2");
   expect(pkg.scripts["update:wagglebot"]).toBe("wagglebot update");
   for (const f of [
-    "catalogs/team-payments.yaml",
-    "registry.base.yaml",
+    "teams/team-payments/catalog.yaml",
+    "teams/team-payments/README.md",
+    "company/registry.yaml",
     "tool_catalog.yaml",
-    "skills.list",
-    "agents.base.list",
+    "company/skills.list",
+    "company/agents.list",
     ".gitignore",
     ".nvmrc",
     ".env.credentials.example",
     "docker-compose.override.yml",
     "README.md",
-    "instructions/00-example.md",
-    "agents/README.md",
+    "company/instructions/00-example.md",
+    "company/agents/README.md",
   ]) {
     expect(existsSync(join(target, f))).toBe(true);
   }

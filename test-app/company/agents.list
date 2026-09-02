@@ -15,7 +15,8 @@
 #   https://git.my-company.local/platform/agents.git v1.2.0
 #   git@git.my-company.local:platform/agents.git
 #
-# Two other kinds of subagent need no entry here:
-#   - A subagent for the whole company is committed to agents/ in this repository.
+# Other kinds of subagent need no entry here:
+#   - A subagent for the whole company is committed to company/agents/ in this repository.
+#   - A subagent for one team is committed to teams/<team>/agents/.
 #   - A subagent for one component is committed to .agents/subagents/ in the
 #     repository of that component.

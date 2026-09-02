@@ -1,6 +1,7 @@
 import { writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { homedir } from "node:os";
+import { join } from "node:path";
 import { createInterface } from "node:readline/promises";
 import { parseArgs } from "node:util";
 import type { Catalog } from "./catalog";
@@ -11,12 +12,13 @@ import { resolveSkillsBin, runInstallSkills } from "./commands/install-skills";
 import { runSyncAgents } from "./commands/sync-agents";
 import { runUpdate } from "./commands/update";
 import { runWriteMcp } from "./commands/write-mcp";
-import { findCompanyRoot, loadCompanyRepo } from "./company";
+import { assertTeamDirsKnown, findCompanyRoot, loadCompanyRepo } from "./company";
 import type { Exec } from "./exec";
 import { realExec } from "./exec";
 import { HARNESSES } from "./harness";
 import type { Ask } from "./identity";
 import { getUsername } from "./identity";
+import type { ProxyConfig } from "./registry";
 import { loadRegistry, mergeRegistries } from "./registry";
 import { createReporter } from "./report";
 
@@ -77,6 +79,10 @@ async function companyContext(
   const root = findCompanyRoot(cwd);
   const company = loadCompanyRepo(root);
   const catalog = loadCatalog(company.catalogText, company.catalogPath);
+  assertTeamDirsKnown(
+    company,
+    catalog.groups.map((g) => g.name),
+  );
   const username = await getUsername(exec, ask, catalog);
   const teams = teamsOf(catalog, username);
   return { company, catalog, username, teams };
@@ -144,9 +150,9 @@ export async function main(argv: string[], deps: CliDeps = { write: console.log 
       const { values } = parseArgs({ args: rest, options: { update: { type: "boolean" } } });
       const root = findCompanyRoot(cwd);
       const company = loadCompanyRepo(root);
-      const listPath = `${root}/skills.list`;
+      const listPath = join(company.company.dir, "skills.list");
       const code = await runInstallSkills({
-        listText: company.skillsListText,
+        listText: company.company.skillsListText,
         listPath,
         exec,
         reporter,
@@ -162,8 +168,12 @@ export async function main(argv: string[], deps: CliDeps = { write: console.log 
       const { company, teams } = await companyContext(cwd, exec, ask);
       const code = await runInstallAgents({
         home,
-        listTexts: company.agentListTexts(teams),
-        companyAgentsDir: company.agentsDir,
+        listTexts: company
+          .layersFor(teams)
+          .flatMap((l) =>
+            l.agentsListText === undefined ? [] : [{ path: `${l.name}/agents.list`, text: l.agentsListText }],
+          ),
+        companyAgentsDir: company.company.agentsDir,
         exec,
         reporter,
       });
@@ -180,7 +190,7 @@ export async function main(argv: string[], deps: CliDeps = { write: console.log 
       let instructionsDir: string | undefined;
       try {
         const root = findCompanyRoot(cwd);
-        instructionsDir = loadCompanyRepo(root).instructionsDir;
+        instructionsDir = loadCompanyRepo(root).company.instructionsDir;
       } catch {
         instructionsDir = undefined;
       }
@@ -201,13 +211,14 @@ export async function main(argv: string[], deps: CliDeps = { write: console.log 
     if (command === "write-mcp") {
       const { values } = parseArgs({ args: rest, options: { "dry-run": { type: "boolean" } } });
       const { company, teams } = await companyContext(cwd, exec, ask);
-      const base =
-        company.registryBaseText === undefined ? [] : loadRegistry(company.registryBaseText, "registry.base.yaml");
-      const merged = teams.reduce((acc, team) => {
-        const text = company.registryTeamText(team);
-        return text === undefined ? acc : mergeRegistries(acc, loadRegistry(text, `registry.team.${team}.yaml`));
-      }, base);
-      const code = runWriteMcp({ home, proxies: merged, reporter, dryRun: values["dry-run"] === true });
+      const proxies = company
+        .layersFor(teams)
+        .filter((l) => l.registryText !== undefined)
+        .reduce<ProxyConfig[]>(
+          (acc, l) => mergeRegistries(acc, loadRegistry(l.registryText ?? "", `${l.name}/registry.yaml`)),
+          [],
+        );
+      const code = runWriteMcp({ home, proxies, reporter, dryRun: values["dry-run"] === true });
       deps.write(reporter.summary());
       return code;
     }

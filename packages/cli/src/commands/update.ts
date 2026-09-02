@@ -1,11 +1,12 @@
 import { join } from "node:path";
 import { startBackupSet } from "../backup";
 import { loadCatalog, teamsOf } from "../catalog";
-import { findCompanyRoot, loadCompanyRepo } from "../company";
+import { assertTeamDirsKnown, findCompanyRoot, loadCompanyRepo } from "../company";
 import type { Exec } from "../exec";
 import type { Ask } from "../identity";
 import { getUsername } from "../identity";
 import { resolvePaths } from "../paths";
+import type { ProxyConfig } from "../registry";
 import { loadRegistry, mergeRegistries } from "../registry";
 import type { Reporter } from "../report";
 import { runInstallAgents } from "./install-agents";
@@ -48,6 +49,10 @@ export async function runUpdate(deps: {
   }
 
   const catalog = loadCatalog(company.catalogText, company.catalogPath);
+  assertTeamDirsKnown(
+    company,
+    catalog.groups.map((g) => g.name),
+  );
   const username = await getUsername(exec, deps.ask, catalog);
   const teams = teamsOf(catalog, username);
 
@@ -56,29 +61,34 @@ export async function runUpdate(deps: {
   const backups = startBackupSet(resolvePaths(deps.home).backupsDir);
 
   await runInstallSkills({
-    listText: company.skillsListText,
-    listPath: join(root, "skills.list"),
+    listText: company.company.skillsListText,
+    listPath: join(company.company.dir, "skills.list"),
     exec,
     reporter,
     skillsBin: deps.skillsBin,
   });
   await runInstallAgents({
     home: deps.home,
-    listTexts: company.agentListTexts(teams),
-    companyAgentsDir: company.agentsDir,
+    listTexts: company
+      .layersFor(teams)
+      .flatMap((l) =>
+        l.agentsListText === undefined ? [] : [{ path: `${l.name}/agents.list`, text: l.agentsListText }],
+      ),
+    companyAgentsDir: company.company.agentsDir,
     exec,
     reporter,
     backups,
   });
-  runSyncAgents({ home: deps.home, instructionsDir: company.instructionsDir, reporter, backups });
+  runSyncAgents({ home: deps.home, instructionsDir: company.company.instructionsDir, reporter, backups });
 
-  const base =
-    company.registryBaseText === undefined ? [] : loadRegistry(company.registryBaseText, "registry.base.yaml");
-  const merged = teams.reduce((acc, team) => {
-    const text = company.registryTeamText(team);
-    return text === undefined ? acc : mergeRegistries(acc, loadRegistry(text, `registry.team.${team}.yaml`));
-  }, base);
-  runWriteMcp({ home: deps.home, proxies: merged, reporter, backups });
+  const proxies = company
+    .layersFor(teams)
+    .filter((l) => l.registryText !== undefined)
+    .reduce<ProxyConfig[]>(
+      (acc, l) => mergeRegistries(acc, loadRegistry(l.registryText ?? "", `${l.name}/registry.yaml`)),
+      [],
+    );
+  runWriteMcp({ home: deps.home, proxies, reporter, backups });
 
   write(reporter.summary());
   return reporter.failed() ? 1 : 0;

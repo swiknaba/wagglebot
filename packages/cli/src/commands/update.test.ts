@@ -11,15 +11,16 @@ import { runUpdate } from "./update";
 const scaffoldCompany = (): string => {
   const root = mkdtempSync(join(tmpdir(), "wgl-co-"));
   writeFileSync(join(root, "package.json"), JSON.stringify({ dependencies: { wagglebot: "1.4.2" } }));
+  mkdirSync(join(root, "company/instructions"), { recursive: true });
   writeFileSync(
-    join(root, "catalog.yaml"),
-    "kind: Group\nmetadata: { name: t }\nspec: { members: [alice] }\n---\nkind: User\nmetadata: { name: alice }\nspec: { memberOf: [t] }\n",
-  );
-  writeFileSync(
-    join(root, "registry.base.yaml"),
+    join(root, "company/registry.yaml"),
     "proxies:\n  - { namespace: ex, mode: remote_http, endpoint: https://ex/mcp }\n",
   );
-  mkdirSync(join(root, "instructions"));
+  mkdirSync(join(root, "teams/t"), { recursive: true });
+  writeFileSync(
+    join(root, "teams/t/catalog.yaml"),
+    "kind: Group\nmetadata: { name: t }\nspec: { members: [alice] }\n---\nkind: User\nmetadata: { name: alice }\nspec: { memberOf: [t] }\n",
+  );
   return root;
 };
 

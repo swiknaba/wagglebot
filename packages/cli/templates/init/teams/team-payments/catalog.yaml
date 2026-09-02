@@ -1,8 +1,8 @@
 # EDIT: replace every example entity with your own organization.
-# One file per team lives in catalogs/. wagglebot merges all files into one catalog.
-# A small team can delete catalogs/ and keep a single catalog.yaml at the
-# repository root instead.
+# One directory per team lives in teams/. The directory name must equal the Group name.
+# wagglebot merges every catalog.yaml (company/ and teams/*/) into one catalog.
 # The catalog is the single source of truth. An unknown name is a hard error.
+# Every engineer needs a User entity here before the first `wagglebot update`.
 apiVersion: backstage.io/v1alpha1
 kind: Domain
 metadata:
