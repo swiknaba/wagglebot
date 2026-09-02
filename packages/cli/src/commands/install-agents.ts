@@ -3,7 +3,7 @@ import { basename, join } from "node:path";
 import type { BackupSet } from "../backup";
 import { startBackupSet } from "../backup";
 import type { Exec } from "../exec";
-import { HARNESSES } from "../harness";
+import type { Harness } from "../harness";
 import { type ListEntry, parseList } from "../lists";
 import { resolvePaths } from "../paths";
 import type { Reporter } from "../report";
@@ -29,8 +29,9 @@ export function resolveSource(entry: ListEntry): AgentSource {
 
 export async function runInstallAgents(deps: {
   home: string;
+  harnesses: Harness[];
   listTexts: { path: string; text: string }[];
-  companyAgentsDir?: string;
+  agentDirs: { prefix: string; dir: string }[];
   exec: Exec;
   reporter: Reporter;
   backups?: BackupSet;
@@ -42,9 +43,11 @@ export async function runInstallAgents(deps: {
   reporter.section("Custom agents");
 
   const entries = deps.listTexts.flatMap(({ text }) => parseList(text).entries);
-  const targets = HARNESSES.filter((h) => h.subagentDir !== undefined);
-  for (const h of HARNESSES.filter((x) => x.subagentDir === undefined))
-    reporter.item(h.name, "skipped", "no subagent support in Phase 1");
+  const targets = deps.harnesses.filter((h) => h.subagentDir !== undefined);
+  const without = deps.harnesses.filter((h) => h.subagentDir === undefined).map((h) => h.name);
+  if (without.length > 0) {
+    reporter.item("subagents", "skipped", `no Markdown subagent directory: ${without.join(", ")}`);
+  }
 
   const produced: string[] = [];
   const failedPrefixes: string[] = [];
@@ -99,9 +102,9 @@ export async function runInstallAgents(deps: {
     }
   }
 
-  const companyAgentsDir = deps.companyAgentsDir;
-  if (companyAgentsDir !== undefined && existsSync(companyAgentsDir)) {
-    const files = readdirSync(companyAgentsDir)
+  for (const { prefix, dir: agentsDir } of deps.agentDirs) {
+    if (!existsSync(agentsDir)) continue;
+    const files = readdirSync(agentsDir)
       .filter((f) => f.endsWith(".md"))
       .filter((f) => f.toLowerCase() !== "readme.md")
       .sort();
@@ -109,8 +112,8 @@ export async function runInstallAgents(deps: {
       const dir = join(home, harness.subagentDir ?? "");
       mkdirSync(dir, { recursive: true });
       for (const file of files) {
-        const dest = join(dir, `company__${file}`);
-        const content = readFileSync(join(companyAgentsDir, file), "utf8");
+        const dest = join(dir, `${prefix}${file}`);
+        const content = readFileSync(join(agentsDir, file), "utf8");
         installFile(dest, content);
       }
     }

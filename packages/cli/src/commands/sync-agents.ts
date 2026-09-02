@@ -2,7 +2,8 @@ import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileS
 import { dirname, join } from "node:path";
 import type { BackupSet } from "../backup";
 import { newestBackupSet, restoreSet, startBackupSet } from "../backup";
-import { HARNESSES, templatesDir } from "../harness";
+import type { Harness } from "../harness";
+import { templatesDir } from "../harness";
 import { renderManagedBlock } from "../managed-block";
 import { mergeHooks } from "../managed-json";
 import { resolvePaths } from "../paths";
@@ -15,7 +16,8 @@ const readIfExists = (path: string): string => (existsSync(path) ? readFileSync(
 
 export function runSyncAgents(deps: {
   home: string;
-  instructionsDir?: string;
+  harnesses: Harness[];
+  instructionDirs: string[];
   reporter: Reporter;
   options?: SyncOptions;
   backups?: BackupSet;
@@ -36,14 +38,14 @@ export function runSyncAgents(deps: {
   }
 
   const base = readFileSync(join(templatesDir(), "AGENTS.base.md"), "utf8");
-  const instructionsDir = deps.instructionsDir;
-  const instructions =
-    instructionsDir !== undefined && existsSync(instructionsDir)
-      ? [...readdirSync(instructionsDir)]
-          .filter((f) => f.endsWith(".md"))
-          .sort()
-          .map((f) => readFileSync(join(instructionsDir, f), "utf8"))
-      : [];
+  const instructions = deps.instructionDirs
+    .filter((dir) => existsSync(dir))
+    .flatMap((dir) =>
+      [...readdirSync(dir)]
+        .filter((f) => f.endsWith(".md"))
+        .sort()
+        .map((f) => readFileSync(join(dir, f), "utf8")),
+    );
   const rendered = renderTemplate(base, instructions);
   const backups = deps.backups ?? startBackupSet(paths.backupsDir);
 
@@ -73,7 +75,7 @@ export function runSyncAgents(deps: {
     }
   };
 
-  for (const harness of HARNESSES) {
+  for (const harness of deps.harnesses) {
     for (const relative of harness.templateTargets) {
       writeTarget(relative, (existing) => renderManagedBlock(existing, rendered), 0o600);
     }
