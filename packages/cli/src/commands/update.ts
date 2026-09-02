@@ -3,6 +3,7 @@ import { startBackupSet } from "../backup";
 import { loadCatalog, teamsOf } from "../catalog";
 import { assertTeamDirsKnown, findCompanyRoot, loadCompanyRepo } from "../company";
 import type { Exec } from "../exec";
+import { HARNESS_CONFIG_KEY, selectHarnesses } from "../harness-select";
 import type { Ask } from "../identity";
 import { getUsername } from "../identity";
 import { resolvePaths } from "../paths";
@@ -12,6 +13,7 @@ import type { Reporter } from "../report";
 import { runInstallAgents } from "./install-agents";
 import { runInstallSkills } from "./install-skills";
 import { runSyncAgents } from "./sync-agents";
+import { runSyncShell } from "./sync-shell";
 import { runWriteMcp } from "./write-mcp";
 
 export async function runUpdate(deps: {
@@ -53,42 +55,60 @@ export async function runUpdate(deps: {
     company,
     catalog.groups.map((g) => g.name),
   );
-  const username = await getUsername(exec, deps.ask, catalog);
+  const username = await getUsername(exec, deps.ask, catalog, { companyRoot: root });
   const teams = teamsOf(catalog, username);
+
+  const { harnesses, source } = await selectHarnesses(deps.home, exec);
+  const hint =
+    source === "detected"
+      ? `detected — override with: git config --global ${HARNESS_CONFIG_KEY} <names>`
+      : "from git config";
+  write(`harnesses: ${harnesses.map((h) => h.name).join(", ")} (${hint})`);
+
+  const layers = company.layersFor(teams);
+  const paths = resolvePaths(deps.home);
 
   // One backup set for the whole update, so `sync-agents --restore` restores everything this
   // run touched instead of only whichever command happened to run last.
-  const backups = startBackupSet(resolvePaths(deps.home).backupsDir);
+  const backups = startBackupSet(paths.backupsDir);
 
   await runInstallSkills({
-    listText: company.company.skillsListText,
-    listPath: join(company.company.dir, "skills.list"),
+    lists: layers.flatMap((l) =>
+      l.skillsListText === undefined ? [] : [{ path: join(l.dir, "skills.list"), text: l.skillsListText }],
+    ),
     exec,
     reporter,
     skillsBin: deps.skillsBin,
+    skillsAgents: harnesses.flatMap((h) => (h.skillsAgent ? [h.skillsAgent] : [])),
+    managedFile: paths.managedFile,
   });
   await runInstallAgents({
     home: deps.home,
-    listTexts: company
-      .layersFor(teams)
-      .flatMap((l) =>
-        l.agentsListText === undefined ? [] : [{ path: `${l.name}/agents.list`, text: l.agentsListText }],
-      ),
-    companyAgentsDir: company.company.agentsDir,
+    harnesses,
+    listTexts: layers.flatMap((l) =>
+      l.agentsListText === undefined ? [] : [{ path: `${l.name}/agents.list`, text: l.agentsListText }],
+    ),
+    agentDirs: layers.map((l) => ({ prefix: `${l.name}__`, dir: l.agentsDir })),
     exec,
     reporter,
     backups,
   });
-  runSyncAgents({ home: deps.home, instructionsDir: company.company.instructionsDir, reporter, backups });
+  runSyncAgents({
+    home: deps.home,
+    harnesses,
+    instructionDirs: layers.map((l) => l.instructionsDir),
+    reporter,
+    backups,
+  });
+  runSyncShell({ home: deps.home, companyRoot: root, reporter, backups });
 
-  const proxies = company
-    .layersFor(teams)
+  const proxies = layers
     .filter((l) => l.registryText !== undefined)
     .reduce<ProxyConfig[]>(
       (acc, l) => mergeRegistries(acc, loadRegistry(l.registryText ?? "", `${l.name}/registry.yaml`)),
       [],
     );
-  runWriteMcp({ home: deps.home, proxies, reporter, backups });
+  runWriteMcp({ home: deps.home, harnesses, proxies, env: process.env, reporter, backups });
 
   write(reporter.summary());
   return reporter.failed() ? 1 : 0;

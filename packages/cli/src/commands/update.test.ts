@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { newestBackupSet, restoreSet } from "../backup";
@@ -29,12 +29,14 @@ const gitExec =
   async (cmd, args, _opts) => {
     calls.push([cmd, ...args]);
     if (cmd === "git" && args.includes("wagglebot.username")) return { code: 0, stdout: "alice\n", stderr: "" };
+    if (cmd === "git" && args.includes("wagglebot.harnesses")) return { code: 1, stdout: "", stderr: "" };
     return { code: 0, stdout: "", stderr: "" };
   };
 
 test("pulls, provisions, and prints a summary", async () => {
   const root = scaffoldCompany();
   const home = mkdtempSync(join(tmpdir(), "wgl-home-"));
+  mkdirSync(join(home, ".claude"), { recursive: true });
   const calls: string[][] = [];
   const lines: string[] = [];
   const code = await runUpdate({
@@ -49,11 +51,24 @@ test("pulls, provisions, and prints a summary", async () => {
   expect(code).toBe(0);
   expect(calls[0]).toEqual(["git", "pull", "--ff-only"]);
   expect(lines.join("\n")).toContain("failed 0");
+  expect(existsSync(join(home, ".zshenv"))).toBe(true);
+
+  // The installers run in the documented order.
+  const sections = ["Skills", "Custom agents", "Base template sync", "Shell environment", "MCP configs"].map((s) =>
+    lines.indexOf(`== ${s} ==`),
+  );
+  for (const index of sections) expect(index).toBeGreaterThanOrEqual(0);
+  for (let i = 1; i < sections.length; i += 1) {
+    const prev = sections[i - 1] ?? -1;
+    const current = sections[i] ?? -1;
+    expect(current).toBeGreaterThan(prev);
+  }
 });
 
 test("a moved pin triggers yarn install and a re-exec, once", async () => {
   const root = scaffoldCompany();
   const home = mkdtempSync(join(tmpdir(), "wgl-home-"));
+  mkdirSync(join(home, ".claude"), { recursive: true });
   const calls: string[][] = [];
   const exec: Exec = async (cmd, args, _opts) => {
     calls.push([cmd, ...args]);
@@ -62,6 +77,7 @@ test("a moved pin triggers yarn install and a re-exec, once", async () => {
       writeFileSync(join(root, "package.json"), JSON.stringify({ dependencies: { wagglebot: "1.5.0" } }));
     }
     if (cmd === "git" && args.includes("wagglebot.username")) return { code: 0, stdout: "alice\n", stderr: "" };
+    if (cmd === "git" && args.includes("wagglebot.harnesses")) return { code: 1, stdout: "", stderr: "" };
     return { code: 0, stdout: "", stderr: "" };
   };
   const quiet = createReporter(() => {}, false);
