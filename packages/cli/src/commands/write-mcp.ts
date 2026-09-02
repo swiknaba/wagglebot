@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { BackupSet } from "../backup";
 import { startBackupSet } from "../backup";
-import { HARNESSES } from "../harness";
+import type { Harness } from "../harness";
 import { mergeManagedSection } from "../managed-json";
 import { resolvePaths } from "../paths";
 import type { AuthScheme, CredentialSource, ProxyConfig } from "../registry";
@@ -41,9 +41,24 @@ export function proxyToClaudeEntry(p: ProxyConfig): Record<string, unknown> {
   return { command: p.command ?? "", args: p.args ?? [], ...withEnv };
 }
 
+// Every ${VAR} the written config will expand. Missing ones are reported, never guessed.
+export function missingEnvVars(proxies: ProxyConfig[], env: NodeJS.ProcessEnv): string[] {
+  const names = new Set<string>();
+  for (const p of proxies) {
+    if (p.auth?.source.from === "env") names.add(p.auth.source.var);
+    for (const value of Object.values(p.env ?? {})) {
+      const m = /^\$\{([A-Za-z_][A-Za-z0-9_]*)\}$/.exec(value);
+      if (m?.[1] !== undefined) names.add(m[1]);
+    }
+  }
+  return [...names].filter((n) => env[n] === undefined || env[n] === "").sort();
+}
+
 export function runWriteMcp(deps: {
   home: string;
+  harnesses: Harness[];
   proxies: ProxyConfig[];
+  env: NodeJS.ProcessEnv;
   reporter: Reporter;
   dryRun?: boolean;
   backups?: BackupSet;
@@ -54,12 +69,18 @@ export function runWriteMcp(deps: {
   const backups = deps.backups ?? startBackupSet(paths.backupsDir);
   reporter.section("MCP configs");
 
-  for (const harness of HARNESSES) {
+  for (const name of missingEnvVars(proxies, deps.env)) {
+    reporter.item(name, "skipped", "not set in this shell — add it to .env.credentials, then open a new terminal");
+  }
+
+  const without = deps.harnesses.filter((h) => h.mcpTarget === undefined).map((h) => h.name);
+  if (without.length > 0) {
+    reporter.item("mcp", "skipped", `no MCP config adapter: ${without.join(", ")}`);
+  }
+
+  for (const harness of deps.harnesses) {
     const mcpTarget = harness.mcpTarget;
-    if (mcpTarget === undefined) {
-      reporter.item(harness.name, "skipped", "no MCP config adapter in Phase 1 (R2)");
-      continue;
-    }
+    if (mcpTarget === undefined) continue;
     try {
       const target = join(home, mcpTarget.path);
       const usable = proxies.filter((p) => !(p.auth !== undefined && p.auth.source.from === "file"));
@@ -71,6 +92,10 @@ export function runWriteMcp(deps: {
       const previouslyOwned = (state.jsonKeys[target] ?? [])
         .filter((k) => k.startsWith(prefix))
         .map((k) => k.slice(prefix.length));
+      if (Object.keys(entries).length === 0 && previouslyOwned.length === 0) {
+        reporter.item(mcpTarget.path, "skipped", "no MCP servers in the registry — file not created");
+        continue;
+      }
       const existing = existsSync(target) ? readFileSync(target, "utf8") : "";
       const result = mergeManagedSection(existing, mcpTarget.parentKey, entries, previouslyOwned);
       if (!result.changed) {

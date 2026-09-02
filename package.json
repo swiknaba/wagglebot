@@ -8,7 +8,8 @@
     "check": "biome check .",
     "typecheck": "tsc --noEmit",
     "test": "bun test",
-    "build": "bun run --cwd packages/cli build"
+    "build": "bun run --cwd packages/cli build",
+    "regen:test-app": "node scripts/regen-test-app.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "2.2.0",

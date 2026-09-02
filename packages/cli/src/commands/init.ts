@@ -5,6 +5,7 @@ import type { Reporter } from "../report";
 
 const RENAMES: Record<string, string> = {
   gitignore: ".gitignore",
+  nvmrc: ".nvmrc",
   "env.credentials.example": ".env.credentials.example",
 };
 const SUBSTITUTED = new Set(["package.json", "README.md"]);

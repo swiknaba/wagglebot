@@ -34,3 +34,17 @@ test("rejects a non-matching answer with near matches", async () => {
 test("rejects a stored value that no longer matches", async () => {
   await expect(getUsername(fakeExec("ghost", []), async () => "n/a", catalog)).rejects.toThrow(/ghost/);
 });
+
+test("a rejected answer explains how to add the User entity", async () => {
+  const exec: Exec = async () => ({ code: 1, stdout: "", stderr: "" });
+  await expect(getUsername(exec, async () => "carol", catalog, { companyRoot: "/srv/co" })).rejects.toThrow(
+    /teams\/<your-team>\/catalog\.yaml.*\/srv\/co/s,
+  );
+});
+
+test("a rejected stored name explains how to change it", async () => {
+  const exec: Exec = async () => ({ code: 0, stdout: "ghost\n", stderr: "" });
+  await expect(getUsername(exec, async () => "", catalog)).rejects.toThrow(
+    /git config --global --unset wagglebot\.username/,
+  );
+});

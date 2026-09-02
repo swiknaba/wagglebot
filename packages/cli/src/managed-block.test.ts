@@ -24,3 +24,14 @@ test("is idempotent", () => {
 test("a lone begin marker throws", () => {
   expect(() => renderManagedBlock(`${BLOCK_BEGIN}\nx`, "y")).toThrow("end marker");
 });
+
+test("hash style uses shell comment markers", () => {
+  const { next } = renderManagedBlock("export A=1\n", "export B=2", "hash");
+  expect(next).toBe("export A=1\n# wagglebot:begin\nexport B=2\n# wagglebot:end\n");
+  expect(renderManagedBlock(next, "export B=2", "hash").changed).toBe(false);
+});
+
+test("an html append onto a line without a trailing newline still gets a blank line", () => {
+  const { next } = renderManagedBlock("text", "RULES v1");
+  expect(next).toContain("text\n\n<!-- wagglebot:begin -->");
+});

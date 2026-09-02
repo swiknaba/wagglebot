@@ -33,7 +33,8 @@ commands — `git clone <company repo>`, `yarn install`,
 * The curated skills and subagents.
 * The base prompt, in every agent harness.
 * The MCP server configs, from one curated registry.
-* Your credentials stay on your machine, in one gitignored file.
+* Your credentials stay on your machine in one gitignored file, and
+  load into every new shell.
 
 An engineer clones, installs, runs the update, and works. Nothing
 listens on a port, and git access is the whole permission system. A
@@ -93,6 +94,26 @@ service bearer tokens.
 * The package is published on [npm](https://www.npmjs.com/package/wagglebot).
 * GitHub releases serve as the changelog.
 * Run `bin/release` to do both.
+
+## Test App
+
+`test-app/` is a company repository. `wagglebot init` scaffolds it. It
+serves as the reference output of the CLI.
+
+An end-to-end test in CI runs the full provisioning flow against a
+sandboxed home directory. The flow covers the base prompt sync, the
+hooks, and the shell block. `test-app/` serves as the drift gate for
+the scaffold output.
+
+Regenerate `test-app/` after any change to the scaffold templates or
+the package version:
+
+```sh
+bun run regen:test-app
+```
+
+Commit the result. The end-to-end test fails, and names the drifted
+file, when `test-app/` falls behind the real scaffold output.
 
 ## License
 

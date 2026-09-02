@@ -16,7 +16,10 @@ jobs:
       - run: bun audit --audit-level high
       - run: bun run build
       - uses: actions/setup-node@v7.0.0
-        with: { node-version: 20 }
+        with: { node-version: 22 }
+      - run: node packages/cli/bin/wagglebot.js --version
+      - uses: actions/setup-node@v7.0.0
+        with: { node-version: 24 }
       - run: node packages/cli/bin/wagglebot.js --version
   osv:
     runs-on: ubuntu-latest

@@ -1,5 +1,0 @@
-# Curated skill packages. One pinned entry per line: owner/repo@<tag-or-commit>.
-# A third-party entry MUST pin (D32). Replace <pin-me> with a real tag or commit.
-# obra/superpowers@<pin-me>
-# ayghri/i-have-adhd@<pin-me>
-# wagglebot/skills@<pin-me>        # first-party, D33

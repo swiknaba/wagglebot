@@ -35,8 +35,8 @@ The scaffolded `package.json` carries the alias:
 2. `yarn install`, when the wagglebot pin moved. The CLI therefore
    updates itself through the normal dependency path, and the pin bump
    is a reviewed pull request, never a silent upgrade.
-3. Run the installers: `install-skills`, `install-agents`,
-   `sync-agents`, and the MCP config writer.
+3. Run the installers, in order: `install-skills`, `install-agents`,
+   `sync-agents`, `sync-shell`, and the MCP config writer.
 4. Print a summary: current, updated, and failed items.
 
 `wagglebot update --help` explains what the command touches, file by
@@ -70,8 +70,8 @@ is rejected with the list of near matches, never accepted silently
 (P35).
 
 **MCP configs are written, not proxied (Phase 1).** The update command
-reads `registry.base.yaml` and the team layers, finds the team of the
-engineer in `catalog.yaml` by git username, merges shallowly, and
+reads `company/registry.yaml` and each `teams/<team>/registry.yaml`,
+finds the team of the engineer in `catalog.yaml` by git username, merges shallowly, and
 writes the result into each harness MCP config, inside the managed
 block. Credentials resolve locally per D10: the config names an
 environment variable, and the value stays in `.env.credentials`.
@@ -79,16 +79,61 @@ The Phase 2 hub replaces this written config when the tool count needs
 aggregation (see the
 [phase 2 spec](2026-08-28-phase-2-shared-layer.md)).
 
-## Curated Skills List
-
-`skills.list`, in the company repository, is a versioned list of skill packages. The
-format is one **pinned** entry per line: `owner/repo@<ref>`, where the
-ref is a tag or a commit hash. Comments are allowed. Seed content:
+**Harness selection.** Wagglebot provisions every harness whose home
+directory already exists, for example `~/.claude` or `~/.codex`. An
+engineer overrides detection with an explicit, comma-separated list:
 
 ```
-obra/superpowers@<pinned-ref>
-ayghri/i-have-adhd@<pinned-ref>
-wagglebot/skills@<pinned-ref>        # first-party, D33
+git config --global wagglebot.harnesses claude-code,codex
+```
+
+That key wins over detection whenever it is set. An unknown name in
+the list is a hard error, and it names the valid harnesses.
+
+**Credentials reach the shell.** `sync-shell` adds a managed block to
+`~/.zshenv` (and to `~/.bashrc`, when that file already exists) that
+sources `templates/shell/wagglebot.sh`, a script the wagglebot package
+ships. That script exports every line of the company repository's
+gitignored `.env.credentials` file into the shell. An agent harness
+started from a new terminal then sees the variables, and can expand
+`${VAR}` in its MCP config.
+
+## Company Repository Layout
+
+`company/` and every `teams/<team>/` directory share one shape. The
+team directory name must equal the Group name in `catalog.yaml`.
+
+```
+package.json  README.md  .gitignore  .nvmrc  .env.credentials.example  tool_catalog.yaml  docker-compose.override.yml
+company/
+  catalog.yaml        (optional) entities shared by everyone
+  registry.yaml       MCP servers for everyone
+  skills.list         curated skills for everyone
+  agents.list         shared subagents from other repositories, for everyone
+  agents/*.md         company subagents
+  instructions/*.md   company instructions
+teams/<team>/         same six items, for the members of Group <team>
+  catalog.yaml        the Group, its Users, its Domains and Systems
+  registry.yaml  skills.list  agents.list  agents/  instructions/
+```
+
+Every `catalog.yaml` merges into one catalog. A `teams/<team>/`
+directory that names no matching Group is a hard error.
+
+## Curated Skills List
+
+`company/skills.list` and `teams/<team>/skills.list`, in the company
+repository, are versioned lists of skill packages. The format is one
+**pinned** entry per line: `owner/repo@<ref>`. Comments are allowed.
+
+The skills CLI checks out a tag or a branch, never a commit hash, so a
+skills pin is always a tag. `install-skills` rejects a commit-hash ref.
+
+Seed content, both real entries:
+
+```
+obra/superpowers@v6.3.0
+ayghri/i-have-adhd@main
 ```
 
 **One pin rule covers every list** (D32). An entry outside your
@@ -161,23 +206,35 @@ A team writes its own agents, in a runtime such as
 | Kind | Lives in | Distributed by |
 |---|---|---|
 | **Component agent** — useful for one repository | `.agents/subagents/` in that repository | Git. Nothing to do. |
+| **Company agent** — useful for the whole company | `company/agents/` | `wagglebot update`, with no list entry |
+| **Team agent** — useful for one team | `teams/<team>/agents/` | `wagglebot update`, with no list entry |
 | **Shared agent** — useful for a team or the organization | A repository of its own | The list below |
 
 A component agent needs no wagglebot feature. Git already gives it to
 everyone who clones the repository, a pull request reviews each change,
 and the history is free. This mirrors component memory (D29).
 
+The list stays for a shared agent maintained in a repository of its own,
+separate from the company repository.
+
 ### The lists
 
 Two layers, which compose the same way the registry does:
 
 ```
-agents.base.list                  # every engineer, in the company repository
-agents.team.<team>.list           # one team
+company/agents.list               # every engineer
+teams/<team>/agents.list          # members of Group <team>
 ```
 
-One entry per line, `owner/repo`, with an optional `@<ref>`. Comments
-are allowed.
+Company agents authored in this repository live in `company/agents/`.
+Team agents live in `teams/<team>/agents/`. Both directories install
+through `wagglebot update`, with no list entry.
+
+One entry per line. A GitHub repository is written as `owner/repo`,
+with an optional `@<ref>`. A repository on any other git host is
+written as its full clone URL, followed by an optional ref after a
+space. Comments are
+allowed.
 
 Wagglebot ships the mechanism and an **empty** list with commented
 examples. The content belongs to one installation, so this repository
@@ -227,8 +284,8 @@ Two differences remain, and both are small:
 A team contributes an agent in three steps:
 
 1. Write the agent in its own repository.
-2. Open a pull request that adds the entry to `agents.base.list`, or to
-   a team list.
+2. Open a pull request that adds the entry to `company/agents.list`, or
+   to a team list.
 3. On merge, every workstation picks it up at the next hub refresh.
 
 Review of that pull request is the control. Repository write access
@@ -252,7 +309,7 @@ The skill covers:
    | Answer | Where it goes |
    |---|---|
    | This repository | `.agents/subagents/` in this repository |
-   | The team or the organization | Its own repository, plus a pull request on `agents.base.list` |
+   | The team or the organization | Its own repository, plus a pull request on `company/agents.list` |
 
 3. **The consequences of each answer**, so the engineer chooses well. A
    local agent needs no review from another team, and it disappears
@@ -268,12 +325,12 @@ trade.
 **shared agent base template**. It contains harness-independent instructions plus an
 wagglebot connection block. The connection block covers three topics:
 how to reach the hub, the propose-not-write memory rule, and
-coordination etiquette. Teams append overlays from the
+coordination etiquette. Teams append company instructions from the
 company repository. Composition is plain concatenation:
-`AGENTS.base.md` + `overlays/*.md` → the rendered template. YAGNI: no
+`AGENTS.base.md` + `instructions/*.md` → the rendered template. YAGNI: no
 templating engine. The base is never edited in place: a company
-extends through overlays, so a wagglebot upgrade never conflicts
-(D35).
+extends through the company instructions, so a wagglebot upgrade never
+conflicts (D35).
 
 The base template carries three sections: a delegation policy, a
 writing baseline, and a memory policy. All three are portable across
@@ -285,7 +342,7 @@ file cannot do that job.
 
 Workstation-specific content stays out of the base template. Version
 managers, shell paths, and machine setup differ per person and per
-team. Put that content in an overlay.
+team. Put that content in a company instructions file.
 
 ### Seed content for `AGENTS.base.md`
 
@@ -441,8 +498,8 @@ The template also ships with this memory section:
 ```markdown
 ## Memory
 
-You decide what to remember. No model on the server repeats this work,
-so a fact you skip is lost, and a fact you invent is believed.
+You decide what to remember. No model repeats this work, so a fact you
+skip is lost, and a fact you invent is believed.
 
 WHAT TO REMEMBER
 
@@ -459,31 +516,28 @@ Do not remember:
 * A fact the code already states. Read the code instead.
 * A guess, an attempt, or a dead end.
 * Anything about a person, beyond their role and their ownership.
-* A secret. The server rejects one, but never send one.
+* A secret. Never write one.
 
 Write few facts. A large memory is a haystack.
 
-WHERE TO WRITE
+WHERE MEMORY LIVES
 
-Four scopes exist. Pick the smallest one that fits.
+Component memory is one file in the repository you work in:
 
-| Scope | Content | How to write |
-|---|---|---|
-| `component` | A fact about this one repository | Edit `.agents/memory.md` |
-| `system` | A fact about the whole project | Propose, then ask your engineer |
-| `domain` | A convention across projects | A human publishes it |
-| `org` | A company-wide interface | A human publishes it |
+    .agents/memory.md
 
-Default to `component`. A file in the repository travels with the code,
-a pull request reviews it, and git keeps the history.
+Read it at the start of a session, before you plan. Edit it when you
+learn a durable fact about this repository. The file is committed, so a
+pull request reviews every change, and git keeps the history.
 
-Propose `system` only for a fact that a different repository needs.
-Then ask your engineer in the session, and accept the answer. Never
-promote silently. Never write to `domain` or `org`.
+A fact that crosses a repository boundary has no home yet. The shared
+memory store arrives with the wagglebot shared layer. Until then, tell
+your engineer the fact in the session, and let them place it. Do not
+invent a memory tool. Do not write outside `.agents/memory.md`.
 
 BEFORE YOU WRITE
 
-1. Search memory first.
+1. Read `.agents/memory.md` first.
 2. If the fact exists, update it. Do not add a duplicate.
 3. If the fact contradicts an existing one, say so to your engineer.
 
@@ -494,13 +548,10 @@ you time. Do not write during exploration.
 
 WHEN YOUR ENGINEER TELLS YOU TO REMEMBER SOMETHING
 
-Use the `remember` tool, and give the scope they named.
+Write it to `.agents/memory.md`.
 
 * Do not judge the importance. They asked, so write it.
-* Do not ask to promote the scope. They already chose it.
-* Ask only when they named no scope. Suggest the smallest one that fits.
-
-Use `forget` when they tell you a fact is wrong.
+* When they tell you a fact is wrong, remove it.
 ```
 
 NOTE: The superpowers skill set already works this way for larger
@@ -516,10 +567,17 @@ every agent harness location. One file then governs all agents:
 |---|---|
 | Claude Code | `~/.claude/CLAUDE.md` |
 | OpenAI Codex | `~/.codex/AGENTS.md` |
-| Junie (JetBrains) | `~/.junie/AGENTS.md`, `~/.junie/CLAUDE.md` |
-| Cline | `~/.cline/rules/global.md`, `~/.cline/custom_instructions.md` |
-| Universal standard | `~/.agents/AGENTS.md` |
-| Gemini / Antigravity | `~/.gemini/config/GEMINI.md`, `~/.gemini/config/rules/global.md` |
+| Junie (JetBrains) | `~/.junie/AGENTS.md` |
+| Cline | `~/.cline/rules/wagglebot.md` |
+| Gemini CLI | `~/.gemini/GEMINI.md` |
+| GitHub Copilot CLI | `~/.copilot/copilot-instructions.md` |
+
+Paths verified against vendor documentation on 2026-09-02.
+
+Subagent directories: Claude Code `~/.claude/agents/`, Junie
+`~/.junie/agents/`. Codex subagents are TOML, not Markdown, so Codex
+has none. A harness with no known subagent directory is skipped, with
+one log line.
 
 Behavior: create missing directories. Diff before copy, and report
 `synced` or `already ok`. Apply `chmod 600`. Print summary counts. Exit
@@ -616,8 +674,9 @@ follows the same pattern.
 
 1. A clean machine runs `git clone <company repo>`, `yarn install`,
    and `yarn update:wagglebot`. The skills, the subagents, the base
-   prompts, and the MCP configs land in every harness. No service
-   starts, and no credential is configured (D14, D34, D35).
+   prompts, the MCP configs, and the shell block land in every
+   harness. No service starts, and no credential is configured
+   (D14, D34, D35).
 2. `wagglebot update --help` explains what the command touches. A
    second run reports every item as already current.
 3. **The pin bump upgrades everything.** The company merges a
@@ -627,10 +686,10 @@ follows the same pattern.
 4. An operator merges a registry change. The next `wagglebot update` on
    any workstation rewrites the managed block in each harness config,
    and content outside the block stays untouched.
-5. `install-skills` installs the `skills` CLI and every
-   entry in `skills.list` on a clean machine. A second run reports every
-   item as already installed.
-6. A team merges a new entry into `agents.base.list`. The next
+5. `install-skills` installs every entry of `company/skills.list` and
+   the team lists with the bundled `skills` CLI, on a clean machine. A
+   second run reports every item as already installed.
+6. A team merges a new entry into `company/agents.list`. The next
    `wagglebot update` (Phase 1) or hub refresh (Phase 2) installs that
    agent on a different workstation (D32).
 7. An engineer asks an agent to write a custom agent. The
@@ -648,3 +707,5 @@ follows the same pattern.
     `.agents/memory.md` (D29). The file appears in `git status`, so
     a human reviews it. A later `memory_search` finds it without a
     server call.
+12. `wagglebot update` on a machine with only Claude Code creates no
+    directory for any other harness.

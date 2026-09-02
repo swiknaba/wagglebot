@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { newestBackupSet, restoreSet } from "../backup";
@@ -11,15 +11,20 @@ import { runUpdate } from "./update";
 const scaffoldCompany = (): string => {
   const root = mkdtempSync(join(tmpdir(), "wgl-co-"));
   writeFileSync(join(root, "package.json"), JSON.stringify({ dependencies: { wagglebot: "1.4.2" } }));
+  mkdirSync(join(root, "company/instructions"), { recursive: true });
+  // sync-shell reads the shipped script from node_modules, the way a real `yarn install`
+  // leaves it. Fake that install here so runUpdate's sync-shell step does not fail.
+  mkdirSync(join(root, "node_modules/wagglebot/templates/shell"), { recursive: true });
+  writeFileSync(join(root, "node_modules/wagglebot/templates/shell/wagglebot.sh"), "# script\n");
   writeFileSync(
-    join(root, "catalog.yaml"),
-    "kind: Group\nmetadata: { name: t }\nspec: { members: [alice] }\n---\nkind: User\nmetadata: { name: alice }\nspec: { memberOf: [t] }\n",
-  );
-  writeFileSync(
-    join(root, "registry.base.yaml"),
+    join(root, "company/registry.yaml"),
     "proxies:\n  - { namespace: ex, mode: remote_http, endpoint: https://ex/mcp }\n",
   );
-  mkdirSync(join(root, "overlays"));
+  mkdirSync(join(root, "teams/t"), { recursive: true });
+  writeFileSync(
+    join(root, "teams/t/catalog.yaml"),
+    "kind: Group\nmetadata: { name: t }\nspec: { members: [alice] }\n---\nkind: User\nmetadata: { name: alice }\nspec: { memberOf: [t] }\n",
+  );
   return root;
 };
 
@@ -28,12 +33,14 @@ const gitExec =
   async (cmd, args, _opts) => {
     calls.push([cmd, ...args]);
     if (cmd === "git" && args.includes("wagglebot.username")) return { code: 0, stdout: "alice\n", stderr: "" };
+    if (cmd === "git" && args.includes("wagglebot.harnesses")) return { code: 1, stdout: "", stderr: "" };
     return { code: 0, stdout: "", stderr: "" };
   };
 
 test("pulls, provisions, and prints a summary", async () => {
   const root = scaffoldCompany();
   const home = mkdtempSync(join(tmpdir(), "wgl-home-"));
+  mkdirSync(join(home, ".claude"), { recursive: true });
   const calls: string[][] = [];
   const lines: string[] = [];
   const code = await runUpdate({
@@ -48,11 +55,24 @@ test("pulls, provisions, and prints a summary", async () => {
   expect(code).toBe(0);
   expect(calls[0]).toEqual(["git", "pull", "--ff-only"]);
   expect(lines.join("\n")).toContain("failed 0");
+  expect(existsSync(join(home, ".zshenv"))).toBe(true);
+
+  // The installers run in the documented order.
+  const sections = ["Skills", "Custom agents", "Base template sync", "Shell environment", "MCP configs"].map((s) =>
+    lines.indexOf(`== ${s} ==`),
+  );
+  for (const index of sections) expect(index).toBeGreaterThanOrEqual(0);
+  for (let i = 1; i < sections.length; i += 1) {
+    const prev = sections[i - 1] ?? -1;
+    const current = sections[i] ?? -1;
+    expect(current).toBeGreaterThan(prev);
+  }
 });
 
 test("a moved pin triggers yarn install and a re-exec, once", async () => {
   const root = scaffoldCompany();
   const home = mkdtempSync(join(tmpdir(), "wgl-home-"));
+  mkdirSync(join(home, ".claude"), { recursive: true });
   const calls: string[][] = [];
   const exec: Exec = async (cmd, args, _opts) => {
     calls.push([cmd, ...args]);
@@ -61,6 +81,7 @@ test("a moved pin triggers yarn install and a re-exec, once", async () => {
       writeFileSync(join(root, "package.json"), JSON.stringify({ dependencies: { wagglebot: "1.5.0" } }));
     }
     if (cmd === "git" && args.includes("wagglebot.username")) return { code: 0, stdout: "alice\n", stderr: "" };
+    if (cmd === "git" && args.includes("wagglebot.harnesses")) return { code: 1, stdout: "", stderr: "" };
     return { code: 0, stdout: "", stderr: "" };
   };
   const quiet = createReporter(() => {}, false);

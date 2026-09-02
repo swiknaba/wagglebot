@@ -1,16 +1,19 @@
 import { join } from "node:path";
 import { startBackupSet } from "../backup";
 import { loadCatalog, teamsOf } from "../catalog";
-import { findCompanyRoot, loadCompanyRepo } from "../company";
+import { assertTeamDirsKnown, findCompanyRoot, loadCompanyRepo } from "../company";
 import type { Exec } from "../exec";
+import { selectAndAnnounce } from "../harness-select";
 import type { Ask } from "../identity";
 import { getUsername } from "../identity";
 import { resolvePaths } from "../paths";
+import type { ProxyConfig } from "../registry";
 import { loadRegistry, mergeRegistries } from "../registry";
 import type { Reporter } from "../report";
 import { runInstallAgents } from "./install-agents";
 import { runInstallSkills } from "./install-skills";
 import { runSyncAgents } from "./sync-agents";
+import { runSyncShell } from "./sync-shell";
 import { runWriteMcp } from "./write-mcp";
 
 export async function runUpdate(deps: {
@@ -47,31 +50,60 @@ export async function runUpdate(deps: {
     return rerun.code;
   }
 
-  const catalog = loadCatalog(company.catalogText, join(root, "catalog.yaml"));
-  const username = await getUsername(exec, deps.ask, catalog);
+  const catalog = loadCatalog(company.catalogText, company.catalogPath);
+  assertTeamDirsKnown(
+    company,
+    catalog.groups.map((g) => g.name),
+  );
+  const username = await getUsername(exec, deps.ask, catalog, { companyRoot: root });
   const teams = teamsOf(catalog, username);
+
+  const harnesses = await selectAndAnnounce(deps.home, exec, write);
+
+  const layers = company.layersFor(teams);
+  const paths = resolvePaths(deps.home);
 
   // One backup set for the whole update, so `sync-agents --restore` restores everything this
   // run touched instead of only whichever command happened to run last.
-  const backups = startBackupSet(resolvePaths(deps.home).backupsDir);
+  const backups = startBackupSet(paths.backupsDir);
 
   await runInstallSkills({
-    listText: company.skillsListText,
-    listPath: join(root, "skills.list"),
+    lists: layers.flatMap((l) =>
+      l.skillsListText === undefined ? [] : [{ path: join(l.dir, "skills.list"), text: l.skillsListText }],
+    ),
     exec,
     reporter,
     skillsBin: deps.skillsBin,
+    skillsAgents: harnesses.flatMap((h) => (h.skillsAgent ? [h.skillsAgent] : [])),
+    managedFile: paths.managedFile,
   });
-  await runInstallAgents({ home: deps.home, listTexts: company.agentListTexts(teams), exec, reporter, backups });
-  runSyncAgents({ home: deps.home, overlaysDir: company.overlaysDir, reporter, backups });
+  await runInstallAgents({
+    home: deps.home,
+    harnesses,
+    listTexts: layers.flatMap((l) =>
+      l.agentsListText === undefined ? [] : [{ path: `${l.name}/agents.list`, text: l.agentsListText }],
+    ),
+    agentDirs: layers.map((l) => ({ prefix: `${l.name}__`, dir: l.agentsDir })),
+    exec,
+    reporter,
+    backups,
+  });
+  runSyncAgents({
+    home: deps.home,
+    harnesses,
+    instructionDirs: layers.map((l) => l.instructionsDir),
+    reporter,
+    backups,
+  });
+  runSyncShell({ home: deps.home, companyRoot: root, reporter, backups });
 
-  const base =
-    company.registryBaseText === undefined ? [] : loadRegistry(company.registryBaseText, "registry.base.yaml");
-  const merged = teams.reduce((acc, team) => {
-    const text = company.registryTeamText(team);
-    return text === undefined ? acc : mergeRegistries(acc, loadRegistry(text, `registry.team.${team}.yaml`));
-  }, base);
-  runWriteMcp({ home: deps.home, proxies: merged, reporter, backups });
+  const proxies = layers
+    .filter((l) => l.registryText !== undefined)
+    .reduce<ProxyConfig[]>(
+      (acc, l) => mergeRegistries(acc, loadRegistry(l.registryText ?? "", `${l.name}/registry.yaml`)),
+      [],
+    );
+  runWriteMcp({ home: deps.home, harnesses, proxies, env: process.env, reporter, backups });
 
   write(reporter.summary());
   return reporter.failed() ? 1 : 0;

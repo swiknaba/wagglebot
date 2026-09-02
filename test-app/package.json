@@ -1,0 +1,10 @@
+{
+  "name": "company-wagglebot",
+  "private": true,
+  "dependencies": {
+    "wagglebot": "file:../packages/cli"
+  },
+  "scripts": {
+    "update:wagglebot": "wagglebot update"
+  }
+}
