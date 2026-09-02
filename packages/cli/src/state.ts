@@ -1,14 +1,18 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 
-export type ManagedState = { jsonKeys: Record<string, string[]>; agentFiles: string[] };
-const EMPTY: ManagedState = { jsonKeys: {}, agentFiles: [] };
+export type ManagedState = {
+  jsonKeys: Record<string, string[]>;
+  agentFiles: string[];
+  skills: Record<string, string[]>;
+};
+const EMPTY: ManagedState = { jsonKeys: {}, agentFiles: [], skills: {} };
 
 function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((entry) => typeof entry === "string");
 }
 
-function toJsonKeys(value: unknown): Record<string, string[]> {
+function toStringArrayRecord(value: unknown): Record<string, string[]> {
   if (typeof value !== "object" || value === null) return {};
   return Object.fromEntries(
     Object.entries(value as Record<string, unknown>).filter((entry): entry is [string, string[]] =>
@@ -22,9 +26,10 @@ export function loadState(managedFile: string): ManagedState {
   const raw: unknown = JSON.parse(readFileSync(managedFile, "utf8"));
   if (typeof raw !== "object" || raw === null) return { ...EMPTY };
   const record: Record<string, unknown> = raw as Record<string, unknown>;
-  const jsonKeys = toJsonKeys(record.jsonKeys);
+  const jsonKeys = toStringArrayRecord(record.jsonKeys);
   const agentFiles = isStringArray(record.agentFiles) ? record.agentFiles : [];
-  return { jsonKeys, agentFiles };
+  const skills = toStringArrayRecord(record.skills);
+  return { jsonKeys, agentFiles, skills };
 }
 
 export function saveState(managedFile: string, state: ManagedState): void {
