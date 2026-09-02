@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Exec } from "../exec";
 import { createReporter } from "../report";
-import { runInstallAgents } from "./install-agents";
+import { resolveSource, runInstallAgents } from "./install-agents";
 
 const quiet = () => createReporter(() => {}, false);
 
@@ -101,4 +101,43 @@ test("removing a file from the company agents/ directory uninstalls it on the ne
   rmSync(join(companyAgentsDir, "reviewer.md"));
   await runInstallAgents({ home, listTexts: [], companyAgentsDir, exec: fakeGit, reporter: quiet() });
   expect(existsSync(installed)).toBe(false);
+});
+
+test("resolveSource maps GitHub shorthand and full URLs to a clone URL, ref, and prefix id", () => {
+  expect(resolveSource({ repo: "acme/agents", ref: "v1", raw: "acme/agents@v1" })).toEqual({
+    cloneUrl: "https://github.com/acme/agents.git",
+    ref: "v1",
+    id: "acme__agents",
+  });
+  const https = "https://git.my-company.local/platform/agents.git";
+  expect(resolveSource({ repo: https, ref: "v1.2.0", raw: `${https} v1.2.0`, isUrl: true })).toEqual({
+    cloneUrl: "https://git.my-company.local/platform/agents.git",
+    ref: "v1.2.0",
+    id: "platform__agents",
+  });
+  const ssh = "git@git.my-company.local:platform/agents.git";
+  expect(resolveSource({ repo: ssh, raw: ssh, isUrl: true })).toEqual({
+    cloneUrl: ssh,
+    ref: undefined,
+    id: "platform__agents",
+  });
+});
+
+test("installs from a private git host by full URL and checks out the ref", async () => {
+  const home = mkdtempSync(join(tmpdir(), "wgl-"));
+  const calls: string[][] = [];
+  const recording: Exec = async (cmd, args) => {
+    calls.push(args);
+    return fakeGit(cmd, args);
+  };
+  const code = await runInstallAgents({
+    home,
+    listTexts: [{ path: "agents.base.list", text: "https://git.my-company.local/platform/agents.git v1.2.0\n" }],
+    exec: recording,
+    reporter: quiet(),
+  });
+  expect(code).toBe(0);
+  expect(calls[0]?.slice(0, 2)).toEqual(["clone", "https://git.my-company.local/platform/agents.git"]);
+  expect(calls.some((args) => args.includes("checkout") && args.includes("v1.2.0"))).toBe(true);
+  expect(existsSync(join(home, ".claude/agents/platform__agents__reviewer.md"))).toBe(true);
 });

@@ -4,10 +4,28 @@ import type { BackupSet } from "../backup";
 import { startBackupSet } from "../backup";
 import type { Exec } from "../exec";
 import { HARNESSES } from "../harness";
-import { parseList } from "../lists";
+import { type ListEntry, parseList } from "../lists";
 import { resolvePaths } from "../paths";
 import type { Reporter } from "../report";
 import { loadState, saveState } from "../state";
+
+// Where to clone an agent list entry from, and the filename prefix that marks its files.
+//   owner/repo[@ref]      -> https://github.com/owner/repo.git, prefix owner__repo
+//   <clone URL> [ref]     -> the URL itself, prefix from the last two path segments
+type AgentSource = { cloneUrl: string; ref?: string; id: string };
+
+export function resolveSource(entry: ListEntry): AgentSource {
+  if (entry.isUrl !== true) {
+    return { cloneUrl: `https://github.com/${entry.repo}.git`, ref: entry.ref, id: entry.repo.replace("/", "__") };
+  }
+  const segments = entry.repo
+    .replace(/\.git$/, "")
+    .split(/[/:]/)
+    .filter((s) => s !== "")
+    .slice(-2)
+    .map((s) => s.replace(/[^\w.-]/g, "_"));
+  return { cloneUrl: entry.repo, ref: entry.ref, id: segments.join("__") };
+}
 
 export async function runInstallAgents(deps: {
   home: string;
@@ -42,27 +60,24 @@ export async function runInstallAgents(deps: {
     reporter.item(dest, fresh ? "installed" : "updated");
   };
   for (const entry of entries) {
-    if (entry.isUrl === true) {
-      reporter.item(entry.raw, "failed", "an agent list accepts owner/repo[@ref] only, not a full git URL");
-      continue;
-    }
-    const prefix = `${entry.repo.replace("/", "__")}__`;
-    const cacheDir = join(paths.agentsCacheDir, entry.repo.replace("/", "__"));
+    const source = resolveSource(entry);
+    const prefix = `${source.id}__`;
+    const cacheDir = join(paths.agentsCacheDir, source.id);
     const git = async (...args: string[]) => exec("git", args);
     const materialize = async (): Promise<boolean> => {
       if (!existsSync(cacheDir)) {
         mkdirSync(paths.agentsCacheDir, { recursive: true });
-        const clone = await git("clone", `https://github.com/${entry.repo}.git`, cacheDir);
+        const clone = await git("clone", source.cloneUrl, cacheDir);
         if (clone.code !== 0) return false;
-      } else if (entry.ref !== undefined) {
+      } else if (source.ref !== undefined) {
         const fetch = await git("-C", cacheDir, "fetch", "--tags", "origin");
         if (fetch.code !== 0) return false;
       } else {
         const pull = await git("-C", cacheDir, "pull", "--ff-only");
         if (pull.code !== 0) return false;
       }
-      if (entry.ref !== undefined) {
-        const co = await git("-C", cacheDir, "checkout", entry.ref);
+      if (source.ref !== undefined) {
+        const co = await git("-C", cacheDir, "checkout", source.ref);
         if (co.code !== 0) return false;
       }
       return true;

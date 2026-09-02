@@ -180,8 +180,11 @@ agents.base.list                  # every engineer, in the company repository
 agents.team.<team>.list           # one team
 ```
 
-One entry per line, `owner/repo`, with an optional `@<ref>`. Comments
-are allowed.
+One entry per line. A GitHub repository is written as `owner/repo`,
+with an optional `@<ref>`. A repository on any other git host is
+written as its full clone URL, followed by an optional ref after a
+space. Comments are
+allowed.
 
 Wagglebot ships the mechanism and an **empty** list with commented
 examples. The content belongs to one installation, so this repository

@@ -1,8 +1,8 @@
 // repo = "owner/name", or the raw URL when isUrl is set
 export type ListEntry = { repo: string; ref?: string; raw: string; isUrl?: boolean };
 
-// A full git URL (https://, ssh://, git@host:...) passes through verbatim: the URL names
-// its own host, and any ref travels inside the URL (e.g. a /tree/<tag> path on GitHub).
+// A full git URL (https://, ssh://, git@host:...) names its own host. An optional ref follows
+// after whitespace ("<url> <ref>"): "@" is taken by ssh URLs and "#" starts a comment.
 const URL_ENTRY = /^(?:[a-z][\w+.-]*:\/\/|git@)/i;
 
 export function parseList(text: string): { entries: ListEntry[]; warnings: string[] } {
@@ -12,7 +12,10 @@ export function parseList(text: string): { entries: ListEntry[]; warnings: strin
     .map((line) => line.split("#")[0]?.trim() ?? "")
     .filter((line) => line !== "")
     .map((raw): ListEntry => {
-      if (URL_ENTRY.test(raw)) return { repo: raw, raw, isUrl: true };
+      if (URL_ENTRY.test(raw)) {
+        const [url = raw, ref] = raw.split(/\s+/);
+        return { repo: url, ref, raw, isUrl: true };
+      }
       const at = raw.indexOf("@");
       const repo = at === -1 ? raw : raw.slice(0, at);
       const ref = at === -1 ? undefined : raw.slice(at + 1);
