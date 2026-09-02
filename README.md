@@ -33,8 +33,8 @@ commands — `git clone <company repo>`, `yarn install`,
 * The curated skills and subagents.
 * The base prompt, in every agent harness.
 * The MCP server configs, from one curated registry.
-* Your credentials stay on your machine, in one gitignored file.
-* Your credentials load into every new shell from one gitignored file.
+* Your credentials stay on your machine in one gitignored file, and
+  load into every new shell.
 
 An engineer clones, installs, runs the update, and works. Nothing
 listens on a port, and git access is the whole permission system. A
@@ -101,9 +101,9 @@ service bearer tokens.
 serves as the reference output of the CLI.
 
 An end-to-end test in CI runs the full provisioning flow against a
-sandboxed home directory. The flow covers install, sync, and the
-shell block. `test-app/` serves as the drift gate for the scaffold
-output.
+sandboxed home directory. The flow covers the base prompt sync, the
+hooks, and the shell block. `test-app/` serves as the drift gate for
+the scaffold output.
 
 Regenerate `test-app/` after any change to the scaffold templates or
 the package version:

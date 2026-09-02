@@ -14,7 +14,7 @@ const mcpFiles = () =>
   );
 const subagentDirs = () =>
   HARNESSES.flatMap((h) =>
-    h.subagentDir ? [`~/${h.subagentDir}/  (${h.name}, files prefixed company__ or <team>__)`] : [],
+    h.subagentDir ? [`~/${h.subagentDir}/  (${h.name}, files prefixed company__, <team>__, or owner__repo__)`] : [],
   );
 const shellFiles = () =>
   SHELL_RC_FILES.map((f) => `~/${f.file}  (managed block${f.createIfMissing ? "" : ", only when the file exists"})`);

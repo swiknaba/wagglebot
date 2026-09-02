@@ -36,3 +36,15 @@ export async function selectHarnesses(
   }
   return { harnesses: detected, source: "detected" };
 }
+
+// Selects the harnesses for this workstation and writes the one-line summary that every
+// command prints before it runs. One place, so `update` and the single-command paths agree.
+export async function selectAndAnnounce(home: string, exec: Exec, write: (line: string) => void): Promise<Harness[]> {
+  const { harnesses, source } = await selectHarnesses(home, exec);
+  const hint =
+    source === "detected"
+      ? `detected — override with: git config --global ${HARNESS_CONFIG_KEY} <names>`
+      : "from git config";
+  write(`harnesses: ${harnesses.map((h) => h.name).join(", ")} (${hint})`);
+  return harnesses;
+}

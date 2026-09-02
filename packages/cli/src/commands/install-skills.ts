@@ -5,6 +5,8 @@ import { type ListEntry, parseList } from "../lists";
 import type { Reporter } from "../report";
 import { loadState, saveState } from "../state";
 
+// The floor check below reads process.version, and the invocation of the skills CLI runs
+// under process.execPath. Both name the same Node binary that runs wagglebot.
 export const SKILLS_NODE_FLOOR = "22.20.0";
 
 export function resolveSkillsBin(): string {
@@ -107,7 +109,7 @@ export async function runInstallSkills(deps: {
     reporter.item(
       "skills",
       "failed",
-      `the skills CLI needs Node ${SKILLS_NODE_FLOOR} or newer, this shell runs ${nodeVersion} — run "nvm use" in the company repository`,
+      `the skills CLI needs Node ${SKILLS_NODE_FLOOR} or newer, this shell runs ${nodeVersion} — start wagglebot with a newer Node, for example "nvm use" in the company repository`,
     );
     return 1;
   }
@@ -128,7 +130,7 @@ export async function runInstallSkills(deps: {
       continue;
     }
     const args = ["add", toSkillsSource(entry), "-g", "-y", ...agents.flatMap((a) => ["-a", a])];
-    const result = await exec(deps.skillsBin, args);
+    const result = await exec(process.execPath, [deps.skillsBin, ...args]);
     const output = `${result.stdout}\n${result.stderr}`;
     if (result.code !== 0 || output.includes("Installation failed")) {
       const reason = output

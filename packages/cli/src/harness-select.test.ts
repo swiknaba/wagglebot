@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Exec } from "./exec";
-import { selectHarnesses } from "./harness-select";
+import { selectAndAnnounce, selectHarnesses } from "./harness-select";
 
 const home = () => mkdtempSync(join(tmpdir(), "wgl-sel-"));
 const configExec =
@@ -33,4 +33,15 @@ test("an unknown name in the config is a hard error that lists the valid names",
 
 test("no detected harness is a hard error with the config hint", async () => {
   await expect(selectHarnesses(home(), configExec(""))).rejects.toThrow(/wagglebot\.harnesses/);
+});
+
+test("selectAndAnnounce writes a one-line summary naming the harness and the config key", async () => {
+  const h = home();
+  mkdirSync(join(h, ".claude"));
+  const lines: string[] = [];
+  const harnesses = await selectAndAnnounce(h, configExec(""), (line) => lines.push(line));
+  expect(harnesses.map((x) => x.name)).toEqual(["claude-code"]);
+  expect(lines).toHaveLength(1);
+  expect(lines[0]).toContain("claude-code");
+  expect(lines[0]).toContain("wagglebot.harnesses");
 });

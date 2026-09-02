@@ -3,7 +3,7 @@ import { startBackupSet } from "../backup";
 import { loadCatalog, teamsOf } from "../catalog";
 import { assertTeamDirsKnown, findCompanyRoot, loadCompanyRepo } from "../company";
 import type { Exec } from "../exec";
-import { HARNESS_CONFIG_KEY, selectHarnesses } from "../harness-select";
+import { selectAndAnnounce } from "../harness-select";
 import type { Ask } from "../identity";
 import { getUsername } from "../identity";
 import { resolvePaths } from "../paths";
@@ -58,12 +58,7 @@ export async function runUpdate(deps: {
   const username = await getUsername(exec, deps.ask, catalog, { companyRoot: root });
   const teams = teamsOf(catalog, username);
 
-  const { harnesses, source } = await selectHarnesses(deps.home, exec);
-  const hint =
-    source === "detected"
-      ? `detected — override with: git config --global ${HARNESS_CONFIG_KEY} <names>`
-      : "from git config";
-  write(`harnesses: ${harnesses.map((h) => h.name).join(", ")} (${hint})`);
+  const harnesses = await selectAndAnnounce(deps.home, exec, write);
 
   const layers = company.layersFor(teams);
   const paths = resolvePaths(deps.home);

@@ -16,8 +16,7 @@ import { runWriteMcp } from "./commands/write-mcp";
 import { assertTeamDirsKnown, findCompanyRoot, loadCompanyRepo } from "./company";
 import type { Exec } from "./exec";
 import { realExec } from "./exec";
-import type { Harness } from "./harness";
-import { HARNESS_CONFIG_KEY, selectHarnesses } from "./harness-select";
+import { selectAndAnnounce } from "./harness-select";
 import { helpText } from "./help";
 import type { Ask } from "./identity";
 import { getUsername } from "./identity";
@@ -27,6 +26,8 @@ import { loadRegistry, mergeRegistries } from "./registry";
 import { createReporter } from "./report";
 
 export type CliDeps = { write: (line: string) => void; cwd?: string };
+
+const KNOWN_COMMANDS = ["update", "init", "install-skills", "install-agents", "sync-agents", "sync-shell", "write-mcp"];
 
 const version = (): string => {
   const require = createRequire(import.meta.url);
@@ -56,16 +57,6 @@ async function companyContext(
   return { company, catalog, username, teams };
 }
 
-async function selected(home: string, exec: Exec, write: (line: string) => void): Promise<Harness[]> {
-  const { harnesses, source } = await selectHarnesses(home, exec);
-  const hint =
-    source === "detected"
-      ? `detected — override with: git config --global ${HARNESS_CONFIG_KEY} <names>`
-      : "from git config";
-  write(`harnesses: ${harnesses.map((h) => h.name).join(", ")} (${hint})`);
-  return harnesses;
-}
-
 export async function main(argv: string[], deps: CliDeps = { write: console.log }): Promise<number> {
   const [command, ...rest] = argv;
 
@@ -77,7 +68,7 @@ export async function main(argv: string[], deps: CliDeps = { write: console.log 
     deps.write(helpText());
     return 0;
   }
-  if (rest.includes("--help") || rest.includes("-h")) {
+  if ((rest.includes("--help") || rest.includes("-h")) && KNOWN_COMMANDS.includes(command)) {
     deps.write(helpText(command));
     return 0;
   }
@@ -118,7 +109,7 @@ export async function main(argv: string[], deps: CliDeps = { write: console.log 
     if (command === "install-skills") {
       const { values } = parseArgs({ args: rest, options: { update: { type: "boolean" } } });
       const { company, teams } = await companyContext(cwd, exec, ask);
-      const harnesses = await selected(home, exec, deps.write);
+      const harnesses = await selectAndAnnounce(home, exec, deps.write);
       const lists = company
         .layersFor(teams)
         .flatMap((l) =>
@@ -140,7 +131,7 @@ export async function main(argv: string[], deps: CliDeps = { write: console.log 
 
     if (command === "install-agents") {
       const { company, teams } = await companyContext(cwd, exec, ask);
-      const harnesses = await selected(home, exec, deps.write);
+      const harnesses = await selectAndAnnounce(home, exec, deps.write);
       const layers = company.layersFor(teams);
       const code = await runInstallAgents({
         home,
@@ -174,7 +165,7 @@ export async function main(argv: string[], deps: CliDeps = { write: console.log 
         return code;
       }
       const { company, teams } = await companyContext(cwd, exec, ask);
-      const harnesses = await selected(home, exec, deps.write);
+      const harnesses = await selectAndAnnounce(home, exec, deps.write);
       const code = runSyncAgents({
         home,
         harnesses,
@@ -196,7 +187,7 @@ export async function main(argv: string[], deps: CliDeps = { write: console.log 
     if (command === "write-mcp") {
       const { values } = parseArgs({ args: rest, options: { "dry-run": { type: "boolean" } } });
       const { company, teams } = await companyContext(cwd, exec, ask);
-      const harnesses = await selected(home, exec, deps.write);
+      const harnesses = await selectAndAnnounce(home, exec, deps.write);
       const proxies = company
         .layersFor(teams)
         .filter((l) => l.registryText !== undefined)

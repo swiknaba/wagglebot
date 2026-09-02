@@ -70,8 +70,8 @@ is rejected with the list of near matches, never accepted silently
 (P35).
 
 **MCP configs are written, not proxied (Phase 1).** The update command
-reads `registry.base.yaml` and the team layers, finds the team of the
-engineer in `catalog.yaml` by git username, merges shallowly, and
+reads `company/registry.yaml` and each `teams/<team>/registry.yaml`,
+finds the team of the engineer in `catalog.yaml` by git username, merges shallowly, and
 writes the result into each harness MCP config, inside the managed
 block. Credentials resolve locally per D10: the config names an
 environment variable, and the value stays in `.env.credentials`.
@@ -206,7 +206,8 @@ A team writes its own agents, in a runtime such as
 | Kind | Lives in | Distributed by |
 |---|---|---|
 | **Component agent** — useful for one repository | `.agents/subagents/` in that repository | Git. Nothing to do. |
-| **Company agent** — useful for the whole company | `agents/` in the company repository | `wagglebot update`, with no list entry |
+| **Company agent** — useful for the whole company | `company/agents/` | `wagglebot update`, with no list entry |
+| **Team agent** — useful for one team | `teams/<team>/agents/` | `wagglebot update`, with no list entry |
 | **Shared agent** — useful for a team or the organization | A repository of its own | The list below |
 
 A component agent needs no wagglebot feature. Git already gives it to
@@ -283,8 +284,8 @@ Two differences remain, and both are small:
 A team contributes an agent in three steps:
 
 1. Write the agent in its own repository.
-2. Open a pull request that adds the entry to `agents.base.list`, or to
-   a team list.
+2. Open a pull request that adds the entry to `company/agents.list`, or
+   to a team list.
 3. On merge, every workstation picks it up at the next hub refresh.
 
 Review of that pull request is the control. Repository write access
@@ -308,7 +309,7 @@ The skill covers:
    | Answer | Where it goes |
    |---|---|
    | This repository | `.agents/subagents/` in this repository |
-   | The team or the organization | Its own repository, plus a pull request on `agents.base.list` |
+   | The team or the organization | Its own repository, plus a pull request on `company/agents.list` |
 
 3. **The consequences of each answer**, so the engineer chooses well. A
    local agent needs no review from another team, and it disappears
@@ -685,10 +686,10 @@ follows the same pattern.
 4. An operator merges a registry change. The next `wagglebot update` on
    any workstation rewrites the managed block in each harness config,
    and content outside the block stays untouched.
-5. `install-skills` installs the `skills` CLI and every
-   entry in `skills.list` on a clean machine. A second run reports every
-   item as already installed.
-6. A team merges a new entry into `agents.base.list`. The next
+5. `install-skills` installs every entry of `company/skills.list` and
+   the team lists with the bundled `skills` CLI, on a clean machine. A
+   second run reports every item as already installed.
+6. A team merges a new entry into `company/agents.list`. The next
    `wagglebot update` (Phase 1) or hub refresh (Phase 2) installs that
    agent on a different workstation (D32).
 7. An engineer asks an agent to write a custom agent. The

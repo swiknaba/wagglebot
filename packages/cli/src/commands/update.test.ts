@@ -12,6 +12,10 @@ const scaffoldCompany = (): string => {
   const root = mkdtempSync(join(tmpdir(), "wgl-co-"));
   writeFileSync(join(root, "package.json"), JSON.stringify({ dependencies: { wagglebot: "1.4.2" } }));
   mkdirSync(join(root, "company/instructions"), { recursive: true });
+  // sync-shell reads the shipped script from node_modules, the way a real `yarn install`
+  // leaves it. Fake that install here so runUpdate's sync-shell step does not fail.
+  mkdirSync(join(root, "node_modules/wagglebot/templates/shell"), { recursive: true });
+  writeFileSync(join(root, "node_modules/wagglebot/templates/shell/wagglebot.sh"), "# script\n");
   writeFileSync(
     join(root, "company/registry.yaml"),
     "proxies:\n  - { namespace: ex, mode: remote_http, endpoint: https://ex/mcp }\n",

@@ -32,6 +32,13 @@ export function runSyncShell(deps: {
   const { home, reporter } = deps;
   const backups = deps.backups ?? startBackupSet(resolvePaths(home).backupsDir);
   reporter.section("Shell environment");
+  if (!existsSync(join(deps.companyRoot, SCRIPT))) {
+    reporter.item(
+      SCRIPT,
+      "failed",
+      "not found under the company repository — run yarn install, then run this command again",
+    );
+  }
   for (const { file, createIfMissing } of SHELL_RC_FILES) {
     const target = join(home, file);
     try {

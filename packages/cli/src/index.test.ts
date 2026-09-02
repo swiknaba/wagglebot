@@ -51,6 +51,13 @@ test("write-mcp --help names the MCP config file it writes", async () => {
   expect(lines.join("\n")).toContain("~/.claude.json");
 });
 
+test("an unknown command with --help still exits 2, not 0", async () => {
+  const lines: string[] = [];
+  const code = await main(["bogus", "--help"], { write: (l) => lines.push(l) });
+  expect(code).toBe(2);
+  expect(lines.join("\n")).toContain("unknown command");
+});
+
 test("update outside a company repo fails cleanly with guidance, no thrown stack trace", async () => {
   const deep = mkdtempSync(join(tmpdir(), "wgl-deep-"));
   const nested = join(deep, "a", "b", "c");

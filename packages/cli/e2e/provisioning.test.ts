@@ -20,6 +20,13 @@ beforeAll(() => {
   // Harness selection detects a harness by the presence of its home directory (harness-select.ts).
   // Create only .claude, so detection finds one harness and the other stays untouched.
   mkdirSync(join(scratchHome, ".claude"), { recursive: true });
+  // sync-shell reads the shell script from the company repository's node_modules, the way a
+  // real `yarn install` leaves it. Simulate that install by copying the shipped script in.
+  mkdirSync(join(appDir, "node_modules/wagglebot/templates/shell"), { recursive: true });
+  cpSync(
+    join(repoRoot, "packages/cli/templates/shell/wagglebot.sh"),
+    join(appDir, "node_modules/wagglebot/templates/shell/wagglebot.sh"),
+  );
   // sync-agents now resolves the engineer's identity from the catalog. Store a known
   // username instead of prompting an interactive question the test cannot answer, in a
   // scratch global git config that never touches the real machine.

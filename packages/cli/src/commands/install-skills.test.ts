@@ -16,7 +16,7 @@ const fakeExec =
   (calls: string[][]): Exec =>
   async (cmd, args) => {
     calls.push([cmd, ...args]);
-    if (args[1] === "fail/fail#v1") return { code: 1, stdout: "■ Installation failed", stderr: "" };
+    if (args[2] === "fail/fail#v1") return { code: 1, stdout: "■ Installation failed", stderr: "" };
     return { code: 0, stdout: "Installed 3 skills", stderr: "" };
   };
 
@@ -55,6 +55,7 @@ test("installs into every selected agent, records state, and is ok on the second
   const r1 = createReporter(() => {}, false);
   expect(await runInstallSkills({ ...deps, reporter: r1 })).toBe(0);
   expect(calls[0]).toEqual([
+    process.execPath,
     "/bin/skills",
     "add",
     "obra/superpowers#v6.3.0",
@@ -114,7 +115,16 @@ test("a URL entry whose pin changes is labeled updated, not installed", async ()
     reporter: r,
   });
   expect(r.counts()).toMatchObject({ updated: 1, installed: 0 });
-  expect(calls[1]).toEqual(["/bin/skills", "add", "https://git.x/a/b.git#v2", "-g", "-y", "-a", "claude-code"]);
+  expect(calls[1]).toEqual([
+    process.execPath,
+    "/bin/skills",
+    "add",
+    "https://git.x/a/b.git#v2",
+    "-g",
+    "-y",
+    "-a",
+    "claude-code",
+  ]);
 });
 
 test("a failure counts, exits non-zero, and is not recorded", async () => {
