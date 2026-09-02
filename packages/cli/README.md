@@ -28,8 +28,8 @@ harness on the workstation.
 | `wagglebot update` | Pulls the company repo, then reinstalls skills, subagents, the base prompt, and MCP configs. |
 | `wagglebot init [dir]` | Scaffolds a new company repository. |
 | `wagglebot install-skills` | Installs the curated skills list. |
-| `wagglebot install-agents` | Installs the curated subagents list. |
-| `wagglebot sync-agents` | Syncs the base prompt, plus overlays, into every harness. |
+| `wagglebot install-agents` | Installs the shared subagents: the company `agents/` directory, plus the curated list. |
+| `wagglebot sync-agents` | Syncs the base prompt, plus the company instructions, into every harness. |
 | `wagglebot write-mcp` | Writes MCP server configs from the registry into every harness. |
 
 Run `wagglebot --help` for the full file-by-file breakdown, or

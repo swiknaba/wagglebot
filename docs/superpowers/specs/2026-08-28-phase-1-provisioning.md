@@ -161,11 +161,15 @@ A team writes its own agents, in a runtime such as
 | Kind | Lives in | Distributed by |
 |---|---|---|
 | **Component agent** — useful for one repository | `.agents/subagents/` in that repository | Git. Nothing to do. |
+| **Company agent** — useful for the whole company | `agents/` in the company repository | `wagglebot update`, with no list entry |
 | **Shared agent** — useful for a team or the organization | A repository of its own | The list below |
 
 A component agent needs no wagglebot feature. Git already gives it to
 everyone who clones the repository, a pull request reviews each change,
 and the history is free. This mirrors component memory (D29).
+
+The list stays for a shared agent maintained in a repository of its own,
+separate from the company repository.
 
 ### The lists
 
@@ -268,12 +272,12 @@ trade.
 **shared agent base template**. It contains harness-independent instructions plus an
 wagglebot connection block. The connection block covers three topics:
 how to reach the hub, the propose-not-write memory rule, and
-coordination etiquette. Teams append overlays from the
+coordination etiquette. Teams append company instructions from the
 company repository. Composition is plain concatenation:
-`AGENTS.base.md` + `overlays/*.md` → the rendered template. YAGNI: no
+`AGENTS.base.md` + `instructions/*.md` → the rendered template. YAGNI: no
 templating engine. The base is never edited in place: a company
-extends through overlays, so a wagglebot upgrade never conflicts
-(D35).
+extends through the company instructions, so a wagglebot upgrade never
+conflicts (D35).
 
 The base template carries three sections: a delegation policy, a
 writing baseline, and a memory policy. All three are portable across
@@ -285,7 +289,7 @@ file cannot do that job.
 
 Workstation-specific content stays out of the base template. Version
 managers, shell paths, and machine setup differ per person and per
-team. Put that content in an overlay.
+team. Put that content in a company instructions file.
 
 ### Seed content for `AGENTS.base.md`
 

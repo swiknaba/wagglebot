@@ -12,6 +12,7 @@ import { loadState, saveState } from "../state";
 export async function runInstallAgents(deps: {
   home: string;
   listTexts: { path: string; text: string }[];
+  companyAgentsDir?: string;
   exec: Exec;
   reporter: Reporter;
   backups?: BackupSet;
@@ -29,6 +30,17 @@ export async function runInstallAgents(deps: {
 
   const produced: string[] = [];
   const failedPrefixes: string[] = [];
+
+  const installFile = (dest: string, content: string): void => {
+    produced.push(dest);
+    if (existsSync(dest) && readFileSync(dest, "utf8") === content) {
+      reporter.item(dest, "ok", "already ok");
+      return;
+    }
+    const fresh = !existsSync(dest);
+    writeFileSync(dest, content);
+    reporter.item(dest, fresh ? "installed" : "updated");
+  };
   for (const entry of entries) {
     if (entry.isUrl === true) {
       reporter.item(entry.raw, "failed", "an agent list accepts owner/repo[@ref] only, not a full git URL");
@@ -67,14 +79,24 @@ export async function runInstallAgents(deps: {
       for (const file of files) {
         const dest = join(dir, `${prefix}${file}`);
         const content = readFileSync(join(cacheDir, file), "utf8");
-        produced.push(dest);
-        if (existsSync(dest) && readFileSync(dest, "utf8") === content) {
-          reporter.item(dest, "ok", "already ok");
-          continue;
-        }
-        const fresh = !existsSync(dest);
-        writeFileSync(dest, content);
-        reporter.item(dest, fresh ? "installed" : "updated");
+        installFile(dest, content);
+      }
+    }
+  }
+
+  const companyAgentsDir = deps.companyAgentsDir;
+  if (companyAgentsDir !== undefined && existsSync(companyAgentsDir)) {
+    const files = readdirSync(companyAgentsDir)
+      .filter((f) => f.endsWith(".md"))
+      .filter((f) => f.toLowerCase() !== "readme.md")
+      .sort();
+    for (const harness of targets) {
+      const dir = join(home, harness.subagentDir ?? "");
+      mkdirSync(dir, { recursive: true });
+      for (const file of files) {
+        const dest = join(dir, `company__${file}`);
+        const content = readFileSync(join(companyAgentsDir, file), "utf8");
+        installFile(dest, content);
       }
     }
   }

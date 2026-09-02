@@ -19,7 +19,7 @@ const scaffoldCompany = (): string => {
     join(root, "registry.base.yaml"),
     "proxies:\n  - { namespace: ex, mode: remote_http, endpoint: https://ex/mcp }\n",
   );
-  mkdirSync(join(root, "overlays"));
+  mkdirSync(join(root, "instructions"));
   return root;
 };
 

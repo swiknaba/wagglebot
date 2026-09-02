@@ -62,8 +62,15 @@ export async function runUpdate(deps: {
     reporter,
     skillsBin: deps.skillsBin,
   });
-  await runInstallAgents({ home: deps.home, listTexts: company.agentListTexts(teams), exec, reporter, backups });
-  runSyncAgents({ home: deps.home, overlaysDir: company.overlaysDir, reporter, backups });
+  await runInstallAgents({
+    home: deps.home,
+    listTexts: company.agentListTexts(teams),
+    companyAgentsDir: company.agentsDir,
+    exec,
+    reporter,
+    backups,
+  });
+  runSyncAgents({ home: deps.home, instructionsDir: company.instructionsDir, reporter, backups });
 
   const base =
     company.registryBaseText === undefined ? [] : loadRegistry(company.registryBaseText, "registry.base.yaml");

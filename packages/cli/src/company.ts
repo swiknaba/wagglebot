@@ -10,7 +10,8 @@ export type CompanyRepo = {
   registryTeamText: (team: string) => string | undefined;
   skillsListText?: string;
   agentListTexts: (teams: string[]) => { path: string; text: string }[];
-  overlaysDir: string;
+  instructionsDir: string;
+  agentsDir: string;
 };
 
 const readOptional = (path: string): string | undefined => (existsSync(path) ? readFileSync(path, "utf8") : undefined);
@@ -78,6 +79,7 @@ export function loadCompanyRepo(root: string): CompanyRepo {
           text: readOptional(join(root, `agents.team.${t}.list`)),
         })),
       ].flatMap((x) => (x.text === undefined ? [] : [{ path: x.path, text: x.text }])),
-    overlaysDir: join(root, "overlays"),
+    instructionsDir: join(root, "instructions"),
+    agentsDir: join(root, "agents"),
   };
 }

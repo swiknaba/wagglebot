@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Exec } from "../exec";
@@ -71,4 +71,34 @@ test("a failing pull on an unpinned, already-cached entry reports failed and kee
   expect(existsSync(installed)).toBe(true);
   const state: { agentFiles: string[] } = JSON.parse(readFileSync(join(home, ".wagglebot/managed.json"), "utf8"));
   expect(state.agentFiles).toContain(installed);
+});
+
+test("installs company agents/ files with the company__ prefix, skipping README.md", async () => {
+  const home = mkdtempSync(join(tmpdir(), "wgl-"));
+  const companyAgentsDir = mkdtempSync(join(tmpdir(), "wgl-co-agents-"));
+  writeFileSync(join(companyAgentsDir, "reviewer.md"), "# Company reviewer agent\n");
+  writeFileSync(join(companyAgentsDir, "README.md"), "# Shared Subagents\n");
+  const code = await runInstallAgents({
+    home,
+    listTexts: [],
+    companyAgentsDir,
+    exec: fakeGit,
+    reporter: quiet(),
+  });
+  expect(code).toBe(0);
+  expect(readFileSync(join(home, ".claude/agents/company__reviewer.md"), "utf8")).toBe("# Company reviewer agent\n");
+  expect(existsSync(join(home, ".claude/agents/company__README.md"))).toBe(false);
+});
+
+test("removing a file from the company agents/ directory uninstalls it on the next run", async () => {
+  const home = mkdtempSync(join(tmpdir(), "wgl-"));
+  const companyAgentsDir = mkdtempSync(join(tmpdir(), "wgl-co-agents-"));
+  writeFileSync(join(companyAgentsDir, "reviewer.md"), "# Company reviewer agent\n");
+  await runInstallAgents({ home, listTexts: [], companyAgentsDir, exec: fakeGit, reporter: quiet() });
+  const installed = join(home, ".claude/agents/company__reviewer.md");
+  expect(existsSync(installed)).toBe(true);
+
+  rmSync(join(companyAgentsDir, "reviewer.md"));
+  await runInstallAgents({ home, listTexts: [], companyAgentsDir, exec: fakeGit, reporter: quiet() });
+  expect(existsSync(installed)).toBe(false);
 });

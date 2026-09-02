@@ -11,7 +11,8 @@ const scaffold = () => {
   writeFileSync(join(root, "registry.base.yaml"), "proxies: []\n");
   writeFileSync(join(root, "skills.list"), "");
   writeFileSync(join(root, "agents.base.list"), "");
-  mkdirSync(join(root, "overlays"));
+  mkdirSync(join(root, "instructions"));
+  mkdirSync(join(root, "agents"));
   mkdirSync(join(root, "nested/deep"), { recursive: true });
   return root;
 };

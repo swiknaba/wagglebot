@@ -40,8 +40,8 @@ function helpText(): string {
   );
   lines.push("  init [dir]             Scaffold a new company repository (default: current directory).");
   lines.push("  install-skills         Install the curated skills list.");
-  lines.push("  install-agents         Install the curated subagents list.");
-  lines.push("  sync-agents            Sync the base prompt (plus overlays) into every harness.");
+  lines.push("  install-agents         Install the shared subagents from agents/ and the curated list.");
+  lines.push("  sync-agents            Sync the base prompt, plus the company instructions, into every harness.");
   lines.push("  write-mcp              Write MCP server configs from the registry into every harness.");
   lines.push("");
   lines.push("Options:");
@@ -160,7 +160,13 @@ export async function main(argv: string[], deps: CliDeps = { write: console.log 
 
     if (command === "install-agents") {
       const { company, teams } = await companyContext(cwd, exec, ask);
-      const code = await runInstallAgents({ home, listTexts: company.agentListTexts(teams), exec, reporter });
+      const code = await runInstallAgents({
+        home,
+        listTexts: company.agentListTexts(teams),
+        companyAgentsDir: company.agentsDir,
+        exec,
+        reporter,
+      });
       deps.write(reporter.summary());
       return code;
     }
@@ -171,16 +177,16 @@ export async function main(argv: string[], deps: CliDeps = { write: console.log 
         allowPositionals: true,
         options: { "dry-run": { type: "boolean" }, restore: { type: "boolean" } },
       });
-      let overlaysDir: string | undefined;
+      let instructionsDir: string | undefined;
       try {
         const root = findCompanyRoot(cwd);
-        overlaysDir = loadCompanyRepo(root).overlaysDir;
+        instructionsDir = loadCompanyRepo(root).instructionsDir;
       } catch {
-        overlaysDir = undefined;
+        instructionsDir = undefined;
       }
       const code = runSyncAgents({
         home,
-        overlaysDir,
+        instructionsDir,
         reporter,
         options: {
           dryRun: values["dry-run"] === true,

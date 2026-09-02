@@ -15,7 +15,7 @@ const readIfExists = (path: string): string => (existsSync(path) ? readFileSync(
 
 export function runSyncAgents(deps: {
   home: string;
-  overlaysDir?: string;
+  instructionsDir?: string;
   reporter: Reporter;
   options?: SyncOptions;
   backups?: BackupSet;
@@ -36,15 +36,15 @@ export function runSyncAgents(deps: {
   }
 
   const base = readFileSync(join(templatesDir(), "AGENTS.base.md"), "utf8");
-  const overlaysDir = deps.overlaysDir;
-  const overlays =
-    overlaysDir !== undefined && existsSync(overlaysDir)
-      ? [...readdirSync(overlaysDir)]
+  const instructionsDir = deps.instructionsDir;
+  const instructions =
+    instructionsDir !== undefined && existsSync(instructionsDir)
+      ? [...readdirSync(instructionsDir)]
           .filter((f) => f.endsWith(".md"))
           .sort()
-          .map((f) => readFileSync(join(overlaysDir, f), "utf8"))
+          .map((f) => readFileSync(join(instructionsDir, f), "utf8"))
       : [];
-  const rendered = renderTemplate(base, overlays);
+  const rendered = renderTemplate(base, instructions);
   const backups = deps.backups ?? startBackupSet(paths.backupsDir);
 
   const writeTarget = (

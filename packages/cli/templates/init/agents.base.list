@@ -1,6 +1,7 @@
 # Shared custom agents, one owner/repo[@ref] per line. Pin each entry to a
 # tag or a commit. Entries resolve against github.com.
-# An agent that belongs to one component needs no entry here: its
+# A subagent for the whole company can live in agents/ instead, with no entry
+# here. An agent that belongs to one component needs no entry either: its
 # .agents/subagents/ directory travels with that repository.
 # Example:
 # acme/review-agents@1a2b3c4

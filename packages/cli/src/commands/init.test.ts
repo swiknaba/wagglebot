@@ -26,7 +26,8 @@ test("scaffolds the company repository with the version substituted", () => {
     ".env.credentials.example",
     "docker-compose.override.yml",
     "README.md",
-    "overlays/00-example.md",
+    "instructions/00-example.md",
+    "agents/README.md",
   ]) {
     expect(existsSync(join(target, f))).toBe(true);
   }
