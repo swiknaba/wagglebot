@@ -30,3 +30,8 @@ test("hash style uses shell comment markers", () => {
   expect(next).toBe("export A=1\n# wagglebot:begin\nexport B=2\n# wagglebot:end\n");
   expect(renderManagedBlock(next, "export B=2", "hash").changed).toBe(false);
 });
+
+test("an html append onto a line without a trailing newline still gets a blank line", () => {
+  const { next } = renderManagedBlock("text", "RULES v1");
+  expect(next).toContain("text\n\n<!-- wagglebot:begin -->");
+});

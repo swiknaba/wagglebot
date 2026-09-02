@@ -16,9 +16,12 @@ export function renderManagedBlock(
   const end = existing.indexOf(END);
   const rendered = `${BEGIN}\n${content}\n${END}`;
   if (begin === -1 && end === -1) {
-    // html blocks get a blank line before them, for readability in markdown and config files.
-    // hash blocks sit directly under existing shell lines, with no blank line.
-    const sep = existing === "" ? "" : existing.endsWith("\n") ? (style === "html" ? "\n" : "") : "\n";
+    // A line that lacks a trailing newline always gets a blank line before the block, for every
+    // style, so the block never runs onto the end of that line.
+    // A line that already ends in a newline gets a blank line only for html blocks, for
+    // readability in markdown and config files. Hash blocks sit directly under existing shell
+    // lines, with no blank line.
+    const sep = existing === "" ? "" : existing.endsWith("\n") ? (style === "html" ? "\n" : "") : "\n\n";
     return { next: `${existing}${sep}${rendered}\n`, changed: true };
   }
   if (begin === -1) throw new Error("managed block: found the end marker without a begin marker");
