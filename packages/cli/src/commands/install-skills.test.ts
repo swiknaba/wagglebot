@@ -96,6 +96,27 @@ test("a changed agent set or a changed pin re-runs the install", async () => {
   expect(Object.keys(loadState(file).skills)).toEqual(["a/b@v2"]);
 });
 
+test("a URL entry whose pin changes is labeled updated, not installed", async () => {
+  const calls: string[][] = [];
+  const file = managed();
+  const base = { exec: fakeExec(calls), skillsBin: "/bin/skills", managedFile: file, nodeVersion: NODE };
+  await runInstallSkills({
+    ...base,
+    lists: [{ path: "l", text: "https://git.x/a/b.git v1\n" }],
+    skillsAgents: ["claude-code"],
+    reporter: quiet(),
+  });
+  const r = createReporter(() => {}, false);
+  await runInstallSkills({
+    ...base,
+    lists: [{ path: "l", text: "https://git.x/a/b.git v2\n" }],
+    skillsAgents: ["claude-code"],
+    reporter: r,
+  });
+  expect(r.counts()).toMatchObject({ updated: 1, installed: 0 });
+  expect(calls[1]).toEqual(["/bin/skills", "add", "https://git.x/a/b.git#v2", "-g", "-y", "-a", "claude-code"]);
+});
+
 test("a failure counts, exits non-zero, and is not recorded", async () => {
   const file = managed();
   const r = createReporter(() => {}, false);

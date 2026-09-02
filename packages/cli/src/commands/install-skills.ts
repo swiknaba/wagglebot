@@ -114,6 +114,8 @@ export async function runInstallSkills(deps: {
 
   const state = loadState(deps.managedFile);
   const next: Record<string, string[]> = {};
+  // The repo a raw list line names. Handles both "owner/repo@ref" and "<url> ref" forms.
+  const repoOf = (raw: string): string => parseList(raw).entries[0]?.repo ?? raw;
   for (const entry of entries) {
     if (isSha(entry.ref)) {
       reporter.item(entry.raw, "failed", "the skills CLI checks out a tag or a branch, not a commit hash — pin a tag");
@@ -137,12 +139,11 @@ export async function runInstallSkills(deps: {
       continue;
     }
     next[entry.raw] = agents;
-    const wasKnown = Object.keys(state.skills).some((raw) => raw.split("@")[0] === entry.repo);
+    const wasKnown = Object.keys(state.skills).some((raw) => repoOf(raw) === entry.repo);
     reporter.item(entry.raw, wasKnown ? "updated" : "installed", `agents: ${agents.join(", ")}`);
   }
   // A state entry that no list names any more. A pin bump (same repo, new ref) and a failed
   // entry are not stale: the first is reported as updated, the second as failed.
-  const repoOf = (raw: string): string => parseList(raw).entries[0]?.repo ?? raw;
   for (const raw of Object.keys(state.skills).filter((r) => !(r in next))) {
     if (entries.some((e) => e.raw === raw || e.repo === repoOf(raw))) continue;
     reporter.item(raw, "skipped", "no longer listed — remove by hand with: skills remove -g <skill-name>");
