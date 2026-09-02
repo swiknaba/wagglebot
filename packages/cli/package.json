@@ -1,8 +1,9 @@
 {
   "name": "wagglebot",
   "version": "0.0.1",
-  "description": "One AI agent setup for a whole engineering team. Placeholder release: the specs are written, the code is not. See the repository.",
+  "description": "One AI agent setup for a whole engineering team.",
   "license": "MIT",
+  "type": "module",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/swiknaba/wagglebot.git"
@@ -13,10 +14,21 @@
   },
   "files": [
     "bin/",
+    "dist/",
+    "templates/",
     "README.md"
   ],
   "engines": {
     "node": ">=20"
+  },
+  "scripts": {
+    "build": "bun build src/index.ts --target=node --outdir dist"
+  },
+  "dependencies": {
+    "skills": "1.5.23"
+  },
+  "devDependencies": {
+    "yaml": "2.8.3"
   },
   "keywords": [
     "ai",

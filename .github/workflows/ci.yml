@@ -1,0 +1,26 @@
+name: ci
+on:
+  push: { branches: [main] }
+  pull_request:
+jobs:
+  checks:
+    if: "!contains(github.event.head_commit.message, '[skip ci]')"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: oven-sh/setup-bun@v2.2.0
+      - run: bun install --frozen-lockfile
+      - run: bun run check
+      - run: bun run typecheck
+      - run: bun test
+      - run: bun audit --audit-level high
+      - run: bun run build
+      - uses: actions/setup-node@v7.0.0
+        with: { node-version: 20 }
+      - run: node packages/cli/bin/wagglebot.js --version
+  osv:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: google/osv-scanner-action/osv-scanner-action@v2.5.1
+        with: { scan-args: "--lockfile=bun.lock" }

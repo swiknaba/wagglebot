@@ -1,0 +1,10 @@
+{
+  "name": "company-wagglebot",
+  "private": true,
+  "dependencies": {
+    "wagglebot": "{{WAGGLEBOT_VERSION}}"
+  },
+  "scripts": {
+    "update:wagglebot": "wagglebot update"
+  }
+}
