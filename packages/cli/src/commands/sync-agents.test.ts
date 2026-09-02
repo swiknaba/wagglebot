@@ -23,7 +23,7 @@ test("writes every template target inside a managed block, chmod 600", () => {
   expect(claude).toContain("## Team Instructions");
   expect(claude).toContain("## Memory");
   expect(statSync(join(home, ".claude/CLAUDE.md")).mode & 0o777).toBe(0o600);
-  expect(existsSync(join(home, ".gemini/config/rules/global.md"))).toBe(true);
+  expect(existsSync(join(home, ".gemini/GEMINI.md"))).toBe(true);
   const settings = JSON.parse(readFileSync(join(home, ".claude/settings.json"), "utf8"));
   expect(JSON.stringify(settings.hooks)).toContain("wagglebot:");
 });
@@ -60,7 +60,7 @@ test("a corrupt settings.json fails the hooks merge but other targets still get 
   expect(r.counts().failed).toBeGreaterThan(0);
   // The CLAUDE.md target (a separate harness target) still gets written.
   expect(existsSync(join(home, ".claude/CLAUDE.md"))).toBe(true);
-  expect(existsSync(join(home, ".gemini/config/rules/global.md"))).toBe(true);
+  expect(existsSync(join(home, ".gemini/GEMINI.md"))).toBe(true);
 });
 
 test("--dry-run changes nothing", () => {

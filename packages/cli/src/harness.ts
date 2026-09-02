@@ -7,37 +7,49 @@ import { fileURLToPath } from "node:url";
 // and switching providers costs nothing.
 export type Harness = {
   name: string;
+  // Home-relative directory whose presence means the harness is installed on this machine.
+  detectDir: string;
+  // The --agent id the skills CLI uses for this harness. Undefined: the skills CLI has no adapter.
+  skillsAgent?: string;
   // Global instruction files. The rendered base prompt lands in a managed block in each one.
   templateTargets: string[];
   // Settings file that holds hook definitions, plus the fragment in templates/hooks/ to merge.
   hooksTarget?: { path: string; fragmentFile: string };
   // Config file and the key under which MCP servers are declared.
   mcpTarget?: { path: string; parentKey: string };
-  // Directory the provider reads custom subagents from. Undefined means the provider has no
-  // known subagent format yet: install-agents skips it with one log line (research list R2).
+  // Directory the harness reads Markdown subagents from. Undefined: no known Markdown format.
   subagentDir?: string;
 };
 
+// Paths verified against vendor documentation on 2026-09-02. Codex subagents are TOML, not
+// Markdown, so Codex has no subagentDir. Cline reads every .md file in its rules directory,
+// so wagglebot owns one file there instead of a block in a shared file.
 export const HARNESSES: Harness[] = [
   {
-    // Anthropic Claude Code. The only provider with a documented global subagent directory so far.
     name: "claude-code",
+    detectDir: ".claude",
+    skillsAgent: "claude-code",
     templateTargets: [".claude/CLAUDE.md"],
     hooksTarget: { path: ".claude/settings.json", fragmentFile: "claude-code.json" },
     mcpTarget: { path: ".claude.json", parentKey: "mcpServers" },
     subagentDir: ".claude/agents",
   },
-  // OpenAI Codex CLI reads the AGENTS.md convention from its own config directory.
-  { name: "codex", templateTargets: [".codex/AGENTS.md"] },
-  // JetBrains Junie reads both file names; write both so either lookup finds the prompt.
-  { name: "junie", templateTargets: [".junie/AGENTS.md", ".junie/CLAUDE.md"] },
-  // Cline keeps global rules in a rules directory and a separate custom-instructions file.
-  { name: "cline", templateTargets: [".cline/rules/global.md", ".cline/custom_instructions.md"] },
-  // The provider-neutral AGENTS.md convention (agents.md). Tools that follow it, and have no
-  // config directory of their own, look here.
-  { name: "agents-standard", templateTargets: [".agents/AGENTS.md"] },
-  // Google Gemini CLI and Antigravity share the .gemini config directory.
-  { name: "gemini", templateTargets: [".gemini/config/GEMINI.md", ".gemini/config/rules/global.md"] },
+  { name: "codex", detectDir: ".codex", skillsAgent: "codex", templateTargets: [".codex/AGENTS.md"] },
+  {
+    name: "junie",
+    detectDir: ".junie",
+    skillsAgent: "junie",
+    templateTargets: [".junie/AGENTS.md"],
+    subagentDir: ".junie/agents",
+  },
+  { name: "cline", detectDir: ".cline", skillsAgent: "cline", templateTargets: [".cline/rules/wagglebot.md"] },
+  { name: "gemini", detectDir: ".gemini", skillsAgent: "gemini-cli", templateTargets: [".gemini/GEMINI.md"] },
+  {
+    name: "copilot",
+    detectDir: ".copilot",
+    skillsAgent: "github-copilot",
+    templateTargets: [".copilot/copilot-instructions.md"],
+  },
 ];
 
 // dist/index.js sits next to templates/ in the published package; src/ sits one level deeper in the repo.

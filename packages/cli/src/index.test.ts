@@ -34,7 +34,7 @@ test("--help explains what update touches, file by file", async () => {
     "~/.claude.json",
     "~/.claude/agents/",
     "~/.codex/AGENTS.md",
-    "~/.agents/AGENTS.md",
+    "~/.copilot/copilot-instructions.md",
     "<!-- wagglebot:begin -->",
     "~/.wagglebot/managed.json",
     "~/.wagglebot/backups/",

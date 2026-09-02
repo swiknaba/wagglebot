@@ -35,7 +35,7 @@ test("sync-agents provisions every harness under a sandboxed HOME", () => {
   expect(claudeMdText).toContain("<!-- wagglebot:begin -->");
   expect(claudeMdText).toContain("## Memory");
 
-  expect(existsSync(join(scratchHome, ".gemini", "config", "rules", "global.md"))).toBe(true);
+  expect(existsSync(join(scratchHome, ".gemini", "GEMINI.md"))).toBe(true);
 
   const settingsPath = join(scratchHome, ".claude", "settings.json");
   expect(existsSync(settingsPath)).toBe(true);
