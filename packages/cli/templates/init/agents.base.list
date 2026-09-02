@@ -1,7 +1,21 @@
-# Shared custom agents, one owner/repo[@ref] per line. Pin each entry to a
-# tag or a commit. Entries resolve against github.com.
-# A subagent for the whole company can live in agents/ instead, with no entry
-# here. An agent that belongs to one component needs no entry either: its
-# .agents/subagents/ directory travels with that repository.
-# Example:
-# acme/review-agents@1a2b3c4
+# Shared subagents that live in another git repository.
+#
+# One repository per line. Wagglebot clones it, takes the Markdown files at its
+# top level, and installs each one as a subagent on every workstation. It writes
+# every file to the location of each agent provider that supports subagents, so
+# nobody needs to know where a provider stores its files.
+#
+# A repository on GitHub is written as owner/repo. Add @<tag-or-commit> to pin
+# it. Pin every repository that the company does not control.
+#   acme/review-agents@1a2b3c4
+#
+# A repository on any other git host is written as its full clone URL. Add a
+# space and a tag or commit to pin it. The clone uses the git credentials of
+# the workstation.
+#   https://git.my-company.local/platform/agents.git v1.2.0
+#   git@git.my-company.local:platform/agents.git
+#
+# Two other kinds of subagent need no entry here:
+#   - A subagent for the whole company is committed to agents/ in this repository.
+#   - A subagent for one component is committed to .agents/subagents/ in the
+#     repository of that component.
