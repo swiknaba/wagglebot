@@ -35,8 +35,8 @@ The scaffolded `package.json` carries the alias:
 2. `yarn install`, when the wagglebot pin moved. The CLI therefore
    updates itself through the normal dependency path, and the pin bump
    is a reviewed pull request, never a silent upgrade.
-3. Run the installers: `install-skills`, `install-agents`,
-   `sync-agents`, and the MCP config writer.
+3. Run the installers, in order: `install-skills`, `install-agents`,
+   `sync-agents`, `sync-shell`, and the MCP config writer.
 4. Print a summary: current, updated, and failed items.
 
 `wagglebot update --help` explains what the command touches, file by
@@ -79,16 +79,61 @@ The Phase 2 hub replaces this written config when the tool count needs
 aggregation (see the
 [phase 2 spec](2026-08-28-phase-2-shared-layer.md)).
 
-## Curated Skills List
-
-`skills.list`, in the company repository, is a versioned list of skill packages. The
-format is one **pinned** entry per line: `owner/repo@<ref>`, where the
-ref is a tag or a commit hash. Comments are allowed. Seed content:
+**Harness selection.** Wagglebot provisions every harness whose home
+directory already exists, for example `~/.claude` or `~/.codex`. An
+engineer overrides detection with an explicit, comma-separated list:
 
 ```
-obra/superpowers@<pinned-ref>
-ayghri/i-have-adhd@<pinned-ref>
-wagglebot/skills@<pinned-ref>        # first-party, D33
+git config --global wagglebot.harnesses claude-code,codex
+```
+
+That key wins over detection whenever it is set. An unknown name in
+the list is a hard error, and it names the valid harnesses.
+
+**Credentials reach the shell.** `sync-shell` adds a managed block to
+`~/.zshenv` (and to `~/.bashrc`, when that file already exists) that
+sources `templates/shell/wagglebot.sh`, a script the wagglebot package
+ships. That script exports every line of the company repository's
+gitignored `.env.credentials` file into the shell. An agent harness
+started from a new terminal then sees the variables, and can expand
+`${VAR}` in its MCP config.
+
+## Company Repository Layout
+
+`company/` and every `teams/<team>/` directory share one shape. The
+team directory name must equal the Group name in `catalog.yaml`.
+
+```
+package.json  README.md  .gitignore  .nvmrc  .env.credentials.example  tool_catalog.yaml  docker-compose.override.yml
+company/
+  catalog.yaml        (optional) entities shared by everyone
+  registry.yaml       MCP servers for everyone
+  skills.list         curated skills for everyone
+  agents.list         shared subagents from other repositories, for everyone
+  agents/*.md         company subagents
+  instructions/*.md   company instructions
+teams/<team>/         same six items, for the members of Group <team>
+  catalog.yaml        the Group, its Users, its Domains and Systems
+  registry.yaml  skills.list  agents.list  agents/  instructions/
+```
+
+Every `catalog.yaml` merges into one catalog. A `teams/<team>/`
+directory that names no matching Group is a hard error.
+
+## Curated Skills List
+
+`company/skills.list` and `teams/<team>/skills.list`, in the company
+repository, are versioned lists of skill packages. The format is one
+**pinned** entry per line: `owner/repo@<ref>`. Comments are allowed.
+
+The skills CLI checks out a tag or a branch, never a commit hash, so a
+skills pin is always a tag. `install-skills` rejects a commit-hash ref.
+
+Seed content, both real entries:
+
+```
+obra/superpowers@v6.3.0
+ayghri/i-have-adhd@main
 ```
 
 **One pin rule covers every list** (D32). An entry outside your
@@ -176,9 +221,13 @@ separate from the company repository.
 Two layers, which compose the same way the registry does:
 
 ```
-agents.base.list                  # every engineer, in the company repository
-agents.team.<team>.list           # one team
+company/agents.list               # every engineer
+teams/<team>/agents.list          # members of Group <team>
 ```
+
+Company agents authored in this repository live in `company/agents/`.
+Team agents live in `teams/<team>/agents/`. Both directories install
+through `wagglebot update`, with no list entry.
 
 One entry per line. A GitHub repository is written as `owner/repo`,
 with an optional `@<ref>`. A repository on any other git host is
@@ -517,10 +566,17 @@ every agent harness location. One file then governs all agents:
 |---|---|
 | Claude Code | `~/.claude/CLAUDE.md` |
 | OpenAI Codex | `~/.codex/AGENTS.md` |
-| Junie (JetBrains) | `~/.junie/AGENTS.md`, `~/.junie/CLAUDE.md` |
-| Cline | `~/.cline/rules/global.md`, `~/.cline/custom_instructions.md` |
-| Universal standard | `~/.agents/AGENTS.md` |
-| Gemini / Antigravity | `~/.gemini/config/GEMINI.md`, `~/.gemini/config/rules/global.md` |
+| Junie (JetBrains) | `~/.junie/AGENTS.md` |
+| Cline | `~/.cline/rules/wagglebot.md` |
+| Gemini CLI | `~/.gemini/GEMINI.md` |
+| GitHub Copilot CLI | `~/.copilot/copilot-instructions.md` |
+
+Paths verified against vendor documentation on 2026-09-02.
+
+Subagent directories: Claude Code `~/.claude/agents/`, Junie
+`~/.junie/agents/`. Codex subagents are TOML, not Markdown, so Codex
+has none. A harness with no known subagent directory is skipped, with
+one log line.
 
 Behavior: create missing directories. Diff before copy, and report
 `synced` or `already ok`. Apply `chmod 600`. Print summary counts. Exit
@@ -617,8 +673,9 @@ follows the same pattern.
 
 1. A clean machine runs `git clone <company repo>`, `yarn install`,
    and `yarn update:wagglebot`. The skills, the subagents, the base
-   prompts, and the MCP configs land in every harness. No service
-   starts, and no credential is configured (D14, D34, D35).
+   prompts, the MCP configs, and the shell block land in every
+   harness. No service starts, and no credential is configured
+   (D14, D34, D35).
 2. `wagglebot update --help` explains what the command touches. A
    second run reports every item as already current.
 3. **The pin bump upgrades everything.** The company merges a
@@ -649,3 +706,5 @@ follows the same pattern.
     `.agents/memory.md` (D29). The file appears in `git status`, so
     a human reviews it. A later `memory_search` finds it without a
     server call.
+12. `wagglebot update` on a machine with only Claude Code creates no
+    directory for any other harness.

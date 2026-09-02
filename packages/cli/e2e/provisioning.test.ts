@@ -18,14 +18,13 @@ beforeAll(() => {
   cpSync(join(repoRoot, "test-app"), appDir, { recursive: true });
   scratchHome = mkdtempSync(join(tmpdir(), "wagglebot-provisioning-home-"));
   // Harness selection detects a harness by the presence of its home directory (harness-select.ts).
-  // Create the two directories this test provisions into, so both are detected.
+  // Create only .claude, so detection finds one harness and the other stays untouched.
   mkdirSync(join(scratchHome, ".claude"), { recursive: true });
-  mkdirSync(join(scratchHome, ".gemini"), { recursive: true });
   // sync-agents now resolves the engineer's identity from the catalog. Store a known
-  // username instead of prompting an interactive question the test cannot answer.
-  execFileSync("git", ["config", "--global", "wagglebot.username", "alice"], {
-    env: { ...process.env, HOME: scratchHome },
-  });
+  // username instead of prompting an interactive question the test cannot answer, in a
+  // scratch global git config that never touches the real machine.
+  const env = { ...process.env, HOME: scratchHome, GIT_CONFIG_GLOBAL: join(scratchHome, ".gitconfig") };
+  execFileSync("git", ["config", "--global", "wagglebot.username", "alice"], { env });
 });
 
 afterAll(() => {
@@ -34,7 +33,7 @@ afterAll(() => {
 });
 
 test("sync-agents provisions every harness under a sandboxed HOME", () => {
-  const env = { ...process.env, HOME: scratchHome };
+  const env = { ...process.env, HOME: scratchHome, GIT_CONFIG_GLOBAL: join(scratchHome, ".gitconfig") };
 
   const first = runCli(["sync-agents"], { cwd: appDir, env });
   expect(first.status).toBe(0);
@@ -45,7 +44,9 @@ test("sync-agents provisions every harness under a sandboxed HOME", () => {
   expect(claudeMdText).toContain("<!-- wagglebot:begin -->");
   expect(claudeMdText).toContain("## Memory");
 
-  expect(existsSync(join(scratchHome, ".gemini", "GEMINI.md"))).toBe(true);
+  // .gemini was never created in the sandbox HOME, so detection must not find it and
+  // sync-agents must not create it.
+  expect(existsSync(join(scratchHome, ".gemini"))).toBe(false);
 
   const settingsPath = join(scratchHome, ".claude", "settings.json");
   expect(existsSync(settingsPath)).toBe(true);
@@ -55,4 +56,13 @@ test("sync-agents provisions every harness under a sandboxed HOME", () => {
   expect(second.status).toBe(0);
   expect(second.stdout).toContain("already ok");
   expect(second.stdout).not.toContain("synced");
+
+  const shell = runCli(["sync-shell"], { cwd: appDir, env });
+  expect(shell.status).toBe(0);
+  const zshenvText = readFileSync(join(scratchHome, ".zshenv"), "utf8");
+  expect(zshenvText).toContain("# wagglebot:begin");
+
+  const help = runCli(["write-mcp", "--help"], { cwd: appDir, env });
+  expect(help.status).toBe(0);
+  expect(help.stdout).toContain("~/.claude.json");
 });
