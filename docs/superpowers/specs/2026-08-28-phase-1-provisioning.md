@@ -448,8 +448,8 @@ The template also ships with this memory section:
 ```markdown
 ## Memory
 
-You decide what to remember. No model on the server repeats this work,
-so a fact you skip is lost, and a fact you invent is believed.
+You decide what to remember. No model repeats this work, so a fact you
+skip is lost, and a fact you invent is believed.
 
 WHAT TO REMEMBER
 
@@ -466,31 +466,28 @@ Do not remember:
 * A fact the code already states. Read the code instead.
 * A guess, an attempt, or a dead end.
 * Anything about a person, beyond their role and their ownership.
-* A secret. The server rejects one, but never send one.
+* A secret. Never write one.
 
 Write few facts. A large memory is a haystack.
 
-WHERE TO WRITE
+WHERE MEMORY LIVES
 
-Four scopes exist. Pick the smallest one that fits.
+Component memory is one file in the repository you work in:
 
-| Scope | Content | How to write |
-|---|---|---|
-| `component` | A fact about this one repository | Edit `.agents/memory.md` |
-| `system` | A fact about the whole project | Propose, then ask your engineer |
-| `domain` | A convention across projects | A human publishes it |
-| `org` | A company-wide interface | A human publishes it |
+    .agents/memory.md
 
-Default to `component`. A file in the repository travels with the code,
-a pull request reviews it, and git keeps the history.
+Read it at the start of a session, before you plan. Edit it when you
+learn a durable fact about this repository. The file is committed, so a
+pull request reviews every change, and git keeps the history.
 
-Propose `system` only for a fact that a different repository needs.
-Then ask your engineer in the session, and accept the answer. Never
-promote silently. Never write to `domain` or `org`.
+A fact that crosses a repository boundary has no home yet. The shared
+memory store arrives with the wagglebot shared layer. Until then, tell
+your engineer the fact in the session, and let them place it. Do not
+invent a memory tool. Do not write outside `.agents/memory.md`.
 
 BEFORE YOU WRITE
 
-1. Search memory first.
+1. Read `.agents/memory.md` first.
 2. If the fact exists, update it. Do not add a duplicate.
 3. If the fact contradicts an existing one, say so to your engineer.
 
@@ -501,13 +498,10 @@ you time. Do not write during exploration.
 
 WHEN YOUR ENGINEER TELLS YOU TO REMEMBER SOMETHING
 
-Use the `remember` tool, and give the scope they named.
+Write it to `.agents/memory.md`.
 
 * Do not judge the importance. They asked, so write it.
-* Do not ask to promote the scope. They already chose it.
-* Ask only when they named no scope. Suggest the smallest one that fits.
-
-Use `forget` when they tell you a fact is wrong.
+* When they tell you a fact is wrong, remove it.
 ```
 
 NOTE: The superpowers skill set already works this way for larger
