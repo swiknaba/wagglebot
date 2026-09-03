@@ -30,7 +30,14 @@ beforeAll(() => {
   // sync-agents now resolves the engineer's identity from the catalog. Store a known
   // username instead of prompting an interactive question the test cannot answer, in a
   // scratch global git config that never touches the real machine.
-  const env = { ...process.env, HOME: scratchHome, GIT_CONFIG_GLOBAL: join(scratchHome, ".gitconfig") };
+  const env = {
+    ...process.env,
+    HOME: scratchHome,
+    GIT_CONFIG_GLOBAL: join(scratchHome, ".gitconfig"),
+    // sync-shell creates the startup file of the login shell only. Pin $SHELL, so the
+    // sandbox decides which file appears instead of the machine that runs the suite.
+    SHELL: "/bin/zsh",
+  };
   execFileSync("git", ["config", "--global", "wagglebot.username", "alice"], { env });
 });
 
@@ -40,7 +47,14 @@ afterAll(() => {
 });
 
 test("sync-agents provisions every harness under a sandboxed HOME", () => {
-  const env = { ...process.env, HOME: scratchHome, GIT_CONFIG_GLOBAL: join(scratchHome, ".gitconfig") };
+  const env = {
+    ...process.env,
+    HOME: scratchHome,
+    GIT_CONFIG_GLOBAL: join(scratchHome, ".gitconfig"),
+    // sync-shell creates the startup file of the login shell only. Pin $SHELL, so the
+    // sandbox decides which file appears instead of the machine that runs the suite.
+    SHELL: "/bin/zsh",
+  };
 
   const first = runCli(["sync-agents"], { cwd: appDir, env });
   expect(first.status).toBe(0);

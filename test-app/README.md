@@ -11,6 +11,11 @@ pull request first.
 
 You need Node 22.20 or newer. Run `nvm use` in this directory.
 
+On Windows, do all of this inside the Windows Subsystem for Linux
+(WSL). Clone this repository under your Linux home directory, not
+under `/mnt/c`. Install your agent harness inside WSL too, because the
+provisioning writes to the Linux home directory only.
+
 ## Setup
 
 1. Run `git clone <this repo>`.
@@ -37,9 +42,10 @@ Run `yarn wagglebot --help` for the valid names.
 
 Copy `.env.credentials.example` to `.env.credentials` and fill the
 values. The file is gitignored. No credential ever enters this
-repository. `wagglebot update` adds a block to `~/.zshenv` (and to
-`~/.bashrc` when it exists) that exports the file into every new shell.
-Start an agent harness from a new terminal so it sees the variables.
+repository. `wagglebot update` adds a block to the startup file of your
+shell, `~/.zshenv` for zsh or `~/.bashrc` for bash. The block exports
+the file into every new shell. Start an agent harness from a new
+terminal so it sees the variables.
 
 ## Layout
 

@@ -17,7 +17,7 @@ const subagentDirs = () =>
     h.subagentDir ? [`~/${h.subagentDir}/  (${h.name}, files prefixed company__, <team>__, or owner__repo__)`] : [],
   );
 const shellFiles = () =>
-  SHELL_RC_FILES.map((f) => `~/${f.file}  (managed block${f.createIfMissing ? "" : ", only when the file exists"})`);
+  SHELL_RC_FILES.map((f) => `~/${f.file}  (managed block, when the file exists or this machine uses ${f.shell})`);
 const skillDirs = () =>
   HARNESSES.flatMap((h) =>
     h.skillsAgent

@@ -78,6 +78,24 @@ service bearer tokens.
 * **Trusted coworkers.** Identity serves routing, context, and
   attribution. Git and your identity provider control code access.
 
+## Platform Support
+
+Wagglebot runs on macOS, on Linux, and on Windows through the Windows
+Subsystem for Linux (WSL). Wagglebot does not support the native
+Windows shells, PowerShell and cmd.
+
+Under WSL, install and run wagglebot inside the WSL distribution.
+Three points apply:
+
+* Run the agent harness inside WSL too. Wagglebot provisions one home
+  directory, the Linux one. A harness that you install on the Windows
+  side reads `C:\Users\<user>\` and finds nothing there.
+* Keep the company repository under your Linux home directory. The
+  `/mnt/c` mount is slow, and it discards the `chmod 600` mode that
+  protects each managed file.
+* The shell block lands in `~/.bashrc` on a distribution that ships
+  bash alone, and in `~/.zshenv` when you use zsh.
+
 ## Documentation
 
 | Spec | Content |
