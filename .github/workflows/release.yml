@@ -28,9 +28,11 @@ jobs:
           registry-url: https://registry.npmjs.org
       # Trusted publishing needs npm 11.5.1 or later. Node 22 bundles npm 10.x,
       # which has no OIDC support and would ask for a token that does not exist.
+      # Pin the major: npm 12 already warns on some Node 22 versions, and a
+      # release pipeline must not change behavior when a new npm ships.
       - name: Use an npm that supports trusted publishing
         run: |
-          npm install -g npm@latest
+          npm install -g npm@11
           npm --version
         working-directory: .
       - name: Verify that the tag matches the package version
@@ -46,22 +48,17 @@ jobs:
         working-directory: .
       - name: Build the bundle
         run: bun run build
-      # "npm pack --dry-run" prints the file list on stderr and only the tarball
-      # name on stdout, so grepping stdout never matches. Read the machine
-      # readable file list instead.
+      # Do not parse "npm pack --json": its shape differs between npm majors.
+      # Build the real tarball and look inside it instead.
       - name: Assert the tarball ships the built bundle
         run: |
           test -f dist/index.js
-          npm pack --dry-run --json > "$RUNNER_TEMP/pack.json"
-          node -e '
-            const pack = require(process.env.RUNNER_TEMP + "/pack.json");
-            const files = pack[0].files.map((f) => f.path);
-            if (!files.includes("dist/index.js")) {
-              console.error("The tarball does not ship dist/index.js. It ships:");
-              console.error(files.join("\n"));
-              process.exit(1);
-            }
-            console.log("The tarball ships dist/index.js.");
-          '
+          npm pack --pack-destination "$RUNNER_TEMP"
+          if ! tar -tzf "$RUNNER_TEMP"/wagglebot-*.tgz | grep -qx "package/dist/index.js"; then
+            echo "The tarball does not ship dist/index.js. It ships:"
+            tar -tzf "$RUNNER_TEMP"/wagglebot-*.tgz
+            exit 1
+          fi
+          echo "The tarball ships dist/index.js."
       - name: Publish to npm with provenance
         run: npm publish --provenance --access public
