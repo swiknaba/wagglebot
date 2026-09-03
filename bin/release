@@ -29,6 +29,11 @@ if ! command -v node &> /dev/null; then
   exit 1
 fi
 
+if ! command -v bun &> /dev/null; then
+  echo "bun is not installed. It is needed to verify the scaffold reference."
+  exit 1
+fi
+
 if [[ $(git status --porcelain) ]]; then
   echo "You have uncommitted changes."
   exit 1
@@ -84,6 +89,15 @@ package_version=$(node -p "require('./$PACKAGE_JSON').version")
 if [ "$NEW_VERSION" != "$package_version" ]; then
   echo "The package version ($package_version) does not match the release ($NEW_VERSION)."
   echo "Please update the version in $PACKAGE_JSON in a reviewed commit first."
+  exit 1
+fi
+
+# The scaffolded README embeds the CLI version, so a version bump makes test-app/
+# stale. Catch that here, before the tag exists, instead of in CI after the release.
+echo "Verifying that test-app/ matches the scaffold..."
+if ! bun test packages/cli/e2e/scaffold.test.ts > /dev/null 2>&1; then
+  echo "test-app/ is out of sync with the CLI scaffold."
+  echo "Please run 'bun run regen:test-app' and commit the result first."
   exit 1
 fi
 
