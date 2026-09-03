@@ -26,8 +26,12 @@ export async function runUpdate(deps: {
   write: (line: string) => void;
   skillsBin: string;
   skipSelfUpdate?: boolean;
+  // The process environment. sync-shell reads $SHELL from it, and write-mcp expands ${VAR}.
+  // A test passes its own, so neither step depends on the machine that runs the suite.
+  env?: Record<string, string | undefined>;
 }): Promise<number> {
   const { exec, reporter, write } = deps;
+  const env = deps.env ?? process.env;
   const root = findCompanyRoot(deps.cwd);
   const pinBefore = loadCompanyRepo(root).pin;
 
@@ -97,7 +101,7 @@ export async function runUpdate(deps: {
     reporter,
     backups,
   });
-  runSyncShell({ home: deps.home, companyRoot: root, reporter, backups });
+  runSyncShell({ home: deps.home, companyRoot: root, reporter, backups, env });
 
   const proxies = layers
     .filter((l) => l.registryText !== undefined)
@@ -105,7 +109,7 @@ export async function runUpdate(deps: {
       (acc, l) => mergeRegistries(acc, loadRegistry(l.registryText ?? "", `${l.name}/registry.yaml`)),
       [],
     );
-  runWriteMcp({ home: deps.home, harnesses, proxies, env: process.env, reporter, backups });
+  runWriteMcp({ home: deps.home, harnesses, proxies, env, reporter, backups });
 
   write(reporter.summary());
   return reporter.failed() ? 1 : 0;

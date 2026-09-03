@@ -9,7 +9,11 @@ registry, and a shell block that loads the engineer's credentials.
 Every mutation lands inside a managed block. Content outside that
 block stays untouched.
 
-Requires Node 22.20 or newer.
+Requires Node 22.20 or newer. Runs on macOS, on Linux, and on Windows
+through the Windows Subsystem for Linux (WSL). The native Windows
+shells, PowerShell and cmd, are out of scope. Under WSL, run this CLI
+and the agent harness in the same environment, because wagglebot
+provisions one home directory.
 
 ## The Engineer Flow
 

@@ -4,6 +4,7 @@ import { templatesDir } from "../harness";
 import type { Reporter } from "../report";
 
 const RENAMES: Record<string, string> = {
+  gitattributes: ".gitattributes",
   gitignore: ".gitignore",
   nvmrc: ".nvmrc",
   "env.credentials.example": ".env.credentials.example",

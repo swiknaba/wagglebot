@@ -1,0 +1,5 @@
+# Every text file checks out with LF, on every platform. The managed shell block
+# sources templates/shell/wagglebot.sh with `.`, and bash rejects a CRLF copy of a
+# script with `$'\r': command not found`. A Windows clone with core.autocrlf=true
+# would produce exactly that, and WSL would then fail to load the credentials.
+* text=auto eol=lf

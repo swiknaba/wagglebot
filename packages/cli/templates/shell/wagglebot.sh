@@ -1,6 +1,7 @@
 # wagglebot shell environment.
 #
-# The managed block in ~/.zshenv (and ~/.bashrc, when that file exists) sources this file.
+# The managed block in the startup file of your shell (~/.zshenv for zsh, ~/.bashrc for
+# bash) sources this file.
 # It exports every line of the gitignored .env.credentials file of the company repository,
 # so an agent harness started from this shell can expand ${VAR} in its MCP config.
 #
