@@ -10,6 +10,7 @@ import { resolvePaths } from "../paths";
 import type { ProxyConfig } from "../registry";
 import { loadRegistry, mergeRegistries } from "../registry";
 import type { Reporter } from "../report";
+import { resolveSkillLockFile } from "../skill-lock";
 import { runInstallAgents } from "./install-agents";
 import { runInstallSkills } from "./install-skills";
 import { runSyncAgents } from "./sync-agents";
@@ -76,6 +77,7 @@ export async function runUpdate(deps: {
     skillsBin: deps.skillsBin,
     skillsAgents: harnesses.flatMap((h) => (h.skillsAgent ? [h.skillsAgent] : [])),
     managedFile: paths.managedFile,
+    skillLockFile: resolveSkillLockFile(deps.home),
   });
   await runInstallAgents({
     home: deps.home,

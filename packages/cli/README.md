@@ -29,9 +29,9 @@ harness on the workstation.
 
 | Command | What it does |
 |---|---|
-| `wagglebot update` | Pulls the company repo, then reinstalls skills, subagents, the base prompt, and MCP configs. |
+| `wagglebot update` | Pulls the company repo, then syncs skills, subagents, the base prompt, and MCP configs. |
 | `wagglebot init [dir]` | Scaffolds a new company repository. |
-| `wagglebot install-skills` | Installs the curated skills list. |
+| `wagglebot install-skills` | Syncs the curated skills list: installs new skills, removes deleted ones. |
 | `wagglebot install-agents` | Installs the shared subagents: the company `agents/` directory, plus the curated list. |
 | `wagglebot sync-agents` | Syncs the base prompt, plus the company instructions, into every harness. |
 | `wagglebot sync-shell` | Adds a managed block to the shell startup files that loads `.env.credentials`. |
