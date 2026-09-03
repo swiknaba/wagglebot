@@ -1,6 +1,6 @@
 {
   "name": "wagglebot",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "One AI agent setup for a whole engineering team.",
   "license": "MIT",
   "type": "module",
