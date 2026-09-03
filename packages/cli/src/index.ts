@@ -24,6 +24,7 @@ import { resolvePaths } from "./paths";
 import type { ProxyConfig } from "./registry";
 import { loadRegistry, mergeRegistries } from "./registry";
 import { createReporter } from "./report";
+import { resolveSkillLockFile } from "./skill-lock";
 
 export type CliDeps = { write: (line: string) => void; cwd?: string };
 
@@ -122,6 +123,7 @@ export async function main(argv: string[], deps: CliDeps = { write: console.log 
         skillsBin: resolveSkillsBin(),
         skillsAgents: harnesses.flatMap((h) => (h.skillsAgent ? [h.skillsAgent] : [])),
         managedFile: resolvePaths(home).managedFile,
+        skillLockFile: resolveSkillLockFile(home),
         update: values.update === true,
         writeList: values.update === true ? (path, text) => writeFileSync(path, text) : undefined,
       });

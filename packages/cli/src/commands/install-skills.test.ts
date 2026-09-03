@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Exec } from "../exec";
@@ -11,6 +11,39 @@ import { nodeSatisfies, runInstallSkills, toSkillsSource } from "./install-skill
 const quiet = () => createReporter(() => {}, false);
 const managed = () => join(mkdtempSync(join(tmpdir(), "wgl-sk-")), "managed.json");
 const NODE = "v24.0.0";
+// No lock file: skillsOfSource then reports nothing for every source, so no test that does not
+// write one can install a new skill or remove a stale one.
+const NO_LOCK = join(mkdtempSync(join(tmpdir(), "wgl-lk-")), "absent.json");
+
+const lockFile = (skills: Record<string, { source: string; updatedAt: string }>): string => {
+  const file = join(mkdtempSync(join(tmpdir(), "wgl-lk-")), ".skill-lock.json");
+  writeFileSync(file, JSON.stringify({ version: 3, skills }));
+  return file;
+};
+// The skills CLI stamps updatedAt on every skill it writes. This exec does the same, so a test
+// can name the skills a source still provides and let the stale ones keep an old stamp.
+const lockWritingExec = (calls: string[][], file: string, provides: Record<string, string[]>): Exec => {
+  return async (cmd, args) => {
+    calls.push([cmd, ...args]);
+    if (args[1] === "add") {
+      const source = (args[2] ?? "").split("#")[0] ?? "";
+      const raw: { version: number; skills: Record<string, unknown> } = JSON.parse(readFileSync(file, "utf8"));
+      for (const name of provides[source] ?? [])
+        raw.skills[name] = {
+          source,
+          sourceUrl: `https://github.com/${source}.git`,
+          updatedAt: new Date(Date.now() + 5).toISOString(),
+        };
+      writeFileSync(file, JSON.stringify(raw));
+    }
+    if (args[1] === "remove") {
+      const raw: { version: number; skills: Record<string, unknown> } = JSON.parse(readFileSync(file, "utf8"));
+      delete raw.skills[args[2] ?? ""];
+      writeFileSync(file, JSON.stringify(raw));
+    }
+    return { code: 0, stdout: "", stderr: "" };
+  };
+};
 
 const fakeExec =
   (calls: string[][]): Exec =>
@@ -50,6 +83,7 @@ test("installs into every selected agent, records state, and is ok on the second
     skillsBin: "/bin/skills",
     skillsAgents: ["claude-code", "codex"],
     managedFile: file,
+    skillLockFile: NO_LOCK,
     nodeVersion: NODE,
   };
   const r1 = createReporter(() => {}, false);
@@ -69,16 +103,25 @@ test("installs into every selected agent, records state, and is ok on the second
   expect(r1.counts().installed).toBe(1);
   expect(loadState(file).skills).toEqual({ "obra/superpowers@v6.3.0": ["claude-code", "codex"] });
 
+  // The second run adds again — that is the only way a skill that is new upstream arrives — but
+  // nothing moved, so the entry reports ok.
   const r2 = createReporter(() => {}, false);
   expect(await runInstallSkills({ ...deps, reporter: r2 })).toBe(0);
-  expect(calls).toHaveLength(1);
+  expect(calls).toHaveLength(2);
+  expect(calls[1]).toEqual(calls[0] ?? []);
   expect(r2.counts()).toMatchObject({ ok: 1, installed: 0 });
 });
 
 test("a changed agent set or a changed pin re-runs the install", async () => {
   const calls: string[][] = [];
   const file = managed();
-  const base = { exec: fakeExec(calls), skillsBin: "/bin/skills", managedFile: file, nodeVersion: NODE };
+  const base = {
+    exec: fakeExec(calls),
+    skillsBin: "/bin/skills",
+    managedFile: file,
+    skillLockFile: NO_LOCK,
+    nodeVersion: NODE,
+  };
   await runInstallSkills({
     ...base,
     lists: [{ path: "l", text: "a/b@v1\n" }],
@@ -100,7 +143,13 @@ test("a changed agent set or a changed pin re-runs the install", async () => {
 test("a URL entry whose pin changes is labeled updated, not installed", async () => {
   const calls: string[][] = [];
   const file = managed();
-  const base = { exec: fakeExec(calls), skillsBin: "/bin/skills", managedFile: file, nodeVersion: NODE };
+  const base = {
+    exec: fakeExec(calls),
+    skillsBin: "/bin/skills",
+    managedFile: file,
+    skillLockFile: NO_LOCK,
+    nodeVersion: NODE,
+  };
   await runInstallSkills({
     ...base,
     lists: [{ path: "l", text: "https://git.x/a/b.git v1\n" }],
@@ -137,6 +186,7 @@ test("a failure counts, exits non-zero, and is not recorded", async () => {
     skillsBin: "/bin/skills",
     skillsAgents: ["claude-code"],
     managedFile: file,
+    skillLockFile: NO_LOCK,
     nodeVersion: NODE,
   });
   expect(code).toBe(1);
@@ -153,6 +203,7 @@ test("a commit hash pin is rejected with the tag advice", async () => {
     skillsBin: "/bin/skills",
     skillsAgents: ["claude-code"],
     managedFile: managed(),
+    skillLockFile: NO_LOCK,
     nodeVersion: NODE,
   });
   expect(r.counts().failed).toBe(1);
@@ -168,6 +219,7 @@ test("an old node fails before any install; no agents skips", async () => {
     skillsBin: "/bin/skills",
     skillsAgents: ["claude-code"],
     managedFile: managed(),
+    skillLockFile: NO_LOCK,
     nodeVersion: "v20.12.2",
   });
   expect(code).toBe(1);
@@ -180,6 +232,7 @@ test("an old node fails before any install; no agents skips", async () => {
     skillsBin: "/bin/skills",
     skillsAgents: [],
     managedFile: managed(),
+    skillLockFile: NO_LOCK,
     nodeVersion: NODE,
   });
   expect(r2.counts().skipped).toBe(1);
@@ -200,6 +253,7 @@ test("--update bumps each GitHub entry to its highest tag and leaves untagged re
     skillsBin: "/bin/skills",
     skillsAgents: ["claude-code"],
     managedFile: managed(),
+    skillLockFile: NO_LOCK,
     nodeVersion: NODE,
     update: true,
     writeList: (path, text) => {
@@ -208,4 +262,90 @@ test("--update bumps each GitHub entry to its highest tag and leaves untagged re
   });
   expect(written["company/skills.list"]).toBe("a/b@v1.10.0\nc/d@main\n");
   expect(r.counts()).toMatchObject({ updated: 1, skipped: 1 });
+});
+
+test("installs a skill that is new in a listed source and reports it", async () => {
+  const file = managed();
+  const lock = lockFile({ alpha: { source: "a/b", updatedAt: new Date().toISOString() } });
+  const calls: string[][] = [];
+  const base = {
+    lists: [{ path: "l", text: "a/b@v1\n" }],
+    skillsBin: "/bin/skills",
+    skillsAgents: ["claude-code"],
+    managedFile: file,
+    skillLockFile: lock,
+    nodeVersion: NODE,
+  };
+  await runInstallSkills({ ...base, exec: lockWritingExec(calls, lock, { "a/b": ["alpha"] }), reporter: quiet() });
+  const r = createReporter(() => {}, false);
+  await runInstallSkills({
+    ...base,
+    exec: lockWritingExec(calls, lock, { "a/b": ["alpha", "beta"] }),
+    reporter: r,
+  });
+  expect(r.counts()).toMatchObject({ updated: 1, ok: 0 });
+  expect(Object.keys(JSON.parse(readFileSync(lock, "utf8")).skills).sort()).toEqual(["alpha", "beta"]);
+});
+
+test("removes a skill the add did not stamp, because it is deleted upstream", async () => {
+  const file = managed();
+  const old = new Date(Date.now() - 60_000).toISOString();
+  const lock = lockFile({ alpha: { source: "a/b", updatedAt: old }, beta: { source: "a/b", updatedAt: old } });
+  const calls: string[][] = [];
+  const r = createReporter(() => {}, false);
+  // The source still provides alpha only. beta keeps its old stamp and is removed.
+  await runInstallSkills({
+    lists: [{ path: "l", text: "a/b@v1\n" }],
+    exec: lockWritingExec(calls, lock, { "a/b": ["alpha"] }),
+    reporter: r,
+    skillsBin: "/bin/skills",
+    skillsAgents: ["claude-code"],
+    managedFile: file,
+    skillLockFile: lock,
+    nodeVersion: NODE,
+  });
+  expect(calls[1]).toEqual([process.execPath, "/bin/skills", "remove", "beta", "-g", "-y", "-a", "claude-code"]);
+  expect(Object.keys(JSON.parse(readFileSync(lock, "utf8")).skills)).toEqual(["alpha"]);
+  expect(r.counts().failed).toBe(0);
+});
+
+test("keeps every skill when the add stamped none of them", async () => {
+  const file = managed();
+  const old = new Date(Date.now() - 60_000).toISOString();
+  const lock = lockFile({ alpha: { source: "a/b", updatedAt: old }, beta: { source: "a/b", updatedAt: old } });
+  const calls: string[][] = [];
+  const r = createReporter(() => {}, false);
+  await runInstallSkills({
+    lists: [{ path: "l", text: "a/b@v1\n" }],
+    exec: lockWritingExec(calls, lock, {}),
+    reporter: r,
+    skillsBin: "/bin/skills",
+    skillsAgents: ["claude-code"],
+    managedFile: file,
+    skillLockFile: lock,
+    nodeVersion: NODE,
+  });
+  expect(calls).toHaveLength(1);
+  expect(r.counts().skipped).toBe(1);
+  expect(Object.keys(JSON.parse(readFileSync(lock, "utf8")).skills).sort()).toEqual(["alpha", "beta"]);
+});
+
+test("removes every skill of a source that no list names any more", async () => {
+  const file = managed();
+  const lock = lockFile({});
+  const calls: string[][] = [];
+  const base = {
+    skillsBin: "/bin/skills",
+    skillsAgents: ["claude-code"],
+    managedFile: file,
+    skillLockFile: lock,
+    nodeVersion: NODE,
+  };
+  const exec = lockWritingExec(calls, lock, { "a/b": ["alpha"], "c/d": ["gamma"] });
+  await runInstallSkills({ ...base, lists: [{ path: "l", text: "a/b@v1\nc/d@v1\n" }], exec, reporter: quiet() });
+  const r = createReporter(() => {}, false);
+  await runInstallSkills({ ...base, lists: [{ path: "l", text: "a/b@v1\n" }], exec, reporter: r });
+  expect(calls.at(-1)).toEqual([process.execPath, "/bin/skills", "remove", "gamma", "-g", "-y", "-a", "claude-code"]);
+  expect(Object.keys(JSON.parse(readFileSync(lock, "utf8")).skills)).toEqual(["alpha"]);
+  expect(loadState(file).skills).toEqual({ "a/b@v1": ["claude-code"] });
 });

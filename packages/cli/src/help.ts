@@ -30,8 +30,12 @@ const LAYERS = "company/ and teams/<team>/ for each team of the engineer";
 const SECTIONS: Record<string, Section> = {
   "install-skills": {
     title: "install-skills",
-    purpose: "Installs every entry of the curated skills lists with the skills CLI, into the selected harnesses.",
-    reads: [`skills.list in ${LAYERS}`],
+    purpose:
+      "Syncs every entry of the curated skills lists with the skills CLI, into the selected harnesses. Each run installs the skills that are new in a listed repository, and removes each skill that the repository deleted or that no list names any more.",
+    reads: [
+      `skills.list in ${LAYERS}`,
+      "~/.agents/.skill-lock.json  (the lock file of the skills CLI: which skill came from which source)",
+    ],
     writes: [...skillDirs(), "~/.wagglebot/managed.json  (which entry was installed for which harness)"],
     flags: ["--update    Bump each pinned entry to the highest version tag on its remote and rewrite the list."],
   },

@@ -3,6 +3,7 @@ import { dirname, join } from "node:path";
 import type { Exec } from "../exec";
 import { type ListEntry, parseList } from "../lists";
 import type { Reporter } from "../report";
+import { loadSkillLock, skillsOfSource, staleSkills } from "../skill-lock";
 import { loadState, saveState } from "../state";
 
 // The floor check below reads process.version, and the invocation of the skills CLI runs
@@ -61,6 +62,7 @@ export async function runInstallSkills(deps: {
   skillsBin: string;
   skillsAgents: string[];
   managedFile: string;
+  skillLockFile: string;
   nodeVersion?: string;
   update?: boolean;
   writeList?: (path: string, text: string) => void;
@@ -116,20 +118,27 @@ export async function runInstallSkills(deps: {
 
   const state = loadState(deps.managedFile);
   const next: Record<string, string[]> = {};
+  const agentFlags = agents.flatMap((a) => ["-a", a]);
   // The repo a raw list line names. Handles both "owner/repo@ref" and "<url> ref" forms.
   const repoOf = (raw: string): string => parseList(raw).entries[0]?.repo ?? raw;
+
+  const removeSkill = async (name: string, reason: string): Promise<void> => {
+    const result = await exec(process.execPath, [deps.skillsBin, "remove", name, "-g", "-y", ...agentFlags]);
+    if (result.code === 0) reporter.item(name, "updated", `removed — ${reason}`);
+    else reporter.item(name, "failed", `skills remove failed — ${reason}`);
+  };
+
   for (const entry of entries) {
     if (isSha(entry.ref)) {
       reporter.item(entry.raw, "failed", "the skills CLI checks out a tag or a branch, not a commit hash — pin a tag");
       continue;
     }
-    const before = state.skills[entry.raw];
-    if (sameAgents(before, agents)) {
-      next[entry.raw] = agents;
-      reporter.item(entry.raw, "ok", "already installed");
-      continue;
-    }
-    const args = ["add", toSkillsSource(entry), "-g", "-y", ...agents.flatMap((a) => ["-a", a])];
+    // The add runs on every pass, not only when the pin or the agent set moved: it is the only
+    // way a skill that is new in the source repository reaches this machine. The add is
+    // idempotent, and it stamps every skill it writes in the lock file.
+    const known = skillsOfSource(loadSkillLock(deps.skillLockFile), entry.repo);
+    const startedAt = Date.now();
+    const args = ["add", toSkillsSource(entry), "-g", "-y", ...agentFlags];
     const result = await exec(process.execPath, [deps.skillsBin, ...args]);
     const output = `${result.stdout}\n${result.stderr}`;
     if (result.code !== 0 || output.includes("Installation failed")) {
@@ -141,14 +150,39 @@ export async function runInstallSkills(deps: {
       continue;
     }
     next[entry.raw] = agents;
+
+    const lock = loadSkillLock(deps.skillLockFile);
+    const mine = skillsOfSource(lock, entry.repo);
+    const added = mine.filter((name) => !known.includes(name));
     const wasKnown = Object.keys(state.skills).some((raw) => repoOf(raw) === entry.repo);
-    reporter.item(entry.raw, wasKnown ? "updated" : "installed", `agents: ${agents.join(", ")}`);
+    const detail = `agents: ${agents.join(", ")}${added.length === 0 ? "" : `; new: ${added.join(", ")}`}`;
+    const moved = added.length > 0 || !sameAgents(state.skills[entry.raw], agents);
+    if (!wasKnown) reporter.item(entry.raw, "installed", detail);
+    else if (moved) reporter.item(entry.raw, "updated", detail);
+    else reporter.item(entry.raw, "ok", "already installed");
+
+    // A skill the add did not stamp is deleted in the source repository. One exception stays
+    // installed: when no skill of the source was stamped, the add itself wrote nothing, so the
+    // stale mark is not evidence of a deletion.
+    const stale = staleSkills(lock, entry.repo, startedAt);
+    if (stale.length > 0 && stale.length === mine.length) {
+      reporter.item(entry.raw, "skipped", `${stale.join(", ")} look stale but the add wrote no skill — kept`);
+      continue;
+    }
+    for (const name of stale) await removeSkill(name, `deleted upstream in ${entry.repo}`);
   }
-  // A state entry that no list names any more. A pin bump (same repo, new ref) and a failed
-  // entry are not stale: the first is reported as updated, the second as failed.
+
+  // A state entry that no list names any more. A pin bump (same repo, new ref) and a failed entry
+  // are not stale: the first is reported as updated, the second as failed.
   for (const raw of Object.keys(state.skills).filter((r) => !(r in next))) {
     if (entries.some((e) => e.raw === raw || e.repo === repoOf(raw))) continue;
-    reporter.item(raw, "skipped", "no longer listed — remove by hand with: skills remove -g <skill-name>");
+    const repo = repoOf(raw);
+    const names = skillsOfSource(loadSkillLock(deps.skillLockFile), repo);
+    if (names.length === 0) {
+      reporter.item(raw, "ok", "no longer listed — nothing left to remove");
+      continue;
+    }
+    for (const name of names) await removeSkill(name, `${repo} is no longer listed`);
   }
   state.skills = next;
   saveState(deps.managedFile, state);
