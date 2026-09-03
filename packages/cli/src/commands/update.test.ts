@@ -28,6 +28,10 @@ const scaffoldCompany = (): string => {
   return root;
 };
 
+// runUpdate hands this to sync-shell, which creates the startup file of the login shell
+// only. Pin $SHELL, so the assertions below hold on a bash machine as well as a zsh one.
+const zshEnv = { ...process.env, SHELL: "/bin/zsh" };
+
 const gitExec =
   (calls: string[][]): Exec =>
   async (cmd, args, _opts) => {
@@ -51,6 +55,7 @@ test("pulls, provisions, and prints a summary", async () => {
     reporter: createReporter((l) => lines.push(l), false),
     write: (l) => lines.push(l),
     skillsBin: "/bin/skills",
+    env: zshEnv,
   });
   expect(code).toBe(0);
   expect(calls[0]).toEqual(["git", "pull", "--ff-only"]);
@@ -93,6 +98,7 @@ test("a moved pin triggers yarn install and a re-exec, once", async () => {
     reporter: quiet,
     write: () => {},
     skillsBin: "/bin/skills",
+    env: zshEnv,
   });
   expect(code).toBe(0);
   expect(calls).toContainEqual(["yarn", "install"]);
@@ -114,6 +120,7 @@ test("one runUpdate makes a single backup set that restores both CLAUDE.md and .
     reporter: createReporter(() => {}, false),
     write: () => {},
     skillsBin: "/bin/skills",
+    env: zshEnv,
   });
   expect(code).toBe(0);
 
