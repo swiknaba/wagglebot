@@ -2,10 +2,10 @@
 
 One AI agent setup for a whole engineering team.
 
-> **Status.** Phase 1 is implemented in
-> [`packages/cli`](packages/cli/). Phases 2–4 stay at the specification
-> stage. The [design specs](docs/superpowers/specs/) define the whole
-> system.
+> **Status.** Phase 1 workstation provisioning is implemented in
+> [`packages/cli`](packages/cli/). Repository instruction sync remains
+> specified but not implemented. Phases 2–4 stay at the specification
+> stage. The [design specs](docs/superpowers/specs/) define the system.
 
 ## Why
 
@@ -35,6 +35,9 @@ commands — `git clone <company repo>`, `yarn install`,
 * The MCP server configs, from one curated registry.
 * Your credentials stay on your machine in one gitignored file, and
   load into every new shell.
+
+Phase 1 also specifies `wagglebot sync-project`. It publishes local
+`.agents/instructions/*.md` files to each supported agent harness.
 
 An engineer clones, installs, runs the update, and works. Nothing
 listens on a port, and git access is the whole permission system. A
@@ -101,7 +104,7 @@ Three points apply:
 | Spec | Content |
 |---|---|
 | [Design](docs/superpowers/specs/2026-08-28-wagglebot-design.md) | Goals, decisions, architecture, and the phase index. |
-| [Phase 1 — provisioning](docs/superpowers/specs/2026-08-28-phase-1-provisioning.md) | One command: skills, subagents, base prompts, MCP configs, local memory. |
+| [Phase 1 — provisioning](docs/superpowers/specs/2026-08-28-phase-1-provisioning.md) | Workstation setup plus local project instruction sync. |
 | [Phase 2 — shared layer](docs/superpowers/specs/2026-08-28-phase-2-shared-layer.md) | The memory worker, the hub, auth, and the compose stack. |
 | [Phase 3 — collaboration](docs/superpowers/specs/2026-08-28-phase-3-collaboration.md) | Cross-machine agent collaboration. |
 | [Phase 4 — ingestion](docs/superpowers/specs/2026-08-28-phase-4-document-ingestion.md) | Documents into memory, with an optional batch extractor. |

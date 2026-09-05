@@ -1,4 +1,4 @@
-# Phase 1 — Workstation Provisioning
+# Phase 1 — Local Provisioning
 
 > Companion to the [wagglebot design spec](2026-08-28-wagglebot-design.md).
 > One team shares one curated agent environment: the same skills and the
@@ -6,7 +6,8 @@
 > harness. This tooling ships inside the `wagglebot` npm package (D35).
 >
 > **This is the whole of Phase 1 (D14).** Zero services run. One
-> central git repository and one command provision a workstation.
+> central git repository provisions a workstation. Local repositories
+> can also publish one instruction source to every supported harness.
 
 ## The Update Command (D34, D35)
 
@@ -54,6 +55,100 @@ Rules:
   target table live in the package. The company repository holds only
   company content, so a wagglebot upgrade is a one-line pin bump
   (D35).
+
+## The Project Instruction Command (D36)
+
+Repository instructions belong to the repository that they describe.
+An engineer writes portable Markdown files here:
+
+```
+.agents/
+  instructions/
+    code-style.md
+    testing.md
+  memory.md
+  subagents/
+```
+
+Only `.agents/instructions/*.md` is an instruction source. Wagglebot
+must not merge `.agents/memory.md`, component subagents, or other files
+into an instruction document.
+
+`wagglebot sync-project` finds the Git root from the current directory.
+It does not require a company repository, a catalog, or an engineer
+identity. It sorts the source files by name and writes equivalent
+project instructions for every supported harness.
+
+The command can run from a globally installed CLI. A global install
+must name an exact package version, for example:
+
+```
+npm install --global wagglebot@1.4.2
+wagglebot sync-project
+```
+
+The company repository pin remains the canonical team upgrade path.
+The command also works through a pinned local package or an exact
+one-time package invocation. A floating package version is not a
+supported workflow (D13, D35).
+
+### Project targets
+
+The common source contains plain Markdown. Phase 1 does not translate
+vendor-specific path conditions or frontmatter.
+
+| Harness | Project target |
+|---|---|
+| OpenAI Codex, Junie, and Cline | A managed block in root `AGENTS.md` |
+| Claude Code | A managed `@AGENTS.md` import in root `CLAUDE.md` |
+| Gemini CLI | A managed `@./AGENTS.md` import in root `GEMINI.md` |
+| GitHub Copilot CLI | A managed block in `.github/copilot-instructions.md` |
+
+The harness table owns these paths. A new harness adds one project
+adapter beside its workstation adapter.
+
+### Safety and lifecycle
+
+`sync-project` follows the workstation sync guarantees:
+
+1. Preserve all content outside a Wagglebot managed block.
+2. Write each changed file atomically.
+3. Back up each target before its first mutation. Store the set under
+   `~/.wagglebot/backups/projects/<root-id>/<timestamp>/`.
+4. Support `--dry-run` and `--restore [path]`.
+5. Remove only stale blocks or files that Wagglebot owns.
+6. When no source or ownership record exists, leave all targets
+   unchanged. When an ownership record exists, an empty source removes
+   only the owned blocks and unchanged generated files.
+7. Preflight every output before the first mutation. Abort when a
+   vendor documents a per-target hard limit and an output exceeds it.
+
+`<root-id>` is the SHA-256 digest of the canonical Git root path. Each
+backup set and ownership record stores that canonical path. Restore
+selects only the newest set for the current root. An optional restore
+path must resolve inside that root and must name a target in the set.
+The backup manifest records an absent-target tombstone when a target did
+not exist. Restore removes such a generated file only when its content
+still matches the ownership record. A later user edit prevents removal
+and produces a conflict report.
+
+Codex has a default 32 KiB combined project instruction budget. Report
+the generated block size and the complete root `AGENTS.md` size as
+UTF-8 bytes. Warn when either size exceeds 32 KiB. Explain that Codex
+also loads global and nested instructions, which the command cannot
+measure as one effective chain. The warning never claims that a smaller
+root file fits the effective budget. Other adapters report their output
+size. They impose no Wagglebot limit until the vendor documents one.
+
+The command never deletes arbitrary links or files from a vendor
+directory. A generated file carries a marker and an ownership record.
+Wagglebot deletes the complete file only when its current content still
+matches the last generated content. Otherwise, it removes only its
+managed block.
+
+The root scope is deliberate. Phase 1 does not compile file globs into
+nested `AGENTS.md` files or vendor-specific conditional rules. A team
+can keep those rules in native vendor files outside Wagglebot blocks.
 
 **The engineer identity is stored, never guessed.** `wagglebot update`
 needs the company Git username to find the team in `catalog.yaml`.
@@ -640,10 +735,10 @@ belongs **in** that repository:
 ```
 
 The directory name matters (D29). `.agents/` follows the emerging
-dotagents convention, and it pairs with the `AGENTS.md` standard, so
-an agent that never heard of wagglebot still recognizes it — even late
-in a long session, when the base instructions have lost salience. The
-rule: agents read and write `.agents/`, and wagglebot tooling reads
+dotagents convention, and it pairs with the `AGENTS.md` standard. An
+agent that never heard of Wagglebot can still recognize it. Agents read
+and write `.agents/`. `sync-project` reads
+`.agents/instructions/*.md`. Other Wagglebot tooling reads
 `.wagglebot/` (`catalog.yaml`, `public.md`).
 
 Git already distributes that file to everyone who clones the
@@ -709,3 +804,21 @@ follows the same pattern.
     server call.
 12. `wagglebot update` on a machine with only Claude Code creates no
     directory for any other harness.
+13. **Local project instructions.** A repository stores two source
+    files in `.agents/instructions/`. `wagglebot sync-project` writes
+    each supported project target without a company repository.
+14. Edit one source file and run `sync-project` again. Every managed
+    target changes, and all content outside each block stays unchanged.
+15. Remove one source file and run `sync-project` again. Stale content
+    disappears only from Wagglebot-owned blocks and generated files.
+    Removing the last source has the same ownership-safe behavior.
+16. `sync-project --dry-run` reports every change without modifying a
+    file. `sync-project --restore` restores the newest backup set for
+    the current Git root.
+17. A restore path outside the current Git root fails without changing
+    a file. A backup from a different repository is never selected.
+18. Restore removes a file that did not exist before sync only when its
+    content remains unchanged. A user edit produces a conflict instead.
+19. A generated block or complete root `AGENTS.md` above 32 KiB emits a
+    warning with its byte count. The warning explains the combined
+    Codex budget and does not claim that smaller output fits it.
