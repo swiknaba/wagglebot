@@ -2,6 +2,8 @@ export type ItemStatus = "installed" | "updated" | "ok" | "skipped" | "failed";
 export type Reporter = {
   section(title: string): void;
   item(name: string, status: ItemStatus, detail?: string): void;
+  // A message that needs attention but fails nothing. Not counted.
+  warn(message: string): void;
   counts(): Record<ItemStatus, number>;
   failed(): boolean;
   summary(): string;
@@ -26,6 +28,7 @@ export function createReporter(write: (line: string) => void, color = process.st
       const label = color ? `${COLORS[status]}${status}${RESET}` : status;
       write(`  ${label.padEnd(color ? 18 : 9)} ${name}${detail === undefined ? "" : ` — ${detail}`}`);
     },
+    warn: (message) => write(`  ${color ? `${COLORS.skipped}warning${RESET}` : "warning"}   ${message}`),
     counts: () => ({ ...tally }),
     failed: () => tally.failed > 0,
     summary: () => ORDER.map((s) => `${s} ${tally[s]}`).join(", "),

@@ -3,9 +3,10 @@
 One AI agent setup for a whole engineering team.
 
 > **Status.** Phase 1 workstation provisioning is implemented in
-> [`packages/cli`](packages/cli/). Repository instruction sync remains
-> specified but not implemented. Phases 2–4 stay at the specification
-> stage. The [design specs](docs/superpowers/specs/) define the system.
+> [`packages/cli`](packages/cli/). The CLI also implements repository
+> instruction sync, as `wagglebot sync-project`. Phases 2–4 stay at the
+> specification stage. The [design specs](docs/superpowers/specs/)
+> define the system.
 
 ## Why
 
@@ -36,8 +37,12 @@ commands — `git clone <company repo>`, `yarn install`,
 * Your credentials stay on your machine in one gitignored file, and
   load into every new shell.
 
-Phase 1 also specifies `wagglebot sync-project`. It publishes local
-`.agents/instructions/*.md` files to each supported agent harness.
+`wagglebot sync-project` publishes the repository's own instructions.
+It reads `.agents/instructions/*.md` and writes root `AGENTS.md`, root
+`CLAUDE.md`, root `GEMINI.md`, and `.github/copilot-instructions.md`.
+The command runs from any Git repository, without the company
+repository. Every target sits inside the repository, so git is the
+undo.
 
 An engineer clones, installs, runs the update, and works. Nothing
 listens on a port, and git access is the whole permission system. A

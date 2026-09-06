@@ -13,3 +13,14 @@ test("counts items and reports failure", () => {
   expect(lines).toContain("== Skills ==");
   expect(lines.some((l) => l.includes("x/y") && l.includes("clone failed"))).toBe(true);
 });
+
+test("warn writes a line with the message and does not change counts", () => {
+  const lines: string[] = [];
+  const r = createReporter((l) => lines.push(l), false);
+  r.item("a", "ok");
+  const before = r.counts();
+  r.warn("check this");
+  expect(lines.some((l) => l.includes("warning") && l.includes("check this"))).toBe(true);
+  expect(r.counts()).toEqual(before);
+  expect(r.failed()).toBe(false);
+});

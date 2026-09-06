@@ -29,6 +29,7 @@ test("--help lists every command and the two git config keys", async () => {
     "install-skills",
     "install-agents",
     "sync-agents",
+    "sync-project",
     "sync-shell",
     "write-mcp",
     "wagglebot.username",
@@ -36,6 +37,21 @@ test("--help lists every command and the two git config keys", async () => {
   ]) {
     expect(text).toContain(fragment);
   }
+});
+
+test("sync-project --help exits 0 and mentions AGENTS.md", async () => {
+  const lines: string[] = [];
+  const code = await main(["sync-project", "--help"], { write: (l) => lines.push(l) });
+  expect(code).toBe(0);
+  expect(lines.join("\n")).toContain("AGENTS.md");
+});
+
+test("sync-project outside a Git repository exits 1 and mentions Git repository", async () => {
+  const noGit = mkdtempSync(join(tmpdir(), "wgl-noGit-"));
+  const lines: string[] = [];
+  const code = await main(["sync-project"], { write: (l) => lines.push(l), cwd: noGit });
+  expect(code).toBe(1);
+  expect(lines.join("\n")).toContain("Git repository");
 });
 
 test("update --help prints the same help", async () => {

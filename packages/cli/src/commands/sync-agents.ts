@@ -10,7 +10,7 @@ import { resolvePaths } from "../paths";
 import type { Reporter } from "../report";
 import { renderTemplate } from "../template";
 
-export type SyncOptions = { dryRun?: boolean; restore?: boolean; restoreTarget?: string };
+export type SyncOptions = { restore?: boolean; restoreTarget?: string };
 
 const readIfExists = (path: string): string => (existsSync(path) ? readFileSync(path, "utf8") : "");
 
@@ -59,10 +59,6 @@ export function runSyncAgents(deps: {
       const result = compute(readIfExists(target));
       if (!result.changed) {
         reporter.item(relative, "ok", "already ok");
-        return;
-      }
-      if (options.dryRun === true) {
-        reporter.item(relative, "skipped", "would sync (dry run)");
         return;
       }
       backups.backup(target);

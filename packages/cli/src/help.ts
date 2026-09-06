@@ -1,3 +1,4 @@
+import { INSTRUCTIONS_DIR } from "./commands/sync-project";
 import { SHELL_RC_FILES } from "./commands/sync-shell";
 import { HARNESSES } from "./harness";
 import { HARNESS_CONFIG_KEY } from "./harness-select";
@@ -16,6 +17,18 @@ const subagentDirs = () =>
   HARNESSES.flatMap((h) =>
     h.subagentDir ? [`~/${h.subagentDir}/  (${h.name}, files prefixed company__, <team>__, or owner__repo__)`] : [],
   );
+const projectFiles = () => {
+  const byPath = new Map<string, { names: string[]; how: string }>();
+  for (const h of HARNESSES) {
+    const t = h.projectTarget;
+    if (t === undefined) continue;
+    const how = t.mode === "import" ? `managed ${t.importLine ?? ""} import` : "managed block";
+    const seen = byPath.get(t.path);
+    if (seen === undefined) byPath.set(t.path, { names: [h.name], how });
+    else seen.names.push(h.name);
+  }
+  return [...byPath.entries()].map(([path, v]) => `<git root>/${path}  (${v.names.join(", ")}, ${v.how})`);
+};
 const shellFiles = () =>
   SHELL_RC_FILES.map((f) => `~/${f.file}  (managed block, when the file exists or this machine uses ${f.shell})`);
 const skillDirs = () =>
@@ -56,6 +69,13 @@ const SECTIONS: Record<string, Section> = {
     ],
     writes: [...templateFiles(), ...hookFiles()],
     flags: ["--restore [~/path]   Write the newest backup set back (every file, or one file)."],
+  },
+  "sync-project": {
+    title: "sync-project",
+    purpose:
+      "Publishes the instructions of the current repository to every supported harness. Reads the Git root from the current directory. Needs no company repository, no catalog, and no identity. Writes every harness target, because the repository is shared by engineers who use different harnesses. Content outside each managed block stays untouched. Removing every source file removes the managed blocks, and deletes a file that held nothing else. Every target is inside the repository, so git is the backup and the undo. Sizes are reported in UTF-8 bytes. Codex reads the root AGENTS.md under a default 32 KiB budget that global and nested files share, so a root file above that budget produces a warning.",
+    reads: [`<git root>/${INSTRUCTIONS_DIR}/*.md  (sorted by name, concatenated)`],
+    writes: projectFiles(),
   },
   "sync-shell": {
     title: "sync-shell",
@@ -101,6 +121,7 @@ const GENERAL = (): string[] => [
   "  install-skills     Install the curated skills lists.",
   "  install-agents     Install the shared subagents.",
   "  sync-agents        Write the base prompt and instructions into every selected harness.",
+  "  sync-project       Publish the .agents/instructions/ of this repository to every harness.",
   "  sync-shell         Load .env.credentials into new shells.",
   "  write-mcp          Write MCP server configs from the registry.",
   "",
@@ -116,6 +137,7 @@ const GENERAL = (): string[] => [
   "Every mutation lands inside a managed block (<!-- wagglebot:begin --> in Markdown, # wagglebot:begin",
   "in shell files, recorded keys in JSON). Content outside stays untouched. Changed files are backed up",
   "to ~/.wagglebot/backups/<timestamp>/ first. Restore with `wagglebot sync-agents --restore`.",
+  "`sync-project` writes only files inside the repository, so git is its backup and its undo.",
 ];
 
 export function helpText(command?: string): string {

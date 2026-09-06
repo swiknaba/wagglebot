@@ -19,6 +19,24 @@ export type Harness = {
   mcpTarget?: { path: string; parentKey: string };
   // Directory the harness reads Markdown subagents from. Undefined: no known Markdown format.
   subagentDir?: string;
+  // Repository-level instruction file, relative to the Git root. `sync-project` writes the
+  // instructions there. Undefined: the harness reads no project file that wagglebot knows.
+  projectTarget?: ProjectTarget;
+};
+
+// How one harness reads project instructions. Several harnesses share one file: Codex, Junie,
+// and Cline all read the root AGENTS.md, so their entries name the same path and the command
+// writes that file once. A harness with its own file either imports AGENTS.md (mode "import",
+// one import line inside the managed block) or carries the complete instructions (mode "block").
+export type ProjectTarget = {
+  path: string;
+  mode: "block" | "import";
+  // The line that imports the root AGENTS.md, for mode "import".
+  importLine?: string;
+  // A vendor-documented default budget in bytes. Output above it produces a warning, never an abort.
+  warnBytes?: number;
+  // A vendor-documented hard limit in bytes. Output above it aborts before the first mutation.
+  limitBytes?: number;
 };
 
 // Paths verified against vendor documentation on 2026-09-02. Codex subagents are TOML, not
@@ -33,22 +51,44 @@ export const HARNESSES: Harness[] = [
     hooksTarget: { path: ".claude/settings.json", fragmentFile: "claude-code.json" },
     mcpTarget: { path: ".claude.json", parentKey: "mcpServers" },
     subagentDir: ".claude/agents",
+    projectTarget: { path: "CLAUDE.md", mode: "import", importLine: "@AGENTS.md" },
   },
-  { name: "codex", detectDir: ".codex", skillsAgent: "codex", templateTargets: [".codex/AGENTS.md"] },
+  {
+    name: "codex",
+    detectDir: ".codex",
+    skillsAgent: "codex",
+    templateTargets: [".codex/AGENTS.md"],
+    // Codex reads global, root, and nested AGENTS.md files under one default 32 KiB budget.
+    projectTarget: { path: "AGENTS.md", mode: "block", warnBytes: 32 * 1024 },
+  },
   {
     name: "junie",
     detectDir: ".junie",
     skillsAgent: "junie",
     templateTargets: [".junie/AGENTS.md"],
     subagentDir: ".junie/agents",
+    projectTarget: { path: "AGENTS.md", mode: "block" },
   },
-  { name: "cline", detectDir: ".cline", skillsAgent: "cline", templateTargets: [".cline/rules/wagglebot.md"] },
-  { name: "gemini", detectDir: ".gemini", skillsAgent: "gemini-cli", templateTargets: [".gemini/GEMINI.md"] },
+  {
+    name: "cline",
+    detectDir: ".cline",
+    skillsAgent: "cline",
+    templateTargets: [".cline/rules/wagglebot.md"],
+    projectTarget: { path: "AGENTS.md", mode: "block" },
+  },
+  {
+    name: "gemini",
+    detectDir: ".gemini",
+    skillsAgent: "gemini-cli",
+    templateTargets: [".gemini/GEMINI.md"],
+    projectTarget: { path: "GEMINI.md", mode: "import", importLine: "@./AGENTS.md" },
+  },
   {
     name: "copilot",
     detectDir: ".copilot",
     skillsAgent: "github-copilot",
     templateTargets: [".copilot/copilot-instructions.md"],
+    projectTarget: { path: ".github/copilot-instructions.md", mode: "block" },
   },
 ];
 

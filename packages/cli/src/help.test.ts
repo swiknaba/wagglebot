@@ -25,6 +25,16 @@ test("command help names what the command reads and writes", () => {
   expect(update).toContain("~/.claude/agents/");
 });
 
+test("general help lists sync-project and its help names the project files", () => {
+  const text = helpText();
+  expect(text).toContain("  sync-project");
+  const sync = helpText("sync-project");
+  expect(sync).toContain(".agents/instructions/");
+  expect(sync).toContain("AGENTS.md");
+  expect(sync).toContain("CLAUDE.md");
+  expect(sync).toContain(".github/copilot-instructions.md");
+});
+
 test("unknown command help falls back to the general text", () => {
   expect(helpText("nope")).toBe(helpText());
 });
