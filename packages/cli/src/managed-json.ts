@@ -39,8 +39,10 @@ const carriesMarker = (element: unknown): boolean => {
   return element.hooks.some((h) => isObject(h) && typeof h.command === "string" && h.command.includes("wagglebot:"));
 };
 
-// Merges hook fragment entries into a settings object. Owns only array elements whose
-// command contains "wagglebot:". Never replaces foreign elements (F22).
+// Merges hook fragment entries into a settings object. Owns only array elements whose command
+// contains "wagglebot:". A foreign element keeps its position. An owned element is replaced in
+// place by the next fragment entry; a fragment entry without a slot is appended; an owned
+// element without a fragment entry left is stale and dropped (F22).
 export function mergeHooks(
   existingText: string,
   fragment: { hooks: Record<string, unknown[]> },
@@ -49,8 +51,18 @@ export function mergeHooks(
   const hooks = isObject(doc.hooks) ? { ...(doc.hooks as JsonObject) } : {};
   for (const [event, fragmentEntries] of Object.entries(fragment.hooks)) {
     const current = Array.isArray(hooks[event]) ? (hooks[event] as unknown[]) : [];
-    const foreign = current.filter((e) => !carriesMarker(e));
-    hooks[event] = [...foreign, ...fragmentEntries];
+    const pending = [...fragmentEntries];
+    const merged: unknown[] = [];
+    for (const element of current) {
+      if (!carriesMarker(element)) {
+        merged.push(element);
+        continue;
+      }
+      const replacement = pending.shift();
+      if (replacement !== undefined) merged.push(replacement);
+    }
+    merged.push(...pending);
+    hooks[event] = merged;
   }
   doc.hooks = hooks;
   const next = print(doc);

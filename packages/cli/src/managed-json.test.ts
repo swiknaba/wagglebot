@@ -48,3 +48,20 @@ test("mergeHooks does not misclassify a foreign entry whose matcher contains the
   expect(doc.hooks.PostToolUse).toHaveLength(2);
   expect(JSON.stringify(doc.hooks.PostToolUse)).toContain("my-own-hook");
 });
+
+test("mergeHooks replaces an owned entry where it stands and keeps foreign entries in place", () => {
+  const owned = { hooks: [{ type: "command", command: "echo wagglebot:old" }] };
+  const fresh = { hooks: [{ type: "command", command: "echo wagglebot:new" }] };
+  const existing = JSON.stringify({ hooks: { PreToolUse: [{ matcher: "a" }, owned, { matcher: "b" }] } });
+  const { next } = mergeHooks(existing, { hooks: { PreToolUse: [fresh] } });
+  expect(JSON.parse(next).hooks.PreToolUse).toEqual([{ matcher: "a" }, fresh, { matcher: "b" }]);
+});
+
+test("mergeHooks appends a new owned entry and drops one the fragment no longer carries", () => {
+  const one = { hooks: [{ command: "wagglebot:one" }] };
+  const two = { hooks: [{ command: "wagglebot:two" }] };
+  const shrunk = mergeHooks(JSON.stringify({ hooks: { E: [one, { matcher: "x" }, two] } }), { hooks: { E: [one] } });
+  expect(JSON.parse(shrunk.next).hooks.E).toEqual([one, { matcher: "x" }]);
+  const grown = mergeHooks(JSON.stringify({ hooks: { E: [{ matcher: "x" }] } }), { hooks: { E: [one, two] } });
+  expect(JSON.parse(grown.next).hooks.E).toEqual([{ matcher: "x" }, one, two]);
+});
