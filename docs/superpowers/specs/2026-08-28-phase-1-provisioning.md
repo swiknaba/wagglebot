@@ -109,28 +109,19 @@ adapter beside its workstation adapter.
 
 ### Safety and lifecycle
 
-`sync-project` follows the workstation sync guarantees:
+`sync-project` follows these rules:
 
 1. Preserve all content outside a Wagglebot managed block.
 2. Write each changed file atomically.
-3. Back up each target before its first mutation. Store the set under
-   `~/.wagglebot/backups/projects/<root-id>/<timestamp>/`.
-4. Support `--dry-run` and `--restore [path]`.
-5. Remove only stale blocks or files that Wagglebot owns.
-6. When no source or ownership record exists, leave all targets
-   unchanged. When an ownership record exists, an empty source removes
-   only the owned blocks and unchanged generated files.
-7. Preflight every output before the first mutation. Abort when a
+3. Remove only a block that Wagglebot owns. A file that then holds
+   only whitespace is deleted. Any other file keeps the rest of its
+   content.
+4. Preflight every output before the first mutation. Abort when a
    vendor documents a per-target hard limit and an output exceeds it.
 
-`<root-id>` is the SHA-256 digest of the canonical Git root path. Each
-backup set and ownership record stores that canonical path. Restore
-selects only the newest set for the current root. An optional restore
-path must resolve inside that root and must name a target in the set.
-The backup manifest records an absent-target tombstone when a target did
-not exist. Restore removes such a generated file only when its content
-still matches the ownership record. A later user edit prevents removal
-and produces a conflict report.
+Every target sits inside the repository, so git is the backup and the
+undo. An engineer who wants to preview a change runs the command in a
+fresh worktree first. Previewing is not a concern of this tool.
 
 Codex has a default 32 KiB combined project instruction budget. Report
 the generated block size and the complete root `AGENTS.md` size as
@@ -141,10 +132,9 @@ root file fits the effective budget. Other adapters report their output
 size. They impose no Wagglebot limit until the vendor documents one.
 
 The command never deletes arbitrary links or files from a vendor
-directory. A generated file carries a marker and an ownership record.
-Wagglebot deletes the complete file only when its current content still
-matches the last generated content. Otherwise, it removes only its
-managed block.
+directory. It removes only its own managed block, marked by comment
+markers. A file left with only whitespace after that removal is
+deleted. A file that still holds other content keeps that content.
 
 The root scope is deliberate. Phase 1 does not compile file globs into
 nested `AGENTS.md` files or vendor-specific conditional rules. A team
@@ -692,9 +682,8 @@ The sync is **non-destructive** (guards F22):
    contains entries this tool did not write.
 3. Back up each target file before the first mutation, under
    `~/.wagglebot/backups/<timestamp>/`.
-4. Provide `--dry-run` (show the diff, change nothing) and `--restore`
-   (write the newest backup set back, every file in it; `--restore
-   <path>` restores one target file from that set).
+4. Provide `--restore` (write the newest backup set back, every file
+   in it; `--restore <path>` restores one target file from that set).
 
 Secret distribution is **out of scope for this tool**. Tokens travel
 through a secret manager or the company password manager, into the
@@ -810,15 +799,16 @@ follows the same pattern.
 14. Edit one source file and run `sync-project` again. Every managed
     target changes, and all content outside each block stays unchanged.
 15. Remove one source file and run `sync-project` again. Stale content
-    disappears only from Wagglebot-owned blocks and generated files.
-    Removing the last source has the same ownership-safe behavior.
-16. `sync-project --dry-run` reports every change without modifying a
-    file. `sync-project --restore` restores the newest backup set for
-    the current Git root.
-17. A restore path outside the current Git root fails without changing
-    a file. A backup from a different repository is never selected.
-18. Restore removes a file that did not exist before sync only when its
-    content remains unchanged. A user edit produces a conflict instead.
+    disappears only from Wagglebot-owned blocks. Content outside a
+    block never changes.
+16. Remove the last source file and run `sync-project` again. A file
+    that held only the managed block is deleted. A file that also
+    held other content keeps that content, with the block removed.
+17. `sync-project` creates nothing under `~/.wagglebot`. Every target
+    it writes lives inside the repository, so git is the backup and
+    the undo.
+18. A file the command never wrote stays untouched by a `sync-project`
+    run, whether a source file exists or not.
 19. A generated block or complete root `AGENTS.md` above 32 KiB emits a
     warning with its byte count. The warning explains the combined
     Codex budget and does not claim that smaller output fits it.

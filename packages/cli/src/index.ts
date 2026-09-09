@@ -10,6 +10,7 @@ import { runInit } from "./commands/init";
 import { runInstallAgents } from "./commands/install-agents";
 import { resolveSkillsBin, runInstallSkills } from "./commands/install-skills";
 import { runSyncAgents } from "./commands/sync-agents";
+import { runSyncProject } from "./commands/sync-project";
 import { runSyncShell } from "./commands/sync-shell";
 import { runUpdate } from "./commands/update";
 import { runWriteMcp } from "./commands/write-mcp";
@@ -28,7 +29,16 @@ import { resolveSkillLockFile } from "./skill-lock";
 
 export type CliDeps = { write: (line: string) => void; cwd?: string };
 
-const KNOWN_COMMANDS = ["update", "init", "install-skills", "install-agents", "sync-agents", "sync-shell", "write-mcp"];
+const KNOWN_COMMANDS = [
+  "update",
+  "init",
+  "install-skills",
+  "install-agents",
+  "sync-agents",
+  "sync-project",
+  "sync-shell",
+  "write-mcp",
+];
 
 const version = (): string => {
   const require = createRequire(import.meta.url);
@@ -153,7 +163,7 @@ export async function main(argv: string[], deps: CliDeps = { write: console.log 
       const { values, positionals } = parseArgs({
         args: rest,
         allowPositionals: true,
-        options: { "dry-run": { type: "boolean" }, restore: { type: "boolean" } },
+        options: { restore: { type: "boolean" } },
       });
       if (values.restore === true) {
         const code = runSyncAgents({
@@ -173,8 +183,17 @@ export async function main(argv: string[], deps: CliDeps = { write: console.log 
         harnesses,
         instructionDirs: company.layersFor(teams).map((l) => l.instructionsDir),
         reporter,
-        options: { dryRun: values["dry-run"] === true },
       });
+      deps.write(reporter.summary());
+      return code;
+    }
+
+    if (command === "sync-project") {
+      // A project command: it needs a Git repository only. No company repository, no catalog, no
+      // identity, and no harness selection, because the repository is shared by engineers who use
+      // different harnesses. Every supported project target is written. Git is the undo.
+      parseArgs({ args: rest });
+      const code = runSyncProject({ cwd, reporter });
       deps.write(reporter.summary());
       return code;
     }
@@ -187,7 +206,7 @@ export async function main(argv: string[], deps: CliDeps = { write: console.log 
     }
 
     if (command === "write-mcp") {
-      const { values } = parseArgs({ args: rest, options: { "dry-run": { type: "boolean" } } });
+      parseArgs({ args: rest });
       const { company, teams } = await companyContext(cwd, exec, ask);
       const harnesses = await selectAndAnnounce(home, exec, deps.write);
       const proxies = company
@@ -203,7 +222,6 @@ export async function main(argv: string[], deps: CliDeps = { write: console.log 
         proxies,
         env: process.env,
         reporter,
-        dryRun: values["dry-run"] === true,
       });
       deps.write(reporter.summary());
       return code;

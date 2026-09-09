@@ -60,7 +60,6 @@ export function runWriteMcp(deps: {
   proxies: ProxyConfig[];
   env: NodeJS.ProcessEnv;
   reporter: Reporter;
-  dryRun?: boolean;
   backups?: BackupSet;
 }): number {
   const { home, proxies, reporter } = deps;
@@ -100,10 +99,6 @@ export function runWriteMcp(deps: {
       const result = mergeManagedSection(existing, mcpTarget.parentKey, entries, previouslyOwned);
       if (!result.changed) {
         reporter.item(mcpTarget.path, "ok", "already ok");
-        continue;
-      }
-      if (deps.dryRun === true) {
-        reporter.item(mcpTarget.path, "skipped", "would write (dry run)");
         continue;
       }
       backups.backup(target);

@@ -15,6 +15,16 @@ test("the harness table carries the verified targets", () => {
   for (const h of HARNESSES) expect(h.detectDir.startsWith(".")).toBe(true);
 });
 
+test("the harness table carries the project targets sync-project needs", () => {
+  const byName = Object.fromEntries(HARNESSES.map((h) => [h.name, h.projectTarget]));
+  expect(byName["claude-code"]).toEqual({ path: "CLAUDE.md", mode: "import", importLine: "@AGENTS.md" });
+  expect(byName.codex).toEqual({ path: "AGENTS.md", mode: "block", warnBytes: 32 * 1024 });
+  expect(byName.junie).toEqual({ path: "AGENTS.md", mode: "block" });
+  expect(byName.cline).toEqual({ path: "AGENTS.md", mode: "block" });
+  expect(byName.gemini).toEqual({ path: "GEMINI.md", mode: "import", importLine: "@./AGENTS.md" });
+  expect(byName.copilot).toEqual({ path: ".github/copilot-instructions.md", mode: "block" });
+});
+
 test("shipped template files exist", () => {
   expect(existsSync(join(templatesDir(), "AGENTS.base.md"))).toBe(true);
   expect(existsSync(join(templatesDir(), "hooks", "claude-code.json"))).toBe(true);

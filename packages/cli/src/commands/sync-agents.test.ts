@@ -70,18 +70,6 @@ test("a corrupt settings.json fails the hooks merge but other targets still get 
   expect(existsSync(join(home, ".gemini/GEMINI.md"))).toBe(true);
 });
 
-test("--dry-run changes nothing", () => {
-  const { home, instructionsDir } = setup();
-  runSyncAgents({
-    home,
-    harnesses: HARNESSES,
-    instructionDirs: [instructionsDir],
-    reporter: quiet(),
-    options: { dryRun: true },
-  });
-  expect(existsSync(join(home, ".claude/CLAUDE.md"))).toBe(false);
-});
-
 test("writes only the selected harnesses and appends team instructions after company ones", () => {
   const home = mkdtempSync(join(tmpdir(), "wgl-home-"));
   const company = join(home, "co");

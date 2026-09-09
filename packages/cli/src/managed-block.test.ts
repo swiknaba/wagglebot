@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { BLOCK_BEGIN, BLOCK_END, renderManagedBlock } from "./managed-block";
+import { BLOCK_BEGIN, BLOCK_END, removeManagedBlock, renderManagedBlock } from "./managed-block";
 
 const block = (body: string) => `${BLOCK_BEGIN}\n${body}\n${BLOCK_END}`;
 
@@ -34,4 +34,31 @@ test("hash style uses shell comment markers", () => {
 test("an html append onto a line without a trailing newline still gets a blank line", () => {
   const { next } = renderManagedBlock("text", "RULES v1");
   expect(next).toContain("text\n\n<!-- wagglebot:begin -->");
+});
+
+test("removeManagedBlock removes the block and the blank line before it", () => {
+  const { next, changed } = removeManagedBlock(`# Mine\n\n${block("RULES v1")}\n`);
+  expect(changed).toBe(true);
+  expect(next).toBe("# Mine\n");
+});
+
+test("removeManagedBlock on a file that is only the block returns empty content", () => {
+  const { next, changed } = removeManagedBlock(`${block("RULES v1")}\n`);
+  expect(changed).toBe(true);
+  expect(next).toBe("");
+});
+
+test("removeManagedBlock keeps content that comes after the block", () => {
+  const { next, changed } = removeManagedBlock(`${block("RULES v1")}\n\n## Also mine\n`);
+  expect(changed).toBe(true);
+  expect(next).toContain("## Also mine");
+});
+
+test("removeManagedBlock on a file with no markers is unchanged", () => {
+  const existing = "# Mine\n";
+  expect(removeManagedBlock(existing)).toEqual({ next: existing, changed: false });
+});
+
+test("removeManagedBlock throws on a lone begin marker", () => {
+  expect(() => removeManagedBlock(`${BLOCK_BEGIN}\nx`)).toThrow("end marker");
 });
