@@ -31,13 +31,19 @@ export function newestBackupSet(backupsDir: string): string | undefined {
   return last === undefined ? undefined : join(backupsDir, last);
 }
 
-export function restoreSet(setDir: string, onlyTarget?: string): string[] {
-  if (!existsSync(setDir)) return [];
-  return readdirSync(setDir)
-    .map(decode)
-    .filter((target) => onlyTarget === undefined || target === onlyTarget)
-    .map((target) => {
+export type RestoreResult = { restored: string[]; failed: { target: string; error: string }[] };
+
+export function restoreSet(setDir: string, onlyTarget?: string): RestoreResult {
+  const result: RestoreResult = { restored: [], failed: [] };
+  if (!existsSync(setDir)) return result;
+  for (const target of readdirSync(setDir).map(decode)) {
+    if (onlyTarget !== undefined && target !== onlyTarget) continue;
+    try {
       copyFileSync(join(setDir, encode(target)), target);
-      return target;
-    });
+      result.restored.push(target);
+    } catch (error) {
+      result.failed.push({ target, error: error instanceof Error ? error.message : String(error) });
+    }
+  }
+  return result;
 }

@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { HARNESSES } from "../harness";
@@ -102,4 +102,16 @@ test("a corrupt hook fragment fails the hooks item only, and the template target
   expect(code).toBe(1);
   expect(r.counts().failed).toBe(1);
   expect(existsSync(join(home, ".claude/CLAUDE.md"))).toBe(true);
+});
+
+test("--restore reports a file it cannot restore as failed and exits 1", () => {
+  const { home, instructionsDir } = setup();
+  mkdirSync(join(home, ".claude"), { recursive: true });
+  writeFileSync(join(home, ".claude/CLAUDE.md"), "# Mine\n");
+  runSyncAgents({ home, harnesses: HARNESSES, instructionDirs: [instructionsDir], reporter: quiet() });
+  rmSync(join(home, ".claude"), { recursive: true }); // the restore target directory is gone
+  const r = createReporter(() => {}, false);
+  const code = runSyncAgents({ home, harnesses: [], instructionDirs: [], reporter: r, options: { restore: true } });
+  expect(code).toBe(1);
+  expect(r.counts().failed).toBeGreaterThan(0);
 });

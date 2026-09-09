@@ -136,7 +136,7 @@ test("one runUpdate makes a single backup set that restores both CLAUDE.md and .
   writeFileSync(join(home, ".claude.json"), JSON.stringify({ mcpServers: {} }));
   const set = newestBackupSet(paths.backupsDir);
   expect(set).toBeDefined();
-  const restored = restoreSet(set ?? "");
+  const restored = restoreSet(set ?? "").restored;
   expect(restored).toContain(join(home, ".claude/CLAUDE.md"));
   expect(restored).toContain(join(home, ".claude.json"));
   expect(readFileSync(join(home, ".claude/CLAUDE.md"), "utf8")).toBe("# my personal rules\n");

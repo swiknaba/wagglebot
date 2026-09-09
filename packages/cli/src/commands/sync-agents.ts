@@ -34,8 +34,10 @@ export function runSyncAgents(deps: {
       reporter.item("restore", "failed", "no backup set exists");
       return 1;
     }
-    for (const target of restoreSet(set, options.restoreTarget)) reporter.item(target, "updated", "restored");
-    return 0;
+    const result = restoreSet(set, options.restoreTarget);
+    for (const target of result.restored) reporter.item(target, "updated", "restored");
+    for (const f of result.failed) reporter.item(f.target, "failed", f.error);
+    return result.failed.length > 0 ? 1 : 0;
   }
 
   const base = readFileSync(join(templatesDir(), "AGENTS.base.md"), "utf8");
