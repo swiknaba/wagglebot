@@ -12,4 +12,5 @@ The directory name must equal the Group name in `catalog.yaml`.
 | `agents/*.md` | Subagents for this team. |
 | `instructions/*.md` | Instructions appended after the company instructions. |
 
-Every file except `catalog.yaml` is optional.
+The scaffold creates each of these files. Every file except
+`catalog.yaml` may stay empty or be deleted.

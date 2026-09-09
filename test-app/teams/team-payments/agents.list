@@ -1,0 +1,3 @@
+# Shared subagents from other repositories, for the members of Group team-payments.
+# Same format as company/agents.list: owner/repo[@ref], or a full clone URL and an optional ref.
+# A subagent that lives in this repository goes in agents/ instead, with no entry here.
