@@ -231,6 +231,31 @@ test("a pin that did not move this run still reports the stale CLI", async () =>
   expect(r.counts().failed).toBe(0);
 });
 
+test("a pin that is a range or a path reports no stale CLI", async () => {
+  for (const pin of ["1.2.3 - 2.0.0", "^1.5.0", "file:../packages/cli"]) {
+    const root = scaffoldCompany();
+    const pkgPath = join(root, "package.json");
+    const pkg = JSON.parse(readFileSync(pkgPath, "utf8"));
+    pkg.dependencies.wagglebot = pin;
+    writeFileSync(pkgPath, JSON.stringify(pkg));
+    const home = mkdtempSync(join(tmpdir(), "wgl-home-"));
+    mkdirSync(join(home, ".claude"), { recursive: true });
+    const lines: string[] = [];
+    await runUpdate({
+      cwd: root,
+      home,
+      exec: gitExec([]),
+      ask: async () => "alice",
+      reporter: createReporter((l) => lines.push(l), false),
+      write: (l) => lines.push(l),
+      skillsBin: "/bin/skills",
+      cliVersion: "1.4.2",
+      env: zshEnv,
+    });
+    expect(lines.some((l) => l.includes("the company pins wagglebot"))).toBe(false);
+  }
+});
+
 test("a pin that equals the running CLI reports nothing", async () => {
   const root = scaffoldCompany();
   const home = mkdtempSync(join(tmpdir(), "wgl-home-"));

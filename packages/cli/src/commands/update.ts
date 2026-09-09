@@ -19,7 +19,7 @@ import { runWriteMcp } from "./write-mcp";
 
 // A pin the run can compare with the running CLI. A range or a "file:" path names no version,
 // so wagglebot stays quiet about it.
-const EXACT_PIN = /^\d+\.\d+\.\d+/;
+const EXACT_PIN = /^\d+\.\d+\.\d+(-[\w.]+)?$/;
 
 export async function runUpdate(deps: {
   cwd: string;
