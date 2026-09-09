@@ -4,7 +4,9 @@ export type AuthScheme =
   | { kind: "none" }
   | { kind: "bearer" }
   | { kind: "header"; name: string; prefix?: string }
-  | { kind: "basic"; username: string }
+  // basic: ${VAR} holds the base64 value of "username:password". A harness expands the variable
+  // only, so wagglebot cannot encode it.
+  | { kind: "basic" }
   | { kind: "env"; map: Record<string, string> };
 export type CredentialSource =
   | { from: "env"; var: string }
@@ -79,8 +81,13 @@ function validateAuth(file: string, ns: string, mode: ProxyConfig["mode"], auth:
     if (scheme.prefix !== undefined && typeof scheme.prefix !== "string")
       fail(file, ns, "auth.scheme.prefix must be a string");
   }
-  if (kind === "basic" && (typeof scheme.username !== "string" || scheme.username === ""))
-    fail(file, ns, 'auth.scheme.username is required for kind "basic"');
+  if (kind === "basic" && scheme.username !== undefined) {
+    fail(
+      file,
+      ns,
+      'auth.scheme.username is not used — put the base64 value of "username:password" in the variable that auth.source.var names',
+    );
+  }
   if (kind === "env" && !isStringRecord(scheme.map))
     fail(file, ns, 'auth.scheme.map must be a mapping of strings for kind "env"');
   if (from === "env" && (typeof source.var !== "string" || source.var === ""))

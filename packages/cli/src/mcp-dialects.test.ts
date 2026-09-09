@@ -88,7 +88,7 @@ test("codex skips a header with a prefix, basic auth, and sse", () => {
   );
   const basic: ProxyConfig = {
     ...remote,
-    auth: { scheme: { kind: "basic", username: "bee" }, source: { from: "env", var: "API_KEY" } },
+    auth: { scheme: { kind: "basic" }, source: { from: "env", var: "API_KEY" } },
   };
   expect(reasonOf(renderEntry("codex", basic))).toBe("Codex has no env-var mechanism for basic auth");
   expect(reasonOf(renderEntry("codex", sse))).toBe("Codex documents no SSE transport");

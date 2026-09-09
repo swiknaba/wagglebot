@@ -50,7 +50,7 @@ where wagglebot finds the value.
 | `none` | Nothing | A public server |
 | `bearer` | The header `Authorization: Bearer ${VAR}` | A remote server |
 | `header` | The header `name`, after the optional `prefix` | A remote server with a custom header |
-| `basic` | The header `Authorization: Basic ${VAR}`. The scheme needs a `username` field. The variable must hold the base64 value of `username:password`, because the writer does not encode it. | A remote server with basic auth |
+| `basic` | The header `Authorization: Basic ${VAR}`. The variable must hold the base64 value of `username:password`, because the writer does not encode it. | A remote server with basic auth |
 | `env` | One environment variable for each key of `map` | A stdio server |
 
 The MCP specification tells a stdio server to read the environment, not an

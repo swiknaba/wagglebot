@@ -99,16 +99,24 @@ test("an endpoint that is not a string is a hard error", () => {
   expect(() => loadRegistry(text, "r.yaml")).toThrow(/endpoint must be a string/);
 });
 
-test("a basic scheme needs a username, and an env source needs a var", () => {
+test("a basic scheme rejects a username field, and an env source needs a var", () => {
   const basic =
-    "proxies:\n  - namespace: a\n    mode: remote_http\n    endpoint: https://x/mcp\n    auth: { scheme: { kind: basic }, source: { from: env, var: T } }\n";
-  expect(() => loadRegistry(basic, "r.yaml")).toThrow(/scheme\.username/);
+    "proxies:\n  - namespace: a\n    mode: remote_http\n    endpoint: https://x/mcp\n    auth: { scheme: { kind: basic, username: bee }, source: { from: env, var: T } }\n";
+  expect(() => loadRegistry(basic, "r.yaml")).toThrow(
+    'auth.scheme.username is not used — put the base64 value of "username:password" in the variable that auth.source.var names',
+  );
   const source =
     "proxies:\n  - namespace: a\n    mode: remote_http\n    endpoint: https://x/mcp\n    auth: { scheme: { kind: bearer }, source: { from: env } }\n";
   expect(() => loadRegistry(source, "r.yaml")).toThrow(/source\.var is required/);
   const file =
     "proxies:\n  - namespace: a\n    mode: remote_http\n    endpoint: https://x/mcp\n    auth: { scheme: { kind: bearer }, source: { from: file } }\n";
   expect(() => loadRegistry(file, "r.yaml")).toThrow(/source\.path is required/);
+});
+
+test("a basic scheme without a username loads", () => {
+  const text =
+    "proxies:\n  - namespace: a\n    mode: remote_http\n    endpoint: https://x/mcp\n    auth: { scheme: { kind: basic }, source: { from: env, var: T } }\n";
+  expect(loadRegistry(text, "r.yaml")[0]?.auth?.scheme.kind).toBe("basic");
 });
 
 test("a remote mode rejects an env auth scheme", () => {
