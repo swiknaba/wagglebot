@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { startBackupSet } from "../backup";
@@ -275,4 +275,30 @@ test("an existing subagent file is backed up before it is overwritten", async ()
   });
   expect(readFileSync(dest, "utf8")).toBe("# Reviewer agent\n");
   expect(readFileSync(join(backups.dir, dest.replaceAll("/", "%2F")), "utf8")).toBe("# Old\n");
+});
+
+test("a symbolic link in a cloned repository is not installed as a subagent", async () => {
+  const home = mkdtempSync(join(tmpdir(), "wgl-"));
+  const secret = join(home, "secret.txt");
+  writeFileSync(secret, "top secret\n");
+  const git: Exec = async (cmd, args) => {
+    if (cmd === "git" && args[0] === "clone") {
+      const dir = args.at(-1) ?? "";
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(join(dir, "reviewer.md"), "# Reviewer agent\n");
+      symlinkSync(secret, join(dir, "leak.md"));
+      return { code: 0, stdout: "", stderr: "" };
+    }
+    return { code: 0, stdout: "", stderr: "" };
+  };
+  await runInstallAgents({
+    home,
+    harnesses: HARNESSES,
+    listTexts: [{ path: "l", text: "acme/agents@v1\n" }],
+    agentDirs: [],
+    exec: git,
+    reporter: quiet(),
+  });
+  expect(existsSync(join(home, ".claude/agents/acme__agents__leak.md"))).toBe(false);
+  expect(existsSync(join(home, ".claude/agents/acme__agents__reviewer.md"))).toBe(true);
 });

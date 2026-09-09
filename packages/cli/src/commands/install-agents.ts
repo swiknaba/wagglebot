@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import type { BackupSet } from "../backup";
 import { startBackupSet } from "../backup";
@@ -28,10 +28,12 @@ export function resolveSource(entry: ListEntry): AgentSource {
 }
 
 // The Markdown subagents of one directory, sorted. A README documents the directory. It is not an agent.
+// Only a regular file counts: a symbolic link in a cloned repository could point anywhere.
 const subagentFiles = (dir: string): string[] =>
   readdirSync(dir)
     .filter((f) => f.endsWith(".md"))
     .filter((f) => f.toLowerCase() !== "readme.md")
+    .filter((f) => lstatSync(join(dir, f)).isFile())
     .sort();
 
 export async function runInstallAgents(deps: {
