@@ -77,15 +77,17 @@ export function runWriteMcp(deps: {
     reporter.item("mcp", "skipped", `no MCP config adapter: ${without.join(", ")}`);
   }
 
+  // A file credential source needs the Phase 2 hub. Report it once, then leave it out of every config.
+  const usable = proxies.filter((p) => !(p.auth !== undefined && p.auth.source.from === "file"));
+  for (const p of proxies.filter((x) => !usable.includes(x))) {
+    reporter.item(p.namespace, "skipped", "file credential source arrives with the Phase 2 hub");
+  }
+
   for (const harness of deps.harnesses) {
     const mcpTarget = harness.mcpTarget;
     if (mcpTarget === undefined) continue;
     try {
       const target = join(home, mcpTarget.path);
-      const usable = proxies.filter((p) => !(p.auth !== undefined && p.auth.source.from === "file"));
-      for (const p of proxies.filter((x) => !usable.includes(x))) {
-        reporter.item(p.namespace, "skipped", "file credential source arrives with the Phase 2 hub");
-      }
       const entries = Object.fromEntries(usable.map((p) => [p.namespace, proxyToClaudeEntry(p)]));
       const prefix = `${mcpTarget.parentKey}/`;
       const previouslyOwned = (state.jsonKeys[target] ?? [])

@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { Harness } from "../harness";
 import { HARNESSES } from "../harness";
 import type { ProxyConfig } from "../registry";
 import { loadRegistry } from "../registry";
@@ -85,4 +86,24 @@ test("reports every ${VAR} that is not set in the shell", () => {
     "r.yaml",
   );
   expect(missingEnvVars(proxies, { A_TOKEN: "x" })).toEqual(["B_KEY"]);
+});
+
+test("a file credential source is reported once, not once per harness", () => {
+  const home = mkdtempSync(join(tmpdir(), "wgl-"));
+  const claude = HARNESSES.find((h) => h.name === "claude-code");
+  if (claude?.mcpTarget === undefined) throw new Error("fixture");
+  const twice: Harness[] = [
+    claude,
+    { ...claude, name: "second", mcpTarget: { ...claude.mcpTarget, path: ".second.json" } },
+  ];
+  const fileSourced: ProxyConfig = {
+    namespace: "vault",
+    mode: "remote_http",
+    endpoint: "https://v/mcp",
+    auth: { scheme: { kind: "bearer" }, source: { from: "file", path: "/x" } },
+  };
+  const lines: string[] = [];
+  const r = createReporter((l) => lines.push(l), false);
+  runWriteMcp({ home, harnesses: twice, proxies: [fileSourced], env: {}, reporter: r });
+  expect(lines.filter((l) => l.includes("vault")).length).toBe(1);
 });
