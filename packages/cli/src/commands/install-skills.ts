@@ -72,6 +72,7 @@ export async function runInstallSkills(deps: {
   skillsAgents: string[];
   managedFile: string;
   skillLockFile: string;
+  organization?: string[];
   nodeVersion?: string;
   update?: boolean;
   writeList?: (path: string, text: string) => void;
@@ -79,8 +80,8 @@ export async function runInstallSkills(deps: {
   const { reporter, exec } = deps;
   reporter.section("Skills");
   const agents = [...deps.skillsAgents].sort();
-  const parsed = deps.lists.map((l) => ({ ...l, ...parseList(l.text) }));
-  for (const l of parsed) for (const w of l.warnings) reporter.item(`${l.path}: ${w}`, "skipped", "warning only");
+  const parsed = deps.lists.map((l) => ({ ...l, ...parseList(l.text, { organization: deps.organization }) }));
+  for (const l of parsed) for (const w of l.warnings) reporter.warn(`${l.path}: ${w}`);
 
   if (deps.update === true) {
     for (const l of parsed) {

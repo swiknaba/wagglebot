@@ -211,3 +211,18 @@ test("installs from a private git host by full URL and checks out the ref", asyn
   expect(calls.some((args) => args.includes("checkout") && args.includes("v1.2.0"))).toBe(true);
   expect(existsSync(join(home, ".claude/agents/platform__agents__reviewer.md"))).toBe(true);
 });
+
+test("an unpinned third-party agents entry is a warning line", async () => {
+  const home = mkdtempSync(join(tmpdir(), "wgl-"));
+  const lines: string[] = [];
+  const r = createReporter((l) => lines.push(l), false);
+  await runInstallAgents({
+    home,
+    harnesses: HARNESSES,
+    listTexts: [{ path: "agents.base.list", text: "acme/agents\n" }],
+    agentDirs: [],
+    exec: fakeGit,
+    reporter: r,
+  });
+  expect(lines.some((l) => l.includes("warning") && l.includes("acme/agents"))).toBe(true);
+});

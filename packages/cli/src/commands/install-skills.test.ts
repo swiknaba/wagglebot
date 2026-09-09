@@ -428,3 +428,20 @@ test("a missing skills CLI is skipped with a remedy and fails nothing", async ()
   expect(r.counts().skipped).toBe(1);
   expect(r.counts().failed).toBe(0);
 });
+
+test("an unpinned third-party entry is a warning line, not a counted item", async () => {
+  const lines: string[] = [];
+  const r = createReporter((l) => lines.push(l), false);
+  await runInstallSkills({
+    lists: [{ path: "l", text: "acme/tools\n" }],
+    exec: fakeExec([]),
+    reporter: r,
+    skillsBin: "/fake/skills",
+    skillsAgents: ["claude-code"],
+    managedFile: managed(),
+    skillLockFile: NO_LOCK,
+    nodeVersion: NODE,
+  });
+  expect(lines.some((l) => l.includes("warning") && l.includes("acme/tools"))).toBe(true);
+  expect(r.counts().skipped).toBe(0);
+});

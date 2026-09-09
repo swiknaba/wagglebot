@@ -15,6 +15,8 @@ export type Layer = {
 export type CompanyRepo = {
   root: string;
   pin: string;
+  // "host/path" prefixes the company owns, declared under "wagglebot" in package.json (P33).
+  organization: string[];
   company: Layer;
   teams: Layer[];
   catalogText: string;
@@ -24,12 +26,22 @@ export type CompanyRepo = {
 
 const readOptional = (path: string): string | undefined => (existsSync(path) ? readFileSync(path, "utf8") : undefined);
 
-const pinOf = (root: string): string | undefined => {
+type CompanyPackage = { dependencies?: Record<string, string>; wagglebot?: { organization?: unknown } };
+
+const readPackage = (root: string): { pin?: string; organization: string[] } => {
   const pkgPath = join(root, "package.json");
-  if (!existsSync(pkgPath)) return undefined;
-  const pkg: { dependencies?: Record<string, string> } = JSON.parse(readFileSync(pkgPath, "utf8"));
-  return pkg.dependencies?.wagglebot;
+  if (!existsSync(pkgPath)) return { organization: [] };
+  const pkg: CompanyPackage = JSON.parse(readFileSync(pkgPath, "utf8"));
+  const raw = pkg.wagglebot?.organization;
+  if (raw !== undefined && !(Array.isArray(raw) && raw.every((p) => typeof p === "string"))) {
+    throw new Error(
+      `${pkgPath}: "wagglebot.organization" must be a list of "host/path" prefixes, for example ["github.com/acme"]`,
+    );
+  }
+  return { pin: pkg.dependencies?.wagglebot, organization: raw ?? [] };
 };
+
+const pinOf = (root: string): string | undefined => readPackage(root).pin;
 
 export function findCompanyRoot(cwd: string): string {
   let dir = cwd;
@@ -59,7 +71,7 @@ const readLayer = (name: string, dir: string): Layer => ({
 });
 
 export function loadCompanyRepo(root: string): CompanyRepo {
-  const pin = pinOf(root);
+  const { pin, organization } = readPackage(root);
   if (pin === undefined) throw new Error(`${root}/package.json does not pin the "wagglebot" dependency`);
   const company = readLayer("company", join(root, "company"));
   const teamsDir = join(root, "teams");
@@ -79,6 +91,7 @@ export function loadCompanyRepo(root: string): CompanyRepo {
   return {
     root,
     pin,
+    organization,
     company,
     teams,
     catalogText: catalogs.map((l) => l.catalogText ?? "").join("\n---\n"),

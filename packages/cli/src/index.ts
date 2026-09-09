@@ -134,6 +134,7 @@ export async function main(argv: string[], deps: CliDeps = { write: console.log 
         skillsAgents: harnesses.flatMap((h) => (h.skillsAgent ? [h.skillsAgent] : [])),
         managedFile: resolvePaths(home).managedFile,
         skillLockFile: resolveSkillLockFile(home),
+        organization: company.organization,
         update: values.update === true,
         writeList: values.update === true ? (path, text) => writeFileSync(path, text) : undefined,
       });
@@ -154,6 +155,7 @@ export async function main(argv: string[], deps: CliDeps = { write: console.log 
         agentDirs: layers.map((l) => ({ prefix: `${l.name}__`, dir: l.agentsDir })),
         exec,
         reporter,
+        organization: company.organization,
       });
       deps.write(reporter.summary());
       return code;

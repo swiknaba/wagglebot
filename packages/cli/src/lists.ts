@@ -5,7 +5,30 @@ export type ListEntry = { repo: string; ref?: string; raw: string; isUrl?: boole
 // after whitespace ("<url> <ref>"): "@" is taken by ssh URLs and "#" starts a comment.
 const URL_ENTRY = /^(?:[a-z][\w+.-]*:\/\/|git@)/i;
 
-export function parseList(text: string): { entries: ListEntry[]; warnings: string[] } {
+export type ListOptions = { organization?: string[] };
+
+// The "host/path" of an entry: no scheme, no user, no ".git" suffix. A port stays part of the host.
+// A prefix under "wagglebot.organization" in the company package.json matches against this string.
+export function hostPath(entry: ListEntry): string {
+  if (entry.isUrl !== true) return `github.com/${entry.repo}`;
+  const url = entry.repo.replace(/\.git$/, "");
+  const scheme = /^[a-z][\w+.-]*:\/\//i.exec(url);
+  // scp-like "[user@]host:path" has no scheme.
+  if (scheme === null) return url.replace(/^[^@]+@/, "").replace(":", "/");
+  return url.slice(scheme[0].length).replace(/^[^@/]+@/, "");
+}
+
+// A prefix matches whole segments: "github.com/acme" covers "github.com/acme/tools", never
+// "github.com/acme-labs/tools". A declared prefix may carry a trailing slash, which is dropped.
+// The comparison ignores case, because a host and a GitHub owner name are both case-insensitive.
+export const insideOrganization = (entry: ListEntry, organization: string[]): boolean => {
+  const hp = hostPath(entry).toLowerCase();
+  return organization
+    .map((prefix) => prefix.replace(/\/+$/, "").toLowerCase())
+    .some((prefix) => hp === prefix || hp.startsWith(`${prefix}/`));
+};
+
+export function parseList(text: string, options: ListOptions = {}): { entries: ListEntry[]; warnings: string[] } {
   const warnings: string[] = [];
   const entries = text
     .split("\n")
@@ -22,9 +45,17 @@ export function parseList(text: string): { entries: ListEntry[]; warnings: strin
       if (!/^[\w.-]+\/[\w.-]+$/.test(repo) || ref === "") {
         throw new Error(`list entry is malformed: "${raw}" — expected owner/repo[@ref] or a full git URL`);
       }
-      if (ref === undefined) warnings.push(`${repo}: no pin — add "@<tag-or-commit>"`);
       return { repo, ref, raw };
     });
+  // D32: an entry outside the organization must pin a tag. An entry the organization owns may
+  // track its default branch, because the same people control both repositories.
+  for (const entry of entries) {
+    if (entry.ref === undefined && !insideOrganization(entry, options.organization ?? [])) {
+      warnings.push(
+        `${entry.repo}: no pin. A repository outside your organization must pin a tag. Add "@<tag>" to the entry, or a space and the tag after a URL. If your organization owns the repository, list its host/path prefix under "wagglebot.organization" in package.json.`,
+      );
+    }
+  }
   return { entries, warnings };
 }
 

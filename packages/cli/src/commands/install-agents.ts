@@ -34,6 +34,7 @@ export async function runInstallAgents(deps: {
   agentDirs: { prefix: string; dir: string }[];
   exec: Exec;
   reporter: Reporter;
+  organization?: string[];
   backups?: BackupSet;
 }): Promise<number> {
   const { home, exec, reporter } = deps;
@@ -42,7 +43,9 @@ export async function runInstallAgents(deps: {
   const backups = deps.backups ?? startBackupSet(paths.backupsDir);
   reporter.section("Custom agents");
 
-  const entries = deps.listTexts.flatMap(({ text }) => parseList(text).entries);
+  const parsed = deps.listTexts.map((l) => ({ ...l, ...parseList(l.text, { organization: deps.organization }) }));
+  for (const l of parsed) for (const w of l.warnings) reporter.warn(`${l.path}: ${w}`);
+  const entries = parsed.flatMap((l) => l.entries);
   const targets = deps.harnesses.filter((h) => h.subagentDir !== undefined);
   const without = deps.harnesses.filter((h) => h.subagentDir === undefined).map((h) => h.name);
   if (without.length > 0) {

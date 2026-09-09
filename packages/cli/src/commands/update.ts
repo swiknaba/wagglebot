@@ -92,6 +92,7 @@ export async function runUpdate(deps: {
     skillsAgents: harnesses.flatMap((h) => (h.skillsAgent ? [h.skillsAgent] : [])),
     managedFile: paths.managedFile,
     skillLockFile: resolveSkillLockFile(deps.home),
+    organization: company.organization,
   });
   await runInstallAgents({
     home: deps.home,
@@ -102,6 +103,7 @@ export async function runUpdate(deps: {
     agentDirs: layers.map((l) => ({ prefix: `${l.name}__`, dir: l.agentsDir })),
     exec,
     reporter,
+    organization: company.organization,
     backups,
   });
   runSyncAgents({
