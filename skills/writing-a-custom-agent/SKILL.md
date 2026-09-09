@@ -102,6 +102,9 @@ subagent instead.
 | Own repository | One line in `company/agents.list` |
 | Pin rule | A third-party repository must pin a tag (D32) |
 
+A repository inside your organization may skip the pin when `package.json`
+lists its host/path prefix under `"wagglebot.organization"`.
+
 ## Common Mistakes
 
 | Mistake | Fix |

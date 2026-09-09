@@ -74,6 +74,11 @@ every workstation.
 
 Wagglebot runs the command as `npx -y <command> <args...>`.
 
+A repository inside your organization may skip the pin in `skills.list` and
+`agents.list` when `package.json` lists its host/path prefix under
+`"wagglebot.organization"`. That exemption does not reach this field: every
+`stdio_npx` command needs an exact version.
+
 ## Step 5: Place The Credential Value
 
 1. Copy `.env.credentials.example` to `.env.credentials` in the company
@@ -113,6 +118,10 @@ proxies:
       scheme: { kind: env, map: { GITHUB_PERSONAL_ACCESS_TOKEN: "$SOURCE" } }
       source: { from: env, var: GITHUB_TOKEN }
 ```
+
+Some harnesses cannot read a credential from a variable. Wagglebot then leaves
+the entry out for that harness and reports the reason. See `docs/harnesses.md`
+in the wagglebot repository for the table.
 
 ## Review Is The Approval
 
