@@ -27,6 +27,7 @@ test("writes every template target inside a managed block, chmod 600", () => {
   expect(existsSync(join(home, ".gemini/GEMINI.md"))).toBe(true);
   const settings = JSON.parse(readFileSync(join(home, ".claude/settings.json"), "utf8"));
   expect(JSON.stringify(settings.hooks)).toContain("wagglebot:");
+  expect(statSync(join(home, ".claude/settings.json")).mode & 0o777).toBe(0o600);
 });
 
 test("second run reports every item ok and changes nothing", () => {

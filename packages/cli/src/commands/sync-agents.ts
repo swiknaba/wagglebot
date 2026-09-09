@@ -83,7 +83,7 @@ export function runSyncAgents(deps: {
     const hooksTarget = harness.hooksTarget;
     if (hooksTarget !== undefined) {
       // The fragment is read inside the try of writeTarget: a bad fragment fails this item only.
-      writeTarget(hooksTarget.path, (existing) => mergeHooks(existing, readFragment(hooksTarget.fragmentFile)));
+      writeTarget(hooksTarget.path, (existing) => mergeHooks(existing, readFragment(hooksTarget.fragmentFile)), 0o600);
     }
   }
   return reporter.failed() ? 1 : 0;
