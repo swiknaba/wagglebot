@@ -74,26 +74,30 @@ test("pulls, provisions, and prints a summary", async () => {
   }
 });
 
-test("a moved pin triggers yarn install and a re-exec, once", async () => {
-  const root = scaffoldCompany();
-  const home = mkdtempSync(join(tmpdir(), "wgl-home-"));
-  mkdirSync(join(home, ".claude"), { recursive: true });
-  const calls: string[][] = [];
-  const exec: Exec = async (cmd, args, _opts) => {
+// The pull moves the wagglebot pin. That move is what makes runUpdate reach the self-update
+// branch: yarn install, then a re-exec of the freshly installed CLI.
+const pinMovingExec =
+  (root: string, calls: string[][]): Exec =>
+  async (cmd, args, _opts) => {
     calls.push([cmd, ...args]);
     if (cmd === "git" && args[0] === "pull") {
-      // the pull moves the pin
       writeFileSync(join(root, "package.json"), JSON.stringify({ dependencies: { wagglebot: "1.5.0" } }));
     }
     if (cmd === "git" && args.includes("wagglebot.username")) return { code: 0, stdout: "alice\n", stderr: "" };
     if (cmd === "git" && args.includes("wagglebot.harnesses")) return { code: 1, stdout: "", stderr: "" };
     return { code: 0, stdout: "", stderr: "" };
   };
+
+test("a moved pin triggers yarn install and a re-exec, once", async () => {
+  const root = scaffoldCompany();
+  const home = mkdtempSync(join(tmpdir(), "wgl-home-"));
+  mkdirSync(join(home, ".claude"), { recursive: true });
+  const calls: string[][] = [];
   const quiet = createReporter(() => {}, false);
   const code = await runUpdate({
     cwd: root,
     home,
-    exec,
+    exec: pinMovingExec(root, calls),
     ask: async () => "alice",
     reporter: quiet,
     write: () => {},
@@ -138,4 +142,29 @@ test("one runUpdate makes a single backup set that restores both CLAUDE.md and .
   expect(readFileSync(join(home, ".claude/CLAUDE.md"), "utf8")).toBe("# my personal rules\n");
   const doc: { mcpServers: { personal?: unknown } } = JSON.parse(readFileSync(join(home, ".claude.json"), "utf8"));
   expect(doc.mcpServers.personal).toBeDefined();
+});
+
+test("a failing yarn install prints the summary before it exits 1", async () => {
+  const root = scaffoldCompany();
+  const home = mkdtempSync(join(tmpdir(), "wgl-home-"));
+  mkdirSync(join(home, ".claude"), { recursive: true });
+  const pinMoving = pinMovingExec(root, []);
+  const lines: string[] = [];
+  const exec: Exec = async (cmd, args, opts) => {
+    if (cmd === "yarn" && args[0] === "install") return { code: 1, stdout: "", stderr: "error Couldn't find package" };
+    return pinMoving(cmd, args, opts);
+  };
+  const r = createReporter((l) => lines.push(l), false);
+  const code = await runUpdate({
+    cwd: root,
+    home,
+    exec,
+    ask: async () => "alice",
+    reporter: r,
+    write: (l) => lines.push(l),
+    skillsBin: "/bin/skills",
+    env: zshEnv,
+  });
+  expect(code).toBe(1);
+  expect(lines.some((l) => l.includes("failed 1"))).toBe(true);
 });

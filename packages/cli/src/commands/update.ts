@@ -48,6 +48,7 @@ export async function runUpdate(deps: {
     const install = await exec("yarn", ["install"], { cwd: root });
     if (install.code !== 0) {
       reporter.item("yarn install", "failed", install.stderr.split("\n")[0] ?? "");
+      write(reporter.summary());
       return 1;
     }
     const rerun = await exec("yarn", ["wagglebot", "update", "--skip-self-update"], { cwd: root });
