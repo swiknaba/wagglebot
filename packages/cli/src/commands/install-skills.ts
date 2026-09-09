@@ -87,14 +87,23 @@ export async function runInstallSkills(deps: {
   if (deps.update === true) {
     for (const l of parsed) {
       let text = l.text;
-      for (const entry of l.entries.filter((e) => e.ref !== undefined)) {
+      const pinned = l.entries.filter((e) => e.ref !== undefined);
+      // The remotes are independent, so every ls-remote runs at once. The rewrites stay in list
+      // order below.
+      const remotes = await Promise.all(
+        pinned.map((entry) => {
+          if (!VERSION_TAG.test(entry.ref ?? "")) return Promise.resolve(undefined);
+          const url = entry.isUrl === true ? entry.repo : `https://github.com/${entry.repo}.git`;
+          return exec("git", ["ls-remote", "--tags", "--refs", url]);
+        }),
+      );
+      for (const [index, entry] of pinned.entries()) {
         if (!VERSION_TAG.test(entry.ref ?? "")) {
           reporter.item(entry.repo, "skipped", `pin "${entry.ref}" is a branch or a commit, not a version tag — kept`);
           continue;
         }
-        const url = entry.isUrl === true ? entry.repo : `https://github.com/${entry.repo}.git`;
-        const remote = await exec("git", ["ls-remote", "--tags", "--refs", url]);
-        const tag = remote.code === 0 ? highestTag(remote.stdout) : undefined;
+        const remote = remotes[index];
+        const tag = remote !== undefined && remote.code === 0 ? highestTag(remote.stdout) : undefined;
         if (tag === undefined) {
           reporter.item(entry.repo, "skipped", "no version tag on the remote — pin kept");
           continue;
