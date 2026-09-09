@@ -665,6 +665,9 @@ every agent harness location. One file then governs all agents:
 
 Paths verified against vendor documentation on 2026-09-02.
 
+`docs/harnesses.md` holds the MCP config file of each harness, with the
+vendor source of every path and field.
+
 Subagent directories: Claude Code `~/.claude/agents/`, Junie
 `~/.junie/agents/`. Codex subagents are TOML, not Markdown, so Codex
 has none. A harness with no known subagent directory is skipped, with

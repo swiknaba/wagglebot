@@ -48,9 +48,11 @@ export type ProjectTarget = {
   limitBytes?: number;
 };
 
-// Paths verified against vendor documentation on 2026-09-02. Codex subagents are TOML, not
-// Markdown, so Codex has no subagentDir. Cline reads every .md file in its rules directory,
-// so wagglebot owns one file there instead of a block in a shared file.
+// Paths verified against vendor documentation on 2026-09-02, and the MCP config paths on
+// 2026-09-09. docs/harnesses.md holds the vendor table and the source of each MCP field.
+// Codex subagents are TOML, not Markdown, so Codex has no subagentDir. Cline reads every
+// .md file in its rules directory, so wagglebot owns one file there instead of a block in a
+// shared file.
 export const HARNESSES: Harness[] = [
   {
     name: "claude-code",
