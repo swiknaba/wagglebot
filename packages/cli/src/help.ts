@@ -10,9 +10,13 @@ const templateFiles = () =>
 const hookFiles = () =>
   HARNESSES.flatMap((h) => (h.hooksTarget ? [`~/${h.hooksTarget.path}  (${h.name}, managed hook entries)`] : []));
 const mcpFiles = () =>
-  HARNESSES.flatMap((h) =>
-    h.mcpTarget ? [`~/${h.mcpTarget.path}  (${h.name}, managed keys under ${h.mcpTarget.parentKey})`] : [],
-  );
+  HARNESSES.flatMap((h) => {
+    const t = h.mcpTarget;
+    if (t === undefined) return [];
+    if (t.format === "toml")
+      return [`~/${t.path}  (${h.name}, managed block, one [${t.table}.<namespace>] table per server)`];
+    return [`~/${t.path}  (${h.name}, managed keys under ${t.parentKey})`];
+  });
 const subagentDirs = () =>
   HARNESSES.flatMap((h) =>
     h.subagentDir ? [`~/${h.subagentDir}/  (${h.name}, files prefixed company__, <team>__, or owner__repo__)`] : [],

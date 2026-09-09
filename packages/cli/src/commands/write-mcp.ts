@@ -2,44 +2,43 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { BackupSet } from "../backup";
 import { startBackupSet } from "../backup";
-import type { Harness } from "../harness";
+import type { Harness, McpTarget } from "../harness";
+import { MARKERS, removeManagedBlock, renderManagedBlock } from "../managed-block";
 import { mergeManagedSection } from "../managed-json";
+import { renderEntry, renderTomlTables } from "../mcp-dialects";
 import { resolvePaths } from "../paths";
-import type { AuthScheme, CredentialSource, ProxyConfig } from "../registry";
+import type { ProxyConfig } from "../registry";
 import type { Reporter } from "../report";
+import type { ManagedState } from "../state";
 import { loadState, saveState } from "../state";
 
-const expansion = (source: CredentialSource): string | undefined =>
-  source.from === "env" ? `\${${source.var}}` : undefined;
+// The Claude Code renderer moved to mcp-dialects.ts, next to the other five. It stays exported
+// here, because this module is where a caller looks for the entry the writer produces.
+export { proxyToClaudeEntry } from "../mcp-dialects";
 
-const headersFor = (scheme: AuthScheme, source: CredentialSource): Record<string, string> | undefined => {
-  const value = expansion(source);
-  if (value === undefined) return undefined;
-  if (scheme.kind === "bearer") return { Authorization: `Bearer ${value}` };
-  if (scheme.kind === "header") return { [scheme.name]: `${scheme.prefix ?? ""}${value}` };
-  if (scheme.kind === "basic") return { Authorization: `Basic ${value}` };
-  return undefined;
+type JsonTarget = Extract<McpTarget, { format: "json" }>;
+type TomlTarget = Extract<McpTarget, { format: "toml" }>;
+type Entry = { namespace: string; entry: Record<string, unknown> };
+
+// A TOML file has no key ownership, so the hash block of managed-block.ts is what wagglebot
+// owns inside it.
+const { begin: TOML_BLOCK_BEGIN, end: TOML_BLOCK_END } = MARKERS.hash;
+
+const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+// The file text without the managed block, so a table wagglebot wrote never counts as foreign.
+const outsideBlock = (text: string): string => {
+  const begin = text.indexOf(TOML_BLOCK_BEGIN);
+  const end = text.indexOf(TOML_BLOCK_END);
+  if (begin === -1 || end === -1 || end < begin) return text;
+  return text.slice(0, begin) + text.slice(end + TOML_BLOCK_END.length);
 };
 
-export function proxyToClaudeEntry(p: ProxyConfig): Record<string, unknown> {
-  if (p.mode === "remote_http" || p.mode === "remote_sse") {
-    const headers = p.auth === undefined ? undefined : headersFor(p.auth.scheme, p.auth.source);
-    return {
-      type: p.mode === "remote_http" ? "http" : "sse",
-      url: p.endpoint,
-      ...(headers === undefined ? {} : { headers }),
-    };
-  }
-  const authEnv: Record<string, string> = {};
-  if (p.auth !== undefined && p.auth.scheme.kind === "env") {
-    const value = expansion(p.auth.source);
-    if (value !== undefined) for (const key of Object.keys(p.auth.scheme.map)) authEnv[key] = value;
-  }
-  const env = { ...(p.env ?? {}), ...authEnv };
-  const withEnv = Object.keys(env).length === 0 ? {} : { env };
-  if (p.mode === "stdio_npx") return { command: "npx", args: ["-y", p.command ?? "", ...(p.args ?? [])], ...withEnv };
-  return { command: p.command ?? "", args: p.args ?? [], ...withEnv };
-}
+// True when the text declares [<table>.<namespace>] itself, with a bare or a quoted key.
+const definesTable = (text: string, table: string, namespace: string): boolean => {
+  const key = escapeRegExp(namespace);
+  return new RegExp(`^\\s*\\[${escapeRegExp(table)}\\.(?:${key}|"${key}")\\]`, "m").test(text);
+};
 
 // Every ${VAR} the written config will expand. Missing ones are reported, never guessed.
 export function missingEnvVars(proxies: ProxyConfig[], env: NodeJS.ProcessEnv): string[] {
@@ -52,6 +51,85 @@ export function missingEnvVars(proxies: ProxyConfig[], env: NodeJS.ProcessEnv): 
     }
   }
   return [...names].filter((n) => env[n] === undefined || env[n] === "").sort();
+}
+
+function writeJsonTarget(deps: {
+  target: JsonTarget;
+  path: string;
+  rendered: Entry[];
+  emptyReason: string;
+  reporter: Reporter;
+  backups: BackupSet;
+  state: ManagedState;
+  managedFile: string;
+}): void {
+  const { target, path, reporter, state } = deps;
+  const entries = Object.fromEntries(deps.rendered.map((r) => [r.namespace, r.entry]));
+  const prefix = `${target.parentKey}/`;
+  const previouslyOwned = (state.jsonKeys[path] ?? [])
+    .filter((k) => k.startsWith(prefix))
+    .map((k) => k.slice(prefix.length));
+  if (Object.keys(entries).length === 0 && previouslyOwned.length === 0) {
+    reporter.item(target.path, "skipped", deps.emptyReason);
+    return;
+  }
+  const existing = existsSync(path) ? readFileSync(path, "utf8") : "";
+  const result = mergeManagedSection(existing, target.parentKey, entries, previouslyOwned);
+  if (!result.changed) {
+    reporter.item(target.path, "ok", "already ok");
+    return;
+  }
+  deps.backups.backup(path);
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, result.next);
+  state.jsonKeys[path] = [
+    ...(state.jsonKeys[path] ?? []).filter((k) => !k.startsWith(prefix)),
+    ...result.ownedNow.map((k) => `${prefix}${k}`),
+  ];
+  saveState(deps.managedFile, state);
+  reporter.item(target.path, "updated", `${result.ownedNow.length} managed entries`);
+}
+
+// The TOML target keeps the servers of the engineer. A namespace the file already declares
+// outside the block is a conflict: wagglebot reports it and writes no table for it.
+function writeTomlTarget(deps: {
+  harness: Harness;
+  target: TomlTarget;
+  path: string;
+  rendered: Entry[];
+  emptyReason: string;
+  reporter: Reporter;
+  backups: BackupSet;
+}): void {
+  const { harness, target, path, reporter } = deps;
+  const existing = existsSync(path) ? readFileSync(path, "utf8") : "";
+  const foreign = outsideBlock(existing);
+  const kept = deps.rendered.filter(({ namespace }) => {
+    if (!definesTable(foreign, target.table, namespace)) return true;
+    reporter.item(
+      `${namespace} (${harness.name})`,
+      "failed",
+      `already defined outside the wagglebot block in ${target.path} — remove it there, or rename the registry entry`,
+    );
+    return false;
+  });
+  if (kept.length === 0 && !existing.includes(TOML_BLOCK_BEGIN)) {
+    reporter.item(target.path, "skipped", deps.emptyReason);
+    return;
+  }
+  const result =
+    kept.length === 0
+      ? removeManagedBlock(existing, "hash")
+      : renderManagedBlock(existing, renderTomlTables(target.table, kept), "hash");
+  if (!result.changed) {
+    reporter.item(target.path, "ok", "already ok");
+    return;
+  }
+  // No chmod: the file belongs to the harness, and the block carries no secret.
+  deps.backups.backup(path);
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, result.next);
+  reporter.item(target.path, "updated", `${kept.length} managed entries`);
 }
 
 export function runWriteMcp(deps: {
@@ -87,31 +165,33 @@ export function runWriteMcp(deps: {
     const mcpTarget = harness.mcpTarget;
     if (mcpTarget === undefined) continue;
     try {
-      const target = join(home, mcpTarget.path);
-      const entries = Object.fromEntries(usable.map((p) => [p.namespace, proxyToClaudeEntry(p)]));
-      const prefix = `${mcpTarget.parentKey}/`;
-      const previouslyOwned = (state.jsonKeys[target] ?? [])
-        .filter((k) => k.startsWith(prefix))
-        .map((k) => k.slice(prefix.length));
-      if (Object.keys(entries).length === 0 && previouslyOwned.length === 0) {
-        reporter.item(mcpTarget.path, "skipped", "no MCP servers in the registry — file not created");
-        continue;
+      const path = join(home, mcpTarget.path);
+      const rendered: Entry[] = [];
+      for (const p of usable) {
+        const result = renderEntry(mcpTarget.dialect, p);
+        if (result.ok) rendered.push({ namespace: p.namespace, entry: result.entry });
+        else reporter.item(`${p.namespace} (${harness.name})`, "skipped", result.reason);
       }
-      const existing = existsSync(target) ? readFileSync(target, "utf8") : "";
-      const result = mergeManagedSection(existing, mcpTarget.parentKey, entries, previouslyOwned);
-      if (!result.changed) {
-        reporter.item(mcpTarget.path, "ok", "already ok");
-        continue;
+      // The registry can be empty, or every entry can be one this harness cannot express. The
+      // second case must not read as an empty registry, because the skip lines say otherwise.
+      const emptyReason =
+        usable.length === 0
+          ? "no MCP servers in the registry — file not created"
+          : "no MCP server can be written for this harness — every entry was skipped above — file not created";
+      if (mcpTarget.format === "toml") {
+        writeTomlTarget({ harness, target: mcpTarget, path, rendered, emptyReason, reporter, backups });
+      } else {
+        writeJsonTarget({
+          target: mcpTarget,
+          path,
+          rendered,
+          emptyReason,
+          reporter,
+          backups,
+          state,
+          managedFile: paths.managedFile,
+        });
       }
-      backups.backup(target);
-      mkdirSync(dirname(target), { recursive: true });
-      writeFileSync(target, result.next);
-      state.jsonKeys[target] = [
-        ...(state.jsonKeys[target] ?? []).filter((k) => !k.startsWith(prefix)),
-        ...result.ownedNow.map((k) => `${prefix}${k}`),
-      ];
-      saveState(paths.managedFile, state);
-      reporter.item(mcpTarget.path, "updated", `${result.ownedNow.length} managed entries`);
     } catch (error) {
       reporter.item(mcpTarget.path, "failed", error instanceof Error ? error.message : String(error));
     }

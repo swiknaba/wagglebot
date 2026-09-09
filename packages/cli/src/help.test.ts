@@ -17,6 +17,7 @@ test("command help names what the command reads and writes", () => {
   const mcp = helpText("write-mcp");
   expect(mcp).toContain("registry.yaml");
   expect(mcp).toContain("~/.claude.json");
+  expect(mcp).toContain("~/.codex/config.toml");
   const shell = helpText("sync-shell");
   expect(shell).toContain("~/.zshenv");
   expect(shell).toContain(".env.credentials");
