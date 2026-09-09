@@ -226,3 +226,15 @@ test("cline names the streamable HTTP transport and skips a proxy that needs a $
   expect(reasonOf(renderEntry("cline", remote))).toBe(reason);
   expect(reasonOf(renderEntry("cline", stdioNpx))).toBe(reason);
 });
+
+test("junie writes a bare url, and skips sse and a proxy that needs a ${VAR}", () => {
+  expect(entryOf(renderEntry("junie", plainRemote))).toEqual({ url: "https://plain.example/mcp" });
+  expect(entryOf(renderEntry("junie", plainStdio))).toEqual({ command: "my-mcp", args: ["--x"] });
+  expect(reasonOf(renderEntry("junie", { ...plainRemote, mode: "remote_sse" }))).toBe(
+    "Junie documents no SSE transport",
+  );
+  const reason =
+    "Junie does not expand ${VAR} in mcp.json — the credential would land as a literal, so the entry is left out";
+  expect(reasonOf(renderEntry("junie", remote))).toBe(reason);
+  expect(reasonOf(renderEntry("junie", stdioNpx))).toBe(reason);
+});

@@ -153,11 +153,27 @@ function clineEntry(p: ProxyConfig): Rendered {
   return { ok: true, entry: stdioCommand(p) };
 }
 
+// Junie documents no ${VAR} expansion and no SSE transport. Its remote entry carries the url
+// alone, with no type field.
+function junieEntry(p: ProxyConfig): Rendered {
+  if (needsExpansion(p)) {
+    return {
+      ok: false,
+      reason:
+        "Junie does not expand ${VAR} in mcp.json — the credential would land as a literal, so the entry is left out",
+    };
+  }
+  if (p.mode === "remote_sse") return { ok: false, reason: "Junie documents no SSE transport" };
+  if (p.mode === "remote_http") return { ok: true, entry: { url: p.endpoint } };
+  return { ok: true, entry: stdioCommand(p) };
+}
+
 export function renderEntry(dialect: McpDialect, p: ProxyConfig): Rendered {
   if (dialect === "codex") return codexEntry(p);
   if (dialect === "gemini") return geminiEntry(p);
   if (dialect === "copilot") return copilotEntry(p);
   if (dialect === "cline") return clineEntry(p);
+  if (dialect === "junie") return junieEntry(p);
   return { ok: true, entry: proxyToClaudeEntry(p) };
 }
 

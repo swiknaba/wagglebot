@@ -26,7 +26,7 @@ export type Harness = {
 
 // Which field names and which transport keys one harness expects inside its MCP config.
 // docs/harnesses.md holds the vendor table and the source of each path.
-export type McpDialect = "claude" | "codex" | "gemini" | "copilot" | "cline";
+export type McpDialect = "claude" | "codex" | "gemini" | "copilot" | "cline" | "junie";
 export type McpTarget =
   // A JSON file. Ownership is per child key under parentKey, recorded in ~/.wagglebot/managed.json.
   | { format: "json"; path: string; parentKey: string; dialect: McpDialect }
@@ -80,6 +80,10 @@ export const HARNESSES: Harness[] = [
     detectDir: ".junie",
     skillsAgent: "junie",
     templateTargets: [".junie/AGENTS.md"],
+    // https://junie.jetbrains.com/docs/junie-cli-mcp-configuration.html — a remote entry carries
+    // url and headers, with no type field. No documented ${VAR} expansion and no SSE transport,
+    // so a credentialed entry and an SSE entry are both skipped.
+    mcpTarget: { format: "json", path: ".junie/mcp/mcp.json", parentKey: "mcpServers", dialect: "junie" },
     subagentDir: ".junie/agents",
     projectTarget: { path: "AGENTS.md", mode: "block" },
   },

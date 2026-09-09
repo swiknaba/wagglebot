@@ -36,6 +36,8 @@ test("shipped template files exist", () => {
 });
 
 test("every MCP target is home-relative and names its dialect", () => {
+  // Every harness writes MCP servers, so write-mcp reports no missing adapter.
+  expect(HARNESSES.filter((h) => h.mcpTarget !== undefined)).toHaveLength(HARNESSES.length);
   for (const h of HARNESSES) {
     const t = h.mcpTarget;
     if (t === undefined) continue;
@@ -67,5 +69,11 @@ test("every MCP target is home-relative and names its dialect", () => {
     path: ".cline/data/settings/cline_mcp_settings.json",
     parentKey: "mcpServers",
     dialect: "cline",
+  });
+  expect(HARNESSES.find((h) => h.name === "junie")?.mcpTarget).toEqual({
+    format: "json",
+    path: ".junie/mcp/mcp.json",
+    parentKey: "mcpServers",
+    dialect: "junie",
   });
 });

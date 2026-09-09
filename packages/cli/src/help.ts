@@ -91,7 +91,7 @@ const SECTIONS: Record<string, Section> = {
   "write-mcp": {
     title: "write-mcp",
     purpose:
-      "Writes the merged MCP registry into the MCP config of each selected harness. Credentials appear as ${VAR} only.",
+      "Writes the merged MCP registry into the MCP config of each selected harness. A credential appears as ${VAR}, or as the name of an environment variable. A harness that reads neither form has that entry left out, with the reason on its report line.",
     reads: [`registry.yaml in ${LAYERS}  (a team entry with the same namespace wins)`],
     writes: [...mcpFiles(), "~/.wagglebot/managed.json  (every key it wrote)"],
   },
