@@ -393,7 +393,7 @@ MemoryJob { jobId, reason, sourceKind, sourceId, conversationId,
             scopeIds[], payload, createdAt }
 ```
 
-Phase 1 ships only the `session_run` proposal path. The envelope is
+Phase 2 ships only the `session_run` proposal path. The envelope is
 documented, so runtimes can add richer sources later (P14).
 
 **Policy file contract:** one Markdown file that the operator writes.

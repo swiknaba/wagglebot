@@ -1,7 +1,8 @@
 import { expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { startBackupSet } from "../backup";
 import type { Exec } from "../exec";
 import { HARNESSES } from "../harness";
 import { createReporter } from "../report";
@@ -210,4 +211,94 @@ test("installs from a private git host by full URL and checks out the ref", asyn
   expect(calls[0]?.slice(0, 2)).toEqual(["clone", "https://git.my-company.local/platform/agents.git"]);
   expect(calls.some((args) => args.includes("checkout") && args.includes("v1.2.0"))).toBe(true);
   expect(existsSync(join(home, ".claude/agents/platform__agents__reviewer.md"))).toBe(true);
+});
+
+test("an unpinned third-party agents entry is a warning line", async () => {
+  const home = mkdtempSync(join(tmpdir(), "wgl-"));
+  const lines: string[] = [];
+  const claude = HARNESSES.find((h) => h.name === "claude-code");
+  if (claude === undefined) throw new Error("fixture");
+  const r = createReporter((l) => lines.push(l), false);
+  // Claude Code alone, so the only skip a harness could add stays out of the count.
+  const code = await runInstallAgents({
+    home,
+    harnesses: [claude],
+    listTexts: [{ path: "agents.base.list", text: "acme/agents\n" }],
+    agentDirs: [],
+    exec: fakeGit,
+    reporter: r,
+  });
+  expect(lines.some((l) => l.includes("warning") && l.includes("acme/agents"))).toBe(true);
+  // A warning is not a counted item, and it never fails the run.
+  expect(code).toBe(0);
+  expect(r.counts().skipped).toBe(0);
+});
+
+test("a README.md in a cloned repository is not installed as a subagent", async () => {
+  const home = mkdtempSync(join(tmpdir(), "wgl-"));
+  const git: Exec = async (cmd, args) => {
+    if (cmd === "git" && args[0] === "clone") {
+      const dir = args.at(-1) ?? "";
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(join(dir, "README.md"), "# About\n");
+      writeFileSync(join(dir, "reviewer.md"), "# Reviewer agent\n");
+      return { code: 0, stdout: "", stderr: "" };
+    }
+    return { code: 0, stdout: "", stderr: "" };
+  };
+  await runInstallAgents({
+    home,
+    harnesses: HARNESSES,
+    listTexts: [{ path: "l", text: "acme/agents@v1\n" }],
+    agentDirs: [],
+    exec: git,
+    reporter: quiet(),
+  });
+  expect(existsSync(join(home, ".claude/agents/acme__agents__README.md"))).toBe(false);
+  expect(existsSync(join(home, ".claude/agents/acme__agents__reviewer.md"))).toBe(true);
+});
+
+test("an existing subagent file is backed up before it is overwritten", async () => {
+  const home = mkdtempSync(join(tmpdir(), "wgl-"));
+  const dest = join(home, ".claude/agents/acme__agents__reviewer.md");
+  mkdirSync(join(home, ".claude/agents"), { recursive: true });
+  writeFileSync(dest, "# Old\n");
+  const backups = startBackupSet(join(home, ".wagglebot/backups"));
+  await runInstallAgents({
+    home,
+    harnesses: HARNESSES,
+    listTexts: [{ path: "l", text: "acme/agents@v1\n" }],
+    agentDirs: [],
+    exec: fakeGit,
+    reporter: quiet(),
+    backups,
+  });
+  expect(readFileSync(dest, "utf8")).toBe("# Reviewer agent\n");
+  expect(readFileSync(join(backups.dir, dest.replaceAll("/", "%2F")), "utf8")).toBe("# Old\n");
+});
+
+test("a symbolic link in a cloned repository is not installed as a subagent", async () => {
+  const home = mkdtempSync(join(tmpdir(), "wgl-"));
+  const secret = join(home, "secret.txt");
+  writeFileSync(secret, "top secret\n");
+  const git: Exec = async (cmd, args) => {
+    if (cmd === "git" && args[0] === "clone") {
+      const dir = args.at(-1) ?? "";
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(join(dir, "reviewer.md"), "# Reviewer agent\n");
+      symlinkSync(secret, join(dir, "leak.md"));
+      return { code: 0, stdout: "", stderr: "" };
+    }
+    return { code: 0, stdout: "", stderr: "" };
+  };
+  await runInstallAgents({
+    home,
+    harnesses: HARNESSES,
+    listTexts: [{ path: "l", text: "acme/agents@v1\n" }],
+    agentDirs: [],
+    exec: git,
+    reporter: quiet(),
+  });
+  expect(existsSync(join(home, ".claude/agents/acme__agents__leak.md"))).toBe(false);
+  expect(existsSync(join(home, ".claude/agents/acme__agents__reviewer.md"))).toBe(true);
 });

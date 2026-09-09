@@ -55,6 +55,7 @@ test("pulls, provisions, and prints a summary", async () => {
     reporter: createReporter((l) => lines.push(l), false),
     write: (l) => lines.push(l),
     skillsBin: "/bin/skills",
+    cliVersion: "1.4.2",
     env: zshEnv,
   });
   expect(code).toBe(0);
@@ -74,30 +75,35 @@ test("pulls, provisions, and prints a summary", async () => {
   }
 });
 
-test("a moved pin triggers yarn install and a re-exec, once", async () => {
-  const root = scaffoldCompany();
-  const home = mkdtempSync(join(tmpdir(), "wgl-home-"));
-  mkdirSync(join(home, ".claude"), { recursive: true });
-  const calls: string[][] = [];
-  const exec: Exec = async (cmd, args, _opts) => {
+// The pull moves the wagglebot pin. That move is what makes runUpdate reach the self-update
+// branch: yarn install, then a re-exec of the freshly installed CLI.
+const pinMovingExec =
+  (root: string, calls: string[][]): Exec =>
+  async (cmd, args, _opts) => {
     calls.push([cmd, ...args]);
     if (cmd === "git" && args[0] === "pull") {
-      // the pull moves the pin
       writeFileSync(join(root, "package.json"), JSON.stringify({ dependencies: { wagglebot: "1.5.0" } }));
     }
     if (cmd === "git" && args.includes("wagglebot.username")) return { code: 0, stdout: "alice\n", stderr: "" };
     if (cmd === "git" && args.includes("wagglebot.harnesses")) return { code: 1, stdout: "", stderr: "" };
     return { code: 0, stdout: "", stderr: "" };
   };
+
+test("a moved pin triggers yarn install and a re-exec, once", async () => {
+  const root = scaffoldCompany();
+  const home = mkdtempSync(join(tmpdir(), "wgl-home-"));
+  mkdirSync(join(home, ".claude"), { recursive: true });
+  const calls: string[][] = [];
   const quiet = createReporter(() => {}, false);
   const code = await runUpdate({
     cwd: root,
     home,
-    exec,
+    exec: pinMovingExec(root, calls),
     ask: async () => "alice",
     reporter: quiet,
     write: () => {},
     skillsBin: "/bin/skills",
+    cliVersion: "1.4.2",
     env: zshEnv,
   });
   expect(code).toBe(0);
@@ -120,6 +126,7 @@ test("one runUpdate makes a single backup set that restores both CLAUDE.md and .
     reporter: createReporter(() => {}, false),
     write: () => {},
     skillsBin: "/bin/skills",
+    cliVersion: "1.4.2",
     env: zshEnv,
   });
   expect(code).toBe(0);
@@ -132,10 +139,201 @@ test("one runUpdate makes a single backup set that restores both CLAUDE.md and .
   writeFileSync(join(home, ".claude.json"), JSON.stringify({ mcpServers: {} }));
   const set = newestBackupSet(paths.backupsDir);
   expect(set).toBeDefined();
-  const restored = restoreSet(set ?? "");
+  const restored = restoreSet(set ?? "").restored;
   expect(restored).toContain(join(home, ".claude/CLAUDE.md"));
   expect(restored).toContain(join(home, ".claude.json"));
   expect(readFileSync(join(home, ".claude/CLAUDE.md"), "utf8")).toBe("# my personal rules\n");
   const doc: { mcpServers: { personal?: unknown } } = JSON.parse(readFileSync(join(home, ".claude.json"), "utf8"));
   expect(doc.mcpServers.personal).toBeDefined();
+});
+
+test("a failing yarn install prints the summary before it exits 1", async () => {
+  const root = scaffoldCompany();
+  const home = mkdtempSync(join(tmpdir(), "wgl-home-"));
+  mkdirSync(join(home, ".claude"), { recursive: true });
+  const pinMoving = pinMovingExec(root, []);
+  const lines: string[] = [];
+  const exec: Exec = async (cmd, args, opts) => {
+    if (cmd === "yarn" && args[0] === "install") return { code: 1, stdout: "", stderr: "error Couldn't find package" };
+    return pinMoving(cmd, args, opts);
+  };
+  const r = createReporter((l) => lines.push(l), false);
+  const code = await runUpdate({
+    cwd: root,
+    home,
+    exec,
+    ask: async () => "alice",
+    reporter: r,
+    write: (l) => lines.push(l),
+    skillsBin: "/bin/skills",
+    cliVersion: "1.4.2",
+    env: zshEnv,
+  });
+  expect(code).toBe(1);
+  expect(lines.some((l) => l.includes("failed 1"))).toBe(true);
+});
+
+test("a missing yarn keeps the current CLI, warns, and still runs the installers", async () => {
+  const root = scaffoldCompany();
+  const home = mkdtempSync(join(tmpdir(), "wgl-home-"));
+  mkdirSync(join(home, ".claude"), { recursive: true });
+  const pinMoving = pinMovingExec(root, []);
+  const lines: string[] = [];
+  const exec: Exec = async (cmd, args, opts) => {
+    // realExec marks a command that does not exist with notFound.
+    if (cmd === "yarn") return { code: 127, stdout: "", stderr: "", notFound: true };
+    return pinMoving(cmd, args, opts);
+  };
+  const r = createReporter((l) => lines.push(l), false);
+  const code = await runUpdate({
+    cwd: root,
+    home,
+    exec,
+    ask: async () => "alice",
+    reporter: r,
+    write: (l) => lines.push(l),
+    skillsBin: "/bin/skills",
+    cliVersion: "1.4.2",
+    env: zshEnv,
+  });
+  expect(lines.some((l) => l.includes("yarn is not installed"))).toBe(true);
+  // Both remedies end with the same sentence. The run prints one of them, never both.
+  expect(lines.filter((l) => l.includes("run wagglebot update again")).length).toBe(1);
+  expect(lines.some((l) => l.includes("== Base template sync =="))).toBe(true);
+  expect(r.counts().failed).toBe(0);
+  expect(code).toBe(0);
+});
+
+test("a yarn that exits 127 is a failure, not a missing yarn", async () => {
+  const root = scaffoldCompany();
+  const home = mkdtempSync(join(tmpdir(), "wgl-home-"));
+  mkdirSync(join(home, ".claude"), { recursive: true });
+  const pinMoving = pinMovingExec(root, []);
+  const lines: string[] = [];
+  const exec: Exec = async (cmd, args, opts) => {
+    if (cmd === "yarn") return { code: 127, stdout: "", stderr: "error: a lifecycle script is missing" };
+    return pinMoving(cmd, args, opts);
+  };
+  const r = createReporter((l) => lines.push(l), false);
+  const code = await runUpdate({
+    cwd: root,
+    home,
+    exec,
+    ask: async () => "alice",
+    reporter: r,
+    write: (l) => lines.push(l),
+    skillsBin: "/bin/skills",
+    cliVersion: "1.4.2",
+    env: zshEnv,
+  });
+  expect(code).toBe(1);
+  expect(r.counts().failed).toBe(1);
+  expect(lines.some((l) => l.includes("yarn is not installed"))).toBe(false);
+});
+
+test("a pin that did not move this run still reports the stale CLI", async () => {
+  const root = scaffoldCompany();
+  writeFileSync(join(root, "package.json"), JSON.stringify({ dependencies: { wagglebot: "1.5.0" } }));
+  const home = mkdtempSync(join(tmpdir(), "wgl-home-"));
+  mkdirSync(join(home, ".claude"), { recursive: true });
+  const lines: string[] = [];
+  const r = createReporter((l) => lines.push(l), false);
+  const code = await runUpdate({
+    cwd: root,
+    home,
+    exec: gitExec([]),
+    ask: async () => "alice",
+    reporter: r,
+    write: (l) => lines.push(l),
+    skillsBin: "/bin/skills",
+    cliVersion: "1.4.2",
+    env: zshEnv,
+  });
+  expect(code).toBe(0);
+  expect(lines.join("\n")).toContain(
+    'the company pins wagglebot 1.5.0, but this run uses 1.4.2 — run "yarn install" in the company repository, then run wagglebot update again',
+  );
+  // The run continues: every installer still reports its section.
+  expect(lines).toContain("== Base template sync ==");
+  expect(r.counts().failed).toBe(0);
+});
+
+test("a pin that is a range or a path reports no stale CLI", async () => {
+  for (const pin of ["1.2.3 - 2.0.0", "^1.5.0", "file:../packages/cli"]) {
+    const root = scaffoldCompany();
+    const pkgPath = join(root, "package.json");
+    const pkg = JSON.parse(readFileSync(pkgPath, "utf8"));
+    pkg.dependencies.wagglebot = pin;
+    writeFileSync(pkgPath, JSON.stringify(pkg));
+    const home = mkdtempSync(join(tmpdir(), "wgl-home-"));
+    mkdirSync(join(home, ".claude"), { recursive: true });
+    const lines: string[] = [];
+    await runUpdate({
+      cwd: root,
+      home,
+      exec: gitExec([]),
+      ask: async () => "alice",
+      reporter: createReporter((l) => lines.push(l), false),
+      write: (l) => lines.push(l),
+      skillsBin: "/bin/skills",
+      cliVersion: "1.4.2",
+      env: zshEnv,
+    });
+    expect(lines.some((l) => l.includes("the company pins wagglebot"))).toBe(false);
+  }
+});
+
+test("a pin that equals the running CLI reports nothing", async () => {
+  const root = scaffoldCompany();
+  const home = mkdtempSync(join(tmpdir(), "wgl-home-"));
+  mkdirSync(join(home, ".claude"), { recursive: true });
+  const lines: string[] = [];
+  const code = await runUpdate({
+    cwd: root,
+    home,
+    exec: gitExec([]),
+    ask: async () => "alice",
+    reporter: createReporter((l) => lines.push(l), false),
+    write: (l) => lines.push(l),
+    skillsBin: "/bin/skills",
+    cliVersion: "1.4.2",
+    env: zshEnv,
+  });
+  expect(code).toBe(0);
+  expect(lines.join("\n")).not.toContain("the company pins wagglebot");
+});
+
+// The organization key travels from package.json through runUpdate into the list parser.
+const updateWithSkillsList = async (organization?: string[]): Promise<string[]> => {
+  const root = scaffoldCompany();
+  writeFileSync(
+    join(root, "package.json"),
+    JSON.stringify({
+      dependencies: { wagglebot: "1.4.2" },
+      ...(organization === undefined ? {} : { wagglebot: { organization } }),
+    }),
+  );
+  writeFileSync(join(root, "company/skills.list"), "acme/internal-skills\n");
+  const home = mkdtempSync(join(tmpdir(), "wgl-home-"));
+  mkdirSync(join(home, ".claude"), { recursive: true });
+  const lines: string[] = [];
+  await runUpdate({
+    cwd: root,
+    home,
+    exec: gitExec([]),
+    ask: async () => "alice",
+    reporter: createReporter((l) => lines.push(l), false),
+    write: (l) => lines.push(l),
+    skillsBin: "/bin/skills",
+    cliVersion: "1.4.2",
+    env: zshEnv,
+  });
+  return lines;
+};
+
+test("a declared wagglebot.organization silences the pin warning of an entry it owns", async () => {
+  const undeclared = await updateWithSkillsList();
+  expect(undeclared.join("\n")).toContain("acme/internal-skills: no pin");
+  const declared = await updateWithSkillsList(["github.com/acme"]);
+  expect(declared.join("\n")).not.toContain("no pin");
 });

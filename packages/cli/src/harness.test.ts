@@ -7,7 +7,12 @@ test("the harness table carries the verified targets", () => {
   expect(HARNESSES.map((h) => h.name)).toEqual(["claude-code", "codex", "junie", "cline", "gemini", "copilot"]);
   const claude = HARNESSES[0];
   expect(claude?.templateTargets).toEqual([".claude/CLAUDE.md"]);
-  expect(claude?.mcpTarget).toEqual({ path: ".claude.json", parentKey: "mcpServers" });
+  expect(claude?.mcpTarget).toEqual({
+    format: "json",
+    path: ".claude.json",
+    parentKey: "mcpServers",
+    dialect: "claude",
+  });
   expect(claude?.subagentDir).toBe(".claude/agents");
   expect(HARNESSES.find((h) => h.name === "gemini")?.templateTargets).toEqual([".gemini/GEMINI.md"]);
   expect(HARNESSES.find((h) => h.name === "junie")?.subagentDir).toBe(".junie/agents");
@@ -28,4 +33,47 @@ test("the harness table carries the project targets sync-project needs", () => {
 test("shipped template files exist", () => {
   expect(existsSync(join(templatesDir(), "AGENTS.base.md"))).toBe(true);
   expect(existsSync(join(templatesDir(), "hooks", "claude-code.json"))).toBe(true);
+});
+
+test("every MCP target is home-relative and names its dialect", () => {
+  // Every harness writes MCP servers, so write-mcp reports no missing adapter.
+  expect(HARNESSES.filter((h) => h.mcpTarget !== undefined)).toHaveLength(HARNESSES.length);
+  for (const h of HARNESSES) {
+    const t = h.mcpTarget;
+    if (t === undefined) continue;
+    expect(t.path.startsWith(".")).toBe(true);
+    expect(t.path).not.toContain("~");
+    expect(t.dialect.length).toBeGreaterThan(0);
+  }
+  expect(HARNESSES.find((h) => h.name === "codex")?.mcpTarget).toEqual({
+    format: "toml",
+    path: ".codex/config.toml",
+    table: "mcp_servers",
+    dialect: "codex",
+  });
+  expect(HARNESSES.find((h) => h.name === "gemini")?.mcpTarget).toEqual({
+    format: "json",
+    path: ".gemini/settings.json",
+    parentKey: "mcpServers",
+    dialect: "gemini",
+  });
+  expect(HARNESSES.find((h) => h.name === "copilot")?.mcpTarget).toEqual({
+    format: "json",
+    path: ".copilot/mcp-config.json",
+    parentKey: "mcpServers",
+    dialect: "copilot",
+  });
+  // The Cline code reads data/settings/, not the ~/.cline/mcp.json the public docs name.
+  expect(HARNESSES.find((h) => h.name === "cline")?.mcpTarget).toEqual({
+    format: "json",
+    path: ".cline/data/settings/cline_mcp_settings.json",
+    parentKey: "mcpServers",
+    dialect: "cline",
+  });
+  expect(HARNESSES.find((h) => h.name === "junie")?.mcpTarget).toEqual({
+    format: "json",
+    path: ".junie/mcp/mcp.json",
+    parentKey: "mcpServers",
+    dialect: "junie",
+  });
 });

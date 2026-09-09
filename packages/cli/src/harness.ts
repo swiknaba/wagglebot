@@ -15,14 +15,23 @@ export type Harness = {
   templateTargets: string[];
   // Settings file that holds hook definitions, plus the fragment in templates/hooks/ to merge.
   hooksTarget?: { path: string; fragmentFile: string };
-  // Config file and the key under which MCP servers are declared.
-  mcpTarget?: { path: string; parentKey: string };
+  // Config file that declares the MCP servers, and the dialect that harness reads.
+  mcpTarget?: McpTarget;
   // Directory the harness reads Markdown subagents from. Undefined: no known Markdown format.
   subagentDir?: string;
   // Repository-level instruction file, relative to the Git root. `sync-project` writes the
   // instructions there. Undefined: the harness reads no project file that wagglebot knows.
   projectTarget?: ProjectTarget;
 };
+
+// Which field names and which transport keys one harness expects inside its MCP config.
+// docs/harnesses.md holds the vendor table and the source of each path.
+export type McpDialect = "claude" | "codex" | "gemini" | "copilot" | "cline" | "junie";
+export type McpTarget =
+  // A JSON file. Ownership is per child key under parentKey, recorded in ~/.wagglebot/managed.json.
+  | { format: "json"; path: string; parentKey: string; dialect: McpDialect }
+  // A TOML file. Ownership is a "# wagglebot:begin/end" block that holds one [<table>.<namespace>] per server.
+  | { format: "toml"; path: string; table: string; dialect: "codex" };
 
 // How one harness reads project instructions. Several harnesses share one file: Codex, Junie,
 // and Cline all read the root AGENTS.md, so their entries name the same path and the command
@@ -39,9 +48,11 @@ export type ProjectTarget = {
   limitBytes?: number;
 };
 
-// Paths verified against vendor documentation on 2026-09-02. Codex subagents are TOML, not
-// Markdown, so Codex has no subagentDir. Cline reads every .md file in its rules directory,
-// so wagglebot owns one file there instead of a block in a shared file.
+// Paths verified against vendor documentation on 2026-09-02, and the MCP config paths on
+// 2026-09-09. docs/harnesses.md holds the vendor table and the source of each MCP field.
+// Codex subagents are TOML, not Markdown, so Codex has no subagentDir. Cline reads every
+// .md file in its rules directory, so wagglebot owns one file there instead of a block in a
+// shared file.
 export const HARNESSES: Harness[] = [
   {
     name: "claude-code",
@@ -49,7 +60,8 @@ export const HARNESSES: Harness[] = [
     skillsAgent: "claude-code",
     templateTargets: [".claude/CLAUDE.md"],
     hooksTarget: { path: ".claude/settings.json", fragmentFile: "claude-code.json" },
-    mcpTarget: { path: ".claude.json", parentKey: "mcpServers" },
+    // Claude Code reads ~/.claude.json and expands ${VAR} in headers and env.
+    mcpTarget: { format: "json", path: ".claude.json", parentKey: "mcpServers", dialect: "claude" },
     subagentDir: ".claude/agents",
     projectTarget: { path: "CLAUDE.md", mode: "import", importLine: "@AGENTS.md" },
   },
@@ -58,6 +70,10 @@ export const HARNESSES: Harness[] = [
     detectDir: ".codex",
     skillsAgent: "codex",
     templateTargets: [".codex/AGENTS.md"],
+    // https://learn.chatgpt.com/docs/extend/mcp?surface=cli and
+    // https://learn.chatgpt.com/docs/config-file/config-reference — TOML, and the table name
+    // carries an underscore. Codex expands no ${VAR}, so a credential travels as a variable name.
+    mcpTarget: { format: "toml", path: ".codex/config.toml", table: "mcp_servers", dialect: "codex" },
     // Codex reads global, root, and nested AGENTS.md files under one default 32 KiB budget.
     projectTarget: { path: "AGENTS.md", mode: "block", warnBytes: 32 * 1024 },
   },
@@ -66,6 +82,10 @@ export const HARNESSES: Harness[] = [
     detectDir: ".junie",
     skillsAgent: "junie",
     templateTargets: [".junie/AGENTS.md"],
+    // https://junie.jetbrains.com/docs/junie-cli-mcp-configuration.html — a remote entry carries
+    // url and headers, with no type field. No documented ${VAR} expansion and no SSE transport,
+    // so a credentialed entry and an SSE entry are both skipped.
+    mcpTarget: { format: "json", path: ".junie/mcp/mcp.json", parentKey: "mcpServers", dialect: "junie" },
     subagentDir: ".junie/agents",
     projectTarget: { path: "AGENTS.md", mode: "block" },
   },
@@ -74,6 +94,16 @@ export const HARNESSES: Harness[] = [
     detectDir: ".cline",
     skillsAgent: "cline",
     templateTargets: [".cline/rules/wagglebot.md"],
+    // https://docs.cline.bot/getting-started/config plus resolveMcpSettingsPath in
+    // sdk/packages/shared/src/storage/paths.ts. The docs also name ~/.cline/mcp.json, which the
+    // code never reads (https://github.com/cline/cline/issues/11671), so wagglebot writes
+    // data/settings/. No documented ${VAR} expansion, so a credentialed entry is skipped.
+    mcpTarget: {
+      format: "json",
+      path: ".cline/data/settings/cline_mcp_settings.json",
+      parentKey: "mcpServers",
+      dialect: "cline",
+    },
     projectTarget: { path: "AGENTS.md", mode: "block" },
   },
   {
@@ -81,6 +111,10 @@ export const HARNESSES: Harness[] = [
     detectDir: ".gemini",
     skillsAgent: "gemini-cli",
     templateTargets: [".gemini/GEMINI.md"],
+    // https://github.com/google-gemini/gemini-cli/blob/main/docs/reference/configuration.md and
+    // https://github.com/google-gemini/gemini-cli/blob/main/docs/tools/mcp-server.md — mcpServers
+    // sits at the top level, and Gemini expands $VAR, ${VAR}, and ${VAR:-default}.
+    mcpTarget: { format: "json", path: ".gemini/settings.json", parentKey: "mcpServers", dialect: "gemini" },
     projectTarget: { path: "GEMINI.md", mode: "import", importLine: "@./AGENTS.md" },
   },
   {
@@ -88,6 +122,10 @@ export const HARNESSES: Harness[] = [
     detectDir: ".copilot",
     skillsAgent: "github-copilot",
     templateTargets: [".copilot/copilot-instructions.md"],
+    // https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-mcp-servers —
+    // no documented ${VAR} expansion, so a credentialed entry is skipped. Every entry carries
+    // the documented tools: ["*"].
+    mcpTarget: { format: "json", path: ".copilot/mcp-config.json", parentKey: "mcpServers", dialect: "copilot" },
     projectTarget: { path: ".github/copilot-instructions.md", mode: "block" },
   },
 ];

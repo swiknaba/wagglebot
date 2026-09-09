@@ -2,10 +2,11 @@
 
 One AI agent setup for a whole engineering team.
 
-> **Status.** Phase 1 workstation provisioning is implemented in
-> [`packages/cli`](packages/cli/). The CLI also implements repository
-> instruction sync, as `wagglebot sync-project`. Phases 2–4 stay at the
-> specification stage. The [design specs](docs/superpowers/specs/)
+> **Status.** Phase 1 is complete in [`packages/cli`](packages/cli/):
+> workstation provisioning, repository instruction sync
+> (`wagglebot sync-project`), MCP configs for six harnesses, and the
+> three first-party skills under [`skills/`](skills/). Phases 2–4 stay
+> at the specification stage. The [design specs](docs/superpowers/specs/)
 > define the system.
 
 ## Why
@@ -33,7 +34,8 @@ commands — `git clone <company repo>`, `yarn install`,
 
 * The curated skills and subagents.
 * The base prompt, in every agent harness.
-* The MCP server configs, from one curated registry.
+* The MCP server configs, from one curated registry, in every
+  harness ([harness reference](docs/harnesses.md)).
 * Your credentials stay on your machine in one gitignored file, and
   load into every new shell.
 
@@ -114,6 +116,7 @@ Three points apply:
 | [Phase 3 — collaboration](docs/superpowers/specs/2026-08-28-phase-3-collaboration.md) | Cross-machine agent collaboration. |
 | [Phase 4 — ingestion](docs/superpowers/specs/2026-08-28-phase-4-document-ingestion.md) | Documents into memory, with an optional batch extractor. |
 | [Service contracts](docs/superpowers/specs/2026-08-28-service-contracts.md) | Behavior contracts for each service, and the pitfall register. |
+| [Harness reference](docs/harnesses.md) | Every file wagglebot writes per harness, and the MCP config format of each. |
 
 ## Releasing
 

@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import type { BackupSet } from "../backup";
 import { startBackupSet } from "../backup";
@@ -27,6 +27,15 @@ export function resolveSource(entry: ListEntry): AgentSource {
   return { cloneUrl: entry.repo, ref: entry.ref, id: segments.join("__") };
 }
 
+// The Markdown subagents of one directory, sorted. A README documents the directory. It is not an agent.
+// Only a regular file counts: a symbolic link in a cloned repository could point anywhere.
+const subagentFiles = (dir: string): string[] =>
+  readdirSync(dir)
+    .filter((f) => f.endsWith(".md"))
+    .filter((f) => f.toLowerCase() !== "readme.md")
+    .filter((f) => lstatSync(join(dir, f)).isFile())
+    .sort();
+
 export async function runInstallAgents(deps: {
   home: string;
   harnesses: Harness[];
@@ -34,6 +43,7 @@ export async function runInstallAgents(deps: {
   agentDirs: { prefix: string; dir: string }[];
   exec: Exec;
   reporter: Reporter;
+  organization?: string[];
   backups?: BackupSet;
 }): Promise<number> {
   const { home, exec, reporter } = deps;
@@ -42,7 +52,9 @@ export async function runInstallAgents(deps: {
   const backups = deps.backups ?? startBackupSet(paths.backupsDir);
   reporter.section("Custom agents");
 
-  const entries = deps.listTexts.flatMap(({ text }) => parseList(text).entries);
+  const parsed = deps.listTexts.map((l) => ({ ...l, ...parseList(l.text, { organization: deps.organization }) }));
+  for (const l of parsed) for (const w of l.warnings) reporter.warn(`${l.path}: ${w}`);
+  const entries = parsed.flatMap((l) => l.entries);
   const targets = deps.harnesses.filter((h) => h.subagentDir !== undefined);
   const without = deps.harnesses.filter((h) => h.subagentDir === undefined).map((h) => h.name);
   if (without.length > 0) {
@@ -54,11 +66,12 @@ export async function runInstallAgents(deps: {
 
   const installFile = (dest: string, content: string): void => {
     produced.push(dest);
-    if (existsSync(dest) && readFileSync(dest, "utf8") === content) {
+    const fresh = !existsSync(dest);
+    if (!fresh && readFileSync(dest, "utf8") === content) {
       reporter.item(dest, "ok", "already ok");
       return;
     }
-    const fresh = !existsSync(dest);
+    if (!fresh) backups.backup(dest);
     writeFileSync(dest, content);
     reporter.item(dest, fresh ? "installed" : "updated");
   };
@@ -90,7 +103,7 @@ export async function runInstallAgents(deps: {
       failedPrefixes.push(prefix);
       continue;
     }
-    const files = readdirSync(cacheDir).filter((f) => f.endsWith(".md"));
+    const files = subagentFiles(cacheDir);
     for (const harness of targets) {
       const dir = join(home, harness.subagentDir ?? "");
       mkdirSync(dir, { recursive: true });
@@ -104,10 +117,7 @@ export async function runInstallAgents(deps: {
 
   for (const { prefix, dir: agentsDir } of deps.agentDirs) {
     if (!existsSync(agentsDir)) continue;
-    const files = readdirSync(agentsDir)
-      .filter((f) => f.endsWith(".md"))
-      .filter((f) => f.toLowerCase() !== "readme.md")
-      .sort();
+    const files = subagentFiles(agentsDir);
     for (const harness of targets) {
       const dir = join(home, harness.subagentDir ?? "");
       mkdirSync(dir, { recursive: true });

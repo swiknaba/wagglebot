@@ -6,9 +6,11 @@ import { assertTeamDirsKnown, findCompanyRoot, loadCompanyRepo } from "./company
 
 const user = (name: string) => `kind: User\nmetadata: { name: ${name} }\nspec: { memberOf: [] }\n`;
 
-const scaffold = () => {
+// `wagglebot` becomes the "wagglebot" key of package.json, where the organization is declared.
+const scaffold = (wagglebot?: unknown) => {
   const root = mkdtempSync(join(tmpdir(), "wgl-co-"));
-  writeFileSync(join(root, "package.json"), JSON.stringify({ dependencies: { wagglebot: "1.4.2" } }));
+  const pkg = { dependencies: { wagglebot: "1.4.2" }, ...(wagglebot === undefined ? {} : { wagglebot }) };
+  writeFileSync(join(root, "package.json"), JSON.stringify(pkg));
   mkdirSync(join(root, "company/instructions"), { recursive: true });
   writeFileSync(join(root, "company/registry.yaml"), "proxies: []\n");
   writeFileSync(join(root, "company/skills.list"), "");
@@ -60,4 +62,20 @@ test("a teams/ directory that matches no Group is a hard error", () => {
   const company = loadCompanyRepo(scaffold());
   expect(() => assertTeamDirsKnown(company, ["payments"])).toThrow(/teams\/search/);
   expect(() => assertTeamDirsKnown(company, ["payments", "search"])).not.toThrow();
+});
+
+test("reads wagglebot.organization from package.json and defaults to an empty list", () => {
+  expect(loadCompanyRepo(scaffold({ organization: ["github.com/acme"] })).organization).toEqual(["github.com/acme"]);
+  expect(loadCompanyRepo(scaffold()).organization).toEqual([]);
+});
+
+test("a malformed wagglebot.organization is a hard error that names the key", () => {
+  expect(() => loadCompanyRepo(scaffold({ organization: "github.com/acme" }))).toThrow(/wagglebot\.organization/);
+});
+
+test("a malformed wagglebot.organization below the company root does not stop the walk", () => {
+  const root = scaffold();
+  // A nested package of the same repository. It pins nothing, so it is not the company root.
+  writeFileSync(join(root, "nested/package.json"), JSON.stringify({ wagglebot: { organization: "github.com/acme" } }));
+  expect(findCompanyRoot(join(root, "nested/deep"))).toBe(root);
 });

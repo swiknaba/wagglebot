@@ -349,3 +349,145 @@ test("removes every skill of a source that no list names any more", async () => 
   expect(Object.keys(JSON.parse(readFileSync(lock, "utf8")).skills)).toEqual(["alpha"]);
   expect(loadState(file).skills).toEqual({ "a/b@v1": ["claude-code"] });
 });
+
+test("--update bumps a version tag, keeps a branch pin, and rewrites only the entry line", async () => {
+  const written: Record<string, string> = {};
+  const exec: Exec = async (cmd, args) => {
+    if (cmd === "git" && args[0] === "ls-remote") {
+      return { code: 0, stdout: "abc\trefs/tags/v6.3.0\ndef\trefs/tags/v6.4.0\n", stderr: "" };
+    }
+    return { code: 0, stdout: "", stderr: "" };
+  };
+  const text = [
+    "# obra/superpowers@v6.3.0 was chosen because it is stable",
+    "obra/superpowers@v6.3.0   # keep this comment",
+    "ayghri/i-have-adhd@main",
+    "",
+  ].join("\n");
+  const r = createReporter(() => {}, false);
+  const code = await runInstallSkills({
+    lists: [{ path: "company/skills.list", text }],
+    exec,
+    reporter: r,
+    skillsBin: "/fake/skills",
+    skillsAgents: ["claude-code"],
+    managedFile: managed(),
+    skillLockFile: NO_LOCK,
+    nodeVersion: NODE,
+    update: true,
+    writeList: (path, next) => {
+      written[path] = next;
+    },
+  });
+  expect(code).toBe(0);
+  expect(written["company/skills.list"]).toBe(
+    [
+      "# obra/superpowers@v6.3.0 was chosen because it is stable",
+      "obra/superpowers@v6.4.0   # keep this comment",
+      "ayghri/i-have-adhd@main",
+      "",
+    ].join("\n"),
+  );
+  expect(r.counts().updated).toBe(1);
+  expect(r.counts().skipped).toBe(1);
+});
+
+test("an all-digit ref is a tag, not a commit hash", async () => {
+  const calls: string[][] = [];
+  const r = createReporter(() => {}, false);
+  const code = await runInstallSkills({
+    lists: [{ path: "l", text: "acme/skills@20260909\nacme/build@1234567\n" }],
+    exec: fakeExec(calls),
+    reporter: r,
+    skillsBin: "/fake/skills",
+    skillsAgents: ["claude-code"],
+    managedFile: managed(),
+    skillLockFile: NO_LOCK,
+    nodeVersion: NODE,
+  });
+  expect(code).toBe(0);
+  expect(r.counts().failed).toBe(0);
+  expect(calls.filter((c) => c.includes("add")).length).toBe(2);
+});
+
+test("rejects a short commit hash as a pin before it reaches the skills CLI", async () => {
+  const calls: string[][] = [];
+  const r = createReporter(() => {}, false);
+  const code = await runInstallSkills({
+    lists: [{ path: "l", text: "acme/skills@1a2b3c4\n" }],
+    exec: fakeExec(calls),
+    reporter: r,
+    skillsBin: "/fake/skills",
+    skillsAgents: ["claude-code"],
+    managedFile: managed(),
+    skillLockFile: NO_LOCK,
+    nodeVersion: NODE,
+  });
+  expect(code).toBe(1);
+  expect(r.counts().failed).toBe(1);
+  expect(calls.some((c) => c.includes("add"))).toBe(false);
+});
+
+test("a missing skills CLI is skipped with a remedy and fails nothing", async () => {
+  const calls: string[][] = [];
+  const r = createReporter(() => {}, false);
+  const code = await runInstallSkills({
+    lists: [{ path: "l", text: "obra/superpowers@v6.3.0\n" }],
+    exec: fakeExec(calls),
+    reporter: r,
+    skillsBin: undefined,
+    skillsAgents: ["claude-code"],
+    managedFile: managed(),
+    skillLockFile: NO_LOCK,
+    nodeVersion: NODE,
+  });
+  expect(code).toBe(0);
+  expect(calls).toEqual([]);
+  expect(r.counts().skipped).toBe(1);
+  expect(r.counts().failed).toBe(0);
+});
+
+test("an unpinned third-party entry is a warning line, not a counted item", async () => {
+  const lines: string[] = [];
+  const r = createReporter((l) => lines.push(l), false);
+  await runInstallSkills({
+    lists: [{ path: "l", text: "acme/tools\n" }],
+    exec: fakeExec([]),
+    reporter: r,
+    skillsBin: "/fake/skills",
+    skillsAgents: ["claude-code"],
+    managedFile: managed(),
+    skillLockFile: NO_LOCK,
+    nodeVersion: NODE,
+  });
+  expect(lines.some((l) => l.includes("warning") && l.includes("acme/tools"))).toBe(true);
+  expect(r.counts().skipped).toBe(0);
+});
+
+test("--update on a URL entry writes the tag after a space, not after an @", async () => {
+  const written: Record<string, string> = {};
+  const exec: Exec = async (cmd, args) => {
+    if (cmd === "git" && args[0] === "ls-remote") {
+      return { code: 0, stdout: "abc\trefs/tags/v1.0.0\ndef\trefs/tags/v1.1.0\n", stderr: "" };
+    }
+    return { code: 0, stdout: "", stderr: "" };
+  };
+  const r = createReporter(() => {}, false);
+  const code = await runInstallSkills({
+    lists: [{ path: "company/skills.list", text: "https://git.acme.com/team/skills.git v1.0.0\n" }],
+    exec,
+    reporter: r,
+    skillsBin: "/fake/skills",
+    skillsAgents: ["claude-code"],
+    managedFile: managed(),
+    skillLockFile: NO_LOCK,
+    nodeVersion: NODE,
+    update: true,
+    writeList: (path, next) => {
+      written[path] = next;
+    },
+  });
+  expect(code).toBe(0);
+  expect(written["company/skills.list"]).toBe("https://git.acme.com/team/skills.git v1.1.0\n");
+  expect(r.counts().updated).toBe(1);
+});

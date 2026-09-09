@@ -230,10 +230,12 @@ Every seed entry above is third-party, so every seed entry pins.
 ### First-party skills (D33)
 
 Wagglebot ships with a specific toolset, so it ships the skills for
-that toolset. They live in **one repository**, `wagglebot/skills`,
-because they version with wagglebot itself. A registry format change
-breaks `adding-an-mcp-server` on the same day, so the two must move
-together.
+that toolset. They live **in the wagglebot repository under `skills/`**,
+installed from `swiknaba/wagglebot@v<version>`, because they version
+with wagglebot itself. A registry format change breaks
+`adding-an-mcp-server` on the same day, so the two must move together.
+The `skills` CLI discovers `skills/<name>/SKILL.md` in the repository,
+so the entry needs no path.
 
 | Skill | Teaches |
 |---|---|
@@ -378,14 +380,16 @@ stays the only permission system (D15).
 
 ### The bundled skill (D33)
 
-Wagglebot ships one skill, `writing-a-custom-agent`, in the curated
-set. It teaches an agent how to help an engineer write a new custom
-agent.
+Wagglebot ships three skills in the curated set (D33). This section
+describes `writing-a-custom-agent`. It teaches an agent how to help an
+engineer write a new custom agent.
 
 The skill covers:
 
-1. **The runtime.** How to write a Flue agent: the file shape, the
-   hooks, and how to reach the local hub over MCP.
+1. **The shape.** A Markdown subagent by default (D33): YAML front
+   matter with `name` and `description`, then the instructions. A
+   runtime such as Flue only for durability or a sandbox (R1), with its
+   running cost stated in the pull request.
 2. **The placement question, asked before any code.** The skill must
    ask the engineer:
 
@@ -407,10 +411,12 @@ trade.
 ## Agent Base Template + Distribution
 
 `AGENTS.base.md` ships inside the wagglebot package (D35) as the
-**shared agent base template**. It contains harness-independent instructions plus an
-wagglebot connection block. The connection block covers three topics:
-how to reach the hub, the propose-not-write memory rule, and
-coordination etiquette. Teams append company instructions from the
+**shared agent base template**. It contains harness-independent
+instructions plus a wagglebot connection block. In Phase 1 the block
+carries the memory rule. Component memory is a local file. A fact
+that crosses a repository waits for the shared store. How to reach the
+hub arrives with Phase 2, and coordination etiquette with Phase 3.
+Teams append company instructions from the
 company repository. Composition is plain concatenation:
 `AGENTS.base.md` + `instructions/*.md` → the rendered template. YAGNI: no
 templating engine. The base is never edited in place: a company
@@ -659,6 +665,9 @@ every agent harness location. One file then governs all agents:
 
 Paths verified against vendor documentation on 2026-09-02.
 
+`docs/harnesses.md` holds the MCP config file of each harness, with the
+vendor source of every path and field.
+
 Subagent directories: Claude Code `~/.claude/agents/`, Junie
 `~/.junie/agents/`. Codex subagents are TOML, not Markdown, so Codex
 has none. A harness with no known subagent directory is skipped, with
@@ -675,9 +684,13 @@ The sync is **non-destructive** (guards F22):
    targets have no comment syntax, so ownership is per entry: the tool
    records every key it wrote in a local state file,
    `~/.wagglebot/managed.json`, and it only ever rewrites those keys.
-   Content outside the block, and every JSON key it did not write,
-   stays untouched. The same rule covers the MCP config writer and
-   `install-agents`.
+   Hook entries are the exception. Each entry the tool writes carries a
+   `wagglebot:` marker in its command. Ownership follows the marker,
+   so it survives a lost state file. A TOML target has comment syntax,
+   so ownership is a `# wagglebot:begin/end` block that holds one table
+   per server. Content outside the block, and every JSON key it did not
+   write, stays untouched. The same rule covers the MCP config writer
+   and `install-agents`.
 2. Merge hook fragments per entry. Never replace a `hooks` key that
    contains entries this tool did not write.
 3. Back up each target file before the first mutation, under

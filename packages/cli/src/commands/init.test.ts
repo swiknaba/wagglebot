@@ -35,6 +35,14 @@ test("scaffolds the company repository with the version substituted", () => {
   expect(readFileSync(join(target, ".gitignore"), "utf8")).toContain(".env.credentials");
 });
 
+test("pins the first-party skills to the scaffolded wagglebot version", () => {
+  const target = mkdtempSync(join(tmpdir(), "wgl-init-"));
+  expect(runInit({ targetDir: target, version: "1.4.2", reporter: quiet() })).toBe(0);
+  const list = readFileSync(join(target, "company", "skills.list"), "utf8");
+  expect(list).toContain("swiknaba/wagglebot@v1.4.2");
+  expect(list).not.toContain("{{WAGGLEBOT_VERSION}}");
+});
+
 test("refuses a non-empty directory", () => {
   const target = mkdtempSync(join(tmpdir(), "wgl-init-"));
   writeFileSync(join(target, "existing.txt"), "x");

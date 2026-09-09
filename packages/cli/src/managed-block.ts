@@ -1,5 +1,7 @@
 export type MarkerStyle = "html" | "hash";
-const MARKERS: Record<MarkerStyle, { begin: string; end: string }> = {
+// The begin and end marker of each style. write-mcp.ts reads the hash pair, so the markers
+// live in one place.
+export const MARKERS: Record<MarkerStyle, { begin: string; end: string }> = {
   html: { begin: "<!-- wagglebot:begin -->", end: "<!-- wagglebot:end -->" },
   hash: { begin: "# wagglebot:begin", end: "# wagglebot:end" },
 };

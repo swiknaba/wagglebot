@@ -1,7 +1,7 @@
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import type { Exec } from "../exec";
-import { type ListEntry, parseList } from "../lists";
+import { type ListEntry, parseList, replaceListLine, VERSION_TAG } from "../lists";
 import type { Reporter } from "../report";
 import { loadSkillLock, skillsOfSource, staleSkills } from "../skill-lock";
 import { loadState, saveState } from "../state";
@@ -10,12 +10,19 @@ import { loadState, saveState } from "../state";
 // under process.execPath. Both name the same Node binary that runs wagglebot.
 export const SKILLS_NODE_FLOOR = "22.20.0";
 
-export function resolveSkillsBin(): string {
-  const require = createRequire(import.meta.url);
-  const pkgPath = require.resolve("skills/package.json");
-  const pkg: { bin: string | Record<string, string> } = require("skills/package.json");
-  const rel = typeof pkg.bin === "string" ? pkg.bin : (pkg.bin.skills ?? Object.values(pkg.bin)[0] ?? "");
-  return join(dirname(pkgPath), rel);
+// The skills CLI is a dependency of this package, so a normal install always has it. A missing
+// module means a broken or partial install. The installer then skips with a remedy (spec: warn
+// and continue). It never aborts the whole update before git pull.
+export function resolveSkillsBin(): string | undefined {
+  try {
+    const require = createRequire(import.meta.url);
+    const pkgPath = require.resolve("skills/package.json");
+    const pkg: { bin: string | Record<string, string> } = require("skills/package.json");
+    const rel = typeof pkg.bin === "string" ? pkg.bin : (pkg.bin.skills ?? Object.values(pkg.bin)[0] ?? "");
+    return join(dirname(pkgPath), rel);
+  } catch {
+    return undefined;
+  }
 }
 
 // Our lists write a pin as "@<ref>". The skills CLI reads "@" as a skill-name filter and
@@ -37,7 +44,10 @@ export function nodeSatisfies(version: string, floor: string): boolean {
   return true;
 }
 
-const isSha = (ref: string | undefined): boolean => ref !== undefined && /^[0-9a-f]{40}$/i.test(ref);
+// Seven to forty hex characters with at least one letter is a commit hash, short or full. An
+// all-digit ref such as 20260909 is a tag. The skills CLI checks out a tag or a branch only.
+const isSha = (ref: string | undefined): boolean =>
+  ref !== undefined && /^[0-9a-f]{7,40}$/i.test(ref) && /[a-f]/i.test(ref);
 const sameAgents = (a: string[] | undefined, b: string[]): boolean => JSON.stringify(a ?? null) === JSON.stringify(b);
 
 // Highest tag by numeric comparison of "v1.2.3"-like names. Non-numeric tags sort last.
@@ -45,7 +55,7 @@ const highestTag = (lsRemote: string): string | undefined =>
   lsRemote
     .split("\n")
     .map((line) => line.split("refs/tags/")[1])
-    .filter((t): t is string => t !== undefined && t !== "" && /^v?\d+(\.\d+)*$/.test(t))
+    .filter((t): t is string => t !== undefined && t !== "" && VERSION_TAG.test(t))
     .sort((x, y) => {
       const a = parts(x);
       const b = parts(y);
@@ -59,10 +69,11 @@ export async function runInstallSkills(deps: {
   lists: { path: string; text: string }[];
   exec: Exec;
   reporter: Reporter;
-  skillsBin: string;
+  skillsBin: string | undefined;
   skillsAgents: string[];
   managedFile: string;
   skillLockFile: string;
+  organization?: string[];
   nodeVersion?: string;
   update?: boolean;
   writeList?: (path: string, text: string) => void;
@@ -70,16 +81,29 @@ export async function runInstallSkills(deps: {
   const { reporter, exec } = deps;
   reporter.section("Skills");
   const agents = [...deps.skillsAgents].sort();
-  const parsed = deps.lists.map((l) => ({ ...l, ...parseList(l.text) }));
-  for (const l of parsed) for (const w of l.warnings) reporter.item(`${l.path}: ${w}`, "skipped", "warning only");
+  const parsed = deps.lists.map((l) => ({ ...l, ...parseList(l.text, { organization: deps.organization }) }));
+  for (const l of parsed) for (const w of l.warnings) reporter.warn(`${l.path}: ${w}`);
 
   if (deps.update === true) {
     for (const l of parsed) {
       let text = l.text;
-      for (const entry of l.entries.filter((e) => e.ref !== undefined)) {
-        const url = entry.isUrl === true ? entry.repo : `https://github.com/${entry.repo}.git`;
-        const remote = await exec("git", ["ls-remote", "--tags", "--refs", url]);
-        const tag = remote.code === 0 ? highestTag(remote.stdout) : undefined;
+      const pinned = l.entries.filter((e) => e.ref !== undefined);
+      // The remotes are independent, so every ls-remote runs at once. The rewrites stay in list
+      // order below.
+      const remotes = await Promise.all(
+        pinned.map((entry) => {
+          if (!VERSION_TAG.test(entry.ref ?? "")) return Promise.resolve(undefined);
+          const url = entry.isUrl === true ? entry.repo : `https://github.com/${entry.repo}.git`;
+          return exec("git", ["ls-remote", "--tags", "--refs", url]);
+        }),
+      );
+      for (const [index, entry] of pinned.entries()) {
+        if (!VERSION_TAG.test(entry.ref ?? "")) {
+          reporter.item(entry.repo, "skipped", `pin "${entry.ref}" is a branch or a commit, not a version tag — kept`);
+          continue;
+        }
+        const remote = remotes[index];
+        const tag = remote !== undefined && remote.code === 0 ? highestTag(remote.stdout) : undefined;
         if (tag === undefined) {
           reporter.item(entry.repo, "skipped", "no version tag on the remote — pin kept");
           continue;
@@ -89,7 +113,7 @@ export async function runInstallSkills(deps: {
           continue;
         }
         const next = entry.isUrl === true ? `${entry.repo} ${tag}` : `${entry.repo}@${tag}`;
-        text = text.replace(entry.raw, next);
+        text = replaceListLine(text, entry.raw, next);
         reporter.item(entry.repo, "updated", `pin ${entry.ref} -> ${tag}`);
       }
       if (text !== l.text) deps.writeList?.(l.path, text);
@@ -106,6 +130,15 @@ export async function runInstallSkills(deps: {
     reporter.item("skills", "skipped", "no selected harness has a skills CLI adapter");
     return 0;
   }
+  if (deps.skillsBin === undefined) {
+    reporter.item(
+      "skills",
+      "skipped",
+      'the skills CLI is not installed — run "yarn install" in the company repository, then run wagglebot update again',
+    );
+    return 0;
+  }
+  const skillsBin = deps.skillsBin;
   const nodeVersion = deps.nodeVersion ?? process.version;
   if (!nodeSatisfies(nodeVersion, SKILLS_NODE_FLOOR)) {
     reporter.item(
@@ -123,7 +156,7 @@ export async function runInstallSkills(deps: {
   const repoOf = (raw: string): string => parseList(raw).entries[0]?.repo ?? raw;
 
   const removeSkill = async (name: string, reason: string): Promise<void> => {
-    const result = await exec(process.execPath, [deps.skillsBin, "remove", name, "-g", "-y", ...agentFlags]);
+    const result = await exec(process.execPath, [skillsBin, "remove", name, "-g", "-y", ...agentFlags]);
     if (result.code === 0) reporter.item(name, "updated", `removed — ${reason}`);
     else reporter.item(name, "failed", `skills remove failed — ${reason}`);
   };
@@ -139,7 +172,7 @@ export async function runInstallSkills(deps: {
     const known = skillsOfSource(loadSkillLock(deps.skillLockFile), entry.repo);
     const startedAt = Date.now();
     const args = ["add", toSkillsSource(entry), "-g", "-y", ...agentFlags];
-    const result = await exec(process.execPath, [deps.skillsBin, ...args]);
+    const result = await exec(process.execPath, [skillsBin, ...args]);
     const output = `${result.stdout}\n${result.stderr}`;
     if (result.code !== 0 || output.includes("Installation failed")) {
       const reason = output

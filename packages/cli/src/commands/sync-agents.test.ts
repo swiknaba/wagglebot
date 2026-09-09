@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { HARNESSES } from "../harness";
@@ -27,6 +27,7 @@ test("writes every template target inside a managed block, chmod 600", () => {
   expect(existsSync(join(home, ".gemini/GEMINI.md"))).toBe(true);
   const settings = JSON.parse(readFileSync(join(home, ".claude/settings.json"), "utf8"));
   expect(JSON.stringify(settings.hooks)).toContain("wagglebot:");
+  expect(statSync(join(home, ".claude/settings.json")).mode & 0o777).toBe(0o600);
 });
 
 test("second run reports every item ok and changes nothing", () => {
@@ -84,4 +85,33 @@ test("writes only the selected harnesses and appends team instructions after com
   expect(existsSync(join(home, ".claude/CLAUDE.md"))).toBe(false);
   const text = readFileSync(join(home, ".codex/AGENTS.md"), "utf8");
   expect(text.indexOf("## Company")).toBeLessThan(text.indexOf("## Team"));
+});
+
+test("a corrupt hook fragment fails the hooks item only, and the template targets still sync", () => {
+  const { home, instructionsDir } = setup();
+  const fragmentsDir = mkdtempSync(join(tmpdir(), "wgl-frag-"));
+  writeFileSync(join(fragmentsDir, "claude-code.json"), "{ not json");
+  const r = createReporter(() => {}, false);
+  const code = runSyncAgents({
+    home,
+    harnesses: HARNESSES,
+    instructionDirs: [instructionsDir],
+    reporter: r,
+    fragmentsDir,
+  });
+  expect(code).toBe(1);
+  expect(r.counts().failed).toBe(1);
+  expect(existsSync(join(home, ".claude/CLAUDE.md"))).toBe(true);
+});
+
+test("--restore reports a file it cannot restore as failed and exits 1", () => {
+  const { home, instructionsDir } = setup();
+  mkdirSync(join(home, ".claude"), { recursive: true });
+  writeFileSync(join(home, ".claude/CLAUDE.md"), "# Mine\n");
+  runSyncAgents({ home, harnesses: HARNESSES, instructionDirs: [instructionsDir], reporter: quiet() });
+  rmSync(join(home, ".claude"), { recursive: true }); // the restore target directory is gone
+  const r = createReporter(() => {}, false);
+  const code = runSyncAgents({ home, harnesses: [], instructionDirs: [], reporter: r, options: { restore: true } });
+  expect(code).toBe(1);
+  expect(r.counts().failed).toBeGreaterThan(0);
 });

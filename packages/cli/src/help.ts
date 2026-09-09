@@ -10,9 +10,13 @@ const templateFiles = () =>
 const hookFiles = () =>
   HARNESSES.flatMap((h) => (h.hooksTarget ? [`~/${h.hooksTarget.path}  (${h.name}, managed hook entries)`] : []));
 const mcpFiles = () =>
-  HARNESSES.flatMap((h) =>
-    h.mcpTarget ? [`~/${h.mcpTarget.path}  (${h.name}, managed keys under ${h.mcpTarget.parentKey})`] : [],
-  );
+  HARNESSES.flatMap((h) => {
+    const t = h.mcpTarget;
+    if (t === undefined) return [];
+    if (t.format === "toml")
+      return [`~/${t.path}  (${h.name}, managed block, one [${t.table}.<namespace>] table per server)`];
+    return [`~/${t.path}  (${h.name}, managed keys under ${t.parentKey})`];
+  });
 const subagentDirs = () =>
   HARNESSES.flatMap((h) =>
     h.subagentDir ? [`~/${h.subagentDir}/  (${h.name}, files prefixed company__, <team>__, or owner__repo__)`] : [],
@@ -87,7 +91,7 @@ const SECTIONS: Record<string, Section> = {
   "write-mcp": {
     title: "write-mcp",
     purpose:
-      "Writes the merged MCP registry into the MCP config of each selected harness. Credentials appear as ${VAR} only.",
+      "Writes the merged MCP registry into the MCP config of each selected harness. A credential appears as ${VAR}, or as the name of an environment variable. A harness that reads neither form has that entry left out, with the reason on its report line.",
     reads: [`registry.yaml in ${LAYERS}  (a team entry with the same namespace wins)`],
     writes: [...mcpFiles(), "~/.wagglebot/managed.json  (every key it wrote)"],
   },
