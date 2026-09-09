@@ -47,9 +47,12 @@ Sources:
 
 ## Skipped entries
 
-Each line below is a report line of `wagglebot write-mcp`. The entry stays out
-of the file until an engineer applies the fix.
+Each line below is a report line of `wagglebot write-mcp`. The entry, or the
+whole file, stays out until an engineer applies the fix.
 
+* `not set in this shell — add it to .env.credentials, then open a new
+  terminal` — a registry entry names a `${VAR}` that this shell does not
+  export. Add the value to `.env.credentials`, then open a new terminal.
 * `file credential source arrives with the Phase 2 hub` — the registry entry
   reads its credential from a file. Change the source to `from: env` until the
   Phase 2 hub arrives.
@@ -83,6 +86,11 @@ of the file until an engineer applies the fix.
   the MCP servers by hand` — the JSON target holds `//` or `/* */` comments.
   Gemini CLI accepts them, and wagglebot prints strict JSON, so a rewrite would
   drop them. Remove the comments, or add the servers by hand.
+* `no MCP servers in the registry — file not created` — no `registry.yaml` of
+  the company layer or the team layer declares a proxy.
+* `no MCP server can be written for this harness — every entry was skipped
+  above — file not created` — the registry holds entries, and this harness can
+  express none of them. Read the skip lines above this one.
 
 ## The TOML block
 
