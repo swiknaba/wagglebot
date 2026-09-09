@@ -2,10 +2,11 @@
 
 One AI agent setup for a whole engineering team.
 
-> **Status.** Phase 1 workstation provisioning is implemented in
-> [`packages/cli`](packages/cli/). The CLI also implements repository
-> instruction sync, as `wagglebot sync-project`. Phases 2–4 stay at the
-> specification stage. The [design specs](docs/superpowers/specs/)
+> **Status.** Phase 1 is complete in [`packages/cli`](packages/cli/):
+> workstation provisioning, repository instruction sync
+> (`wagglebot sync-project`), MCP configs for six harnesses, and the
+> three first-party skills under [`skills/`](skills/). Phases 2–4 stay
+> at the specification stage. The [design specs](docs/superpowers/specs/)
 > define the system.
 
 ## Why
