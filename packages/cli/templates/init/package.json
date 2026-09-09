@@ -6,5 +6,8 @@
   },
   "scripts": {
     "update:wagglebot": "wagglebot update"
+  },
+  "wagglebot": {
+    "organization": []
   }
 }

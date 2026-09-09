@@ -58,6 +58,19 @@ The directory name under `teams/` must equal the Group name. Every
 `catalog.yaml` merges into one catalog, and an unknown name is a hard
 error.
 
+## Pins
+
+An entry in a `skills.list` or an `agents.list` that points outside
+your organization must pin a tag. Wagglebot prints a warning for each
+unpinned third-party entry. List the repositories that your
+organization owns under `wagglebot.organization` in `package.json`, as
+`host/path` prefixes:
+
+    "wagglebot": { "organization": ["github.com/acme", "git.acme.local"] }
+
+An entry under one of these prefixes may skip the pin, because a pull
+request already reviews it.
+
 ## Upgrade
 
 Bump the `wagglebot` pin in `package.json` in a pull request. Review
