@@ -11,4 +11,4 @@
 # A team adds its own entries in teams/<team>/skills.list.
 obra/superpowers@v6.3.0
 ayghri/i-have-adhd@main    # this repository has no tag yet; replace with a tag when one exists
-swiknaba/wagglebot@v0.2.0   # first-party skills for the wagglebot toolset; bump this pin together with the wagglebot pin in package.json
+swiknaba/wagglebot@v0.2.1   # first-party skills for the wagglebot toolset; bump this pin together with the wagglebot pin in package.json
