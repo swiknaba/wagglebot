@@ -230,10 +230,12 @@ Every seed entry above is third-party, so every seed entry pins.
 ### First-party skills (D33)
 
 Wagglebot ships with a specific toolset, so it ships the skills for
-that toolset. They live in **one repository**, `wagglebot/skills`,
-because they version with wagglebot itself. A registry format change
-breaks `adding-an-mcp-server` on the same day, so the two must move
-together.
+that toolset. They live **in the wagglebot repository under `skills/`**,
+installed from `swiknaba/wagglebot@v<version>`, because they version
+with wagglebot itself. A registry format change breaks
+`adding-an-mcp-server` on the same day, so the two must move together.
+The `skills` CLI discovers `skills/<name>/SKILL.md` in the repository,
+so the entry needs no path.
 
 | Skill | Teaches |
 |---|---|
@@ -378,14 +380,16 @@ stays the only permission system (D15).
 
 ### The bundled skill (D33)
 
-Wagglebot ships one skill, `writing-a-custom-agent`, in the curated
-set. It teaches an agent how to help an engineer write a new custom
-agent.
+Wagglebot ships three skills in the curated set (D33). This section
+describes `writing-a-custom-agent`. It teaches an agent how to help an
+engineer write a new custom agent.
 
 The skill covers:
 
-1. **The runtime.** How to write a Flue agent: the file shape, the
-   hooks, and how to reach the local hub over MCP.
+1. **The shape.** A Markdown subagent by default (D33): YAML front
+   matter with `name` and `description`, then the instructions. A
+   runtime such as Flue only for durability or a sandbox (R1), with its
+   running cost stated in the pull request.
 2. **The placement question, asked before any code.** The skill must
    ask the engineer:
 
