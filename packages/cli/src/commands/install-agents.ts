@@ -27,6 +27,13 @@ export function resolveSource(entry: ListEntry): AgentSource {
   return { cloneUrl: entry.repo, ref: entry.ref, id: segments.join("__") };
 }
 
+// The Markdown subagents of one directory, sorted. A README documents the directory; it is not an agent.
+const subagentFiles = (dir: string): string[] =>
+  readdirSync(dir)
+    .filter((f) => f.endsWith(".md"))
+    .filter((f) => f.toLowerCase() !== "readme.md")
+    .sort();
+
 export async function runInstallAgents(deps: {
   home: string;
   harnesses: Harness[];
@@ -93,7 +100,7 @@ export async function runInstallAgents(deps: {
       failedPrefixes.push(prefix);
       continue;
     }
-    const files = readdirSync(cacheDir).filter((f) => f.endsWith(".md"));
+    const files = subagentFiles(cacheDir);
     for (const harness of targets) {
       const dir = join(home, harness.subagentDir ?? "");
       mkdirSync(dir, { recursive: true });
@@ -107,10 +114,7 @@ export async function runInstallAgents(deps: {
 
   for (const { prefix, dir: agentsDir } of deps.agentDirs) {
     if (!existsSync(agentsDir)) continue;
-    const files = readdirSync(agentsDir)
-      .filter((f) => f.endsWith(".md"))
-      .filter((f) => f.toLowerCase() !== "readme.md")
-      .sort();
+    const files = subagentFiles(agentsDir);
     for (const harness of targets) {
       const dir = join(home, harness.subagentDir ?? "");
       mkdirSync(dir, { recursive: true });

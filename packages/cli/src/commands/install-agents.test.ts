@@ -226,3 +226,27 @@ test("an unpinned third-party agents entry is a warning line", async () => {
   });
   expect(lines.some((l) => l.includes("warning") && l.includes("acme/agents"))).toBe(true);
 });
+
+test("a README.md in a cloned repository is not installed as a subagent", async () => {
+  const home = mkdtempSync(join(tmpdir(), "wgl-"));
+  const git: Exec = async (cmd, args) => {
+    if (cmd === "git" && args[0] === "clone") {
+      const dir = args.at(-1) ?? "";
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(join(dir, "README.md"), "# About\n");
+      writeFileSync(join(dir, "reviewer.md"), "# Reviewer agent\n");
+      return { code: 0, stdout: "", stderr: "" };
+    }
+    return { code: 0, stdout: "", stderr: "" };
+  };
+  await runInstallAgents({
+    home,
+    harnesses: HARNESSES,
+    listTexts: [{ path: "l", text: "acme/agents@v1\n" }],
+    agentDirs: [],
+    exec: git,
+    reporter: quiet(),
+  });
+  expect(existsSync(join(home, ".claude/agents/acme__agents__README.md"))).toBe(false);
+  expect(existsSync(join(home, ".claude/agents/acme__agents__reviewer.md"))).toBe(true);
+});
