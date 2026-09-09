@@ -55,6 +55,7 @@ test("pulls, provisions, and prints a summary", async () => {
     reporter: createReporter((l) => lines.push(l), false),
     write: (l) => lines.push(l),
     skillsBin: "/bin/skills",
+    cliVersion: "1.4.2",
     env: zshEnv,
   });
   expect(code).toBe(0);
@@ -102,6 +103,7 @@ test("a moved pin triggers yarn install and a re-exec, once", async () => {
     reporter: quiet,
     write: () => {},
     skillsBin: "/bin/skills",
+    cliVersion: "1.4.2",
     env: zshEnv,
   });
   expect(code).toBe(0);
@@ -124,6 +126,7 @@ test("one runUpdate makes a single backup set that restores both CLAUDE.md and .
     reporter: createReporter(() => {}, false),
     write: () => {},
     skillsBin: "/bin/skills",
+    cliVersion: "1.4.2",
     env: zshEnv,
   });
   expect(code).toBe(0);
@@ -163,6 +166,7 @@ test("a failing yarn install prints the summary before it exits 1", async () => 
     reporter: r,
     write: (l) => lines.push(l),
     skillsBin: "/bin/skills",
+    cliVersion: "1.4.2",
     env: zshEnv,
   });
   expect(code).toBe(1);
@@ -189,10 +193,60 @@ test("a missing yarn keeps the current CLI, warns, and still runs the installers
     reporter: r,
     write: (l) => lines.push(l),
     skillsBin: "/bin/skills",
+    cliVersion: "1.4.2",
     env: zshEnv,
   });
   expect(lines.some((l) => l.includes("yarn is not installed"))).toBe(true);
+  // Both remedies end with the same sentence. The run prints one of them, never both.
+  expect(lines.filter((l) => l.includes("run wagglebot update again")).length).toBe(1);
   expect(lines.some((l) => l.includes("== Base template sync =="))).toBe(true);
   expect(r.counts().failed).toBe(0);
   expect(code).toBe(0);
+});
+
+test("a pin that did not move this run still reports the stale CLI", async () => {
+  const root = scaffoldCompany();
+  writeFileSync(join(root, "package.json"), JSON.stringify({ dependencies: { wagglebot: "1.5.0" } }));
+  const home = mkdtempSync(join(tmpdir(), "wgl-home-"));
+  mkdirSync(join(home, ".claude"), { recursive: true });
+  const lines: string[] = [];
+  const r = createReporter((l) => lines.push(l), false);
+  const code = await runUpdate({
+    cwd: root,
+    home,
+    exec: gitExec([]),
+    ask: async () => "alice",
+    reporter: r,
+    write: (l) => lines.push(l),
+    skillsBin: "/bin/skills",
+    cliVersion: "1.4.2",
+    env: zshEnv,
+  });
+  expect(code).toBe(0);
+  expect(lines.join("\n")).toContain(
+    'the company pins wagglebot 1.5.0, but this run uses 1.4.2 — run "yarn install" in the company repository, then run wagglebot update again',
+  );
+  // The run continues: every installer still reports its section.
+  expect(lines).toContain("== Base template sync ==");
+  expect(r.counts().failed).toBe(0);
+});
+
+test("a pin that equals the running CLI reports nothing", async () => {
+  const root = scaffoldCompany();
+  const home = mkdtempSync(join(tmpdir(), "wgl-home-"));
+  mkdirSync(join(home, ".claude"), { recursive: true });
+  const lines: string[] = [];
+  const code = await runUpdate({
+    cwd: root,
+    home,
+    exec: gitExec([]),
+    ask: async () => "alice",
+    reporter: createReporter((l) => lines.push(l), false),
+    write: (l) => lines.push(l),
+    skillsBin: "/bin/skills",
+    cliVersion: "1.4.2",
+    env: zshEnv,
+  });
+  expect(code).toBe(0);
+  expect(lines.join("\n")).not.toContain("the company pins wagglebot");
 });

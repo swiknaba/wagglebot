@@ -107,6 +107,7 @@ export async function main(argv: string[], deps: CliDeps = { write: console.log 
         reporter,
         write: deps.write,
         skillsBin: resolveSkillsBin(),
+        cliVersion: version(),
         skipSelfUpdate: values["skip-self-update"] === true,
       });
     }

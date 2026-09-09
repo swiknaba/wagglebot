@@ -17,6 +17,10 @@ import { runSyncAgents } from "./sync-agents";
 import { runSyncShell } from "./sync-shell";
 import { runWriteMcp } from "./write-mcp";
 
+// A pin the run can compare with the running CLI. A range or a "file:" path names no version,
+// so wagglebot stays quiet about it.
+const EXACT_PIN = /^\d+\.\d+\.\d+/;
+
 export async function runUpdate(deps: {
   cwd: string;
   home: string;
@@ -25,6 +29,8 @@ export async function runUpdate(deps: {
   reporter: Reporter;
   write: (line: string) => void;
   skillsBin: string | undefined;
+  // The version of the CLI that runs now. The run compares it with the company pin.
+  cliVersion: string;
   skipSelfUpdate?: boolean;
   // The process environment. sync-shell reads $SHELL from it, and write-mcp expands ${VAR}.
   // A test passes its own, so neither step depends on the machine that runs the suite.
@@ -43,9 +49,11 @@ export async function runUpdate(deps: {
   }
 
   const company = loadCompanyRepo(root);
+  // True when the missing-yarn branch already named the pin and the remedy this run.
+  let reportedStale = false;
   if (company.pin !== pinBefore && deps.skipSelfUpdate !== true) {
-    write(`wagglebot pin moved ${pinBefore} -> ${company.pin}; running yarn install`);
     const install = await exec("yarn", ["install"], { cwd: root });
+    const moved = `wagglebot pin moved ${pinBefore} -> ${company.pin}`;
     if (install.code === 127) {
       // realExec maps a command that does not exist to 127. The installers below still run, with
       // the CLI that is installed now (spec: a missing dependency warns and continues).
@@ -54,15 +62,28 @@ export async function runUpdate(deps: {
         "skipped",
         `yarn is not installed. The pin moved to ${company.pin}, but this run keeps the current CLI. Install yarn, run "yarn install" in the company repository, then run wagglebot update again.`,
       );
+      reportedStale = true;
     } else if (install.code !== 0) {
+      write(moved);
       reporter.item("yarn install", "failed", install.stderr.split("\n")[0] ?? "");
       write(reporter.summary());
       return 1;
     } else {
+      write(`${moved}. yarn install updated the CLI.`);
       const rerun = await exec("yarn", ["wagglebot", "update", "--skip-self-update"], { cwd: root });
       write(rerun.stdout);
       return rerun.code;
     }
+  }
+
+  // The pin moves once, and the remedy can fail on that run. Report the gap on every later run
+  // too, so a stale CLI never provisions a workstation in silence (P35).
+  if (!reportedStale && EXACT_PIN.test(company.pin) && company.pin !== deps.cliVersion) {
+    reporter.item(
+      "wagglebot",
+      "skipped",
+      `the company pins wagglebot ${company.pin}, but this run uses ${deps.cliVersion} — run "yarn install" in the company repository, then run wagglebot update again`,
+    );
   }
 
   const catalog = loadCatalog(company.catalogText, company.catalogPath);
