@@ -81,3 +81,11 @@ test("hasJsonComments keeps a comment marker that a string literal carries", () 
 test("hasJsonComments reports false for corrupt JSON that also carries a comment", () => {
   expect(hasJsonComments('{ // my note\n  "theme": ')).toBe(false);
 });
+
+test("a removed entry named like an Object prototype member is still removed", () => {
+  const existing = JSON.stringify({ mcpServers: { constructor: { url: "https://x" }, personal: { command: "c" } } });
+  const { next } = mergeManagedSection(existing, "mcpServers", {}, ["constructor"]);
+  const doc = JSON.parse(next);
+  expect(Object.hasOwn(doc.mcpServers, "constructor")).toBe(false);
+  expect(doc.mcpServers.personal).toEqual({ command: "c" });
+});

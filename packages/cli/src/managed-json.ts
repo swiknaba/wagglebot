@@ -71,7 +71,8 @@ export function mergeManagedSection(
 ): { next: string; changed: boolean; ownedNow: string[] } {
   const doc = parseObject(existingText);
   const parent = isObject(doc[parentKey]) ? { ...(doc[parentKey] as JsonObject) } : {};
-  const stale = previouslyOwned.filter((k) => !(k in entries));
+  // Object.hasOwn: a namespace such as "constructor" must still count as stale once it is gone.
+  const stale = previouslyOwned.filter((k) => !Object.hasOwn(entries, k));
   for (const k of stale) delete parent[k];
   for (const [k, v] of Object.entries(entries)) parent[k] = v;
   doc[parentKey] = parent;
