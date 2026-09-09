@@ -74,7 +74,7 @@ of the file until an engineer applies the fix.
   names another source` — the entry reads its credential from a file. Change
   `auth.source` to `from: env`.
 * `Codex forwards an environment variable under its own name only (env_vars) —
-  the registry names ${SOURCE} for KEY; rename one so they match` — give the
+  the registry names ${SOURCE} for KEY. Rename one so they match` — give the
   `auth.scheme.map` key the same name as `auth.source.var`.
 * `already defined outside the wagglebot block in .codex/config.toml — remove it
   there, or rename the registry entry` — the file already declares that server

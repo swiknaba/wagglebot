@@ -96,7 +96,7 @@ function codexStdio(p: ProxyConfig): Rendered {
     if (variable !== key) {
       return {
         ok: false,
-        reason: `Codex forwards an environment variable under its own name only (env_vars) — the registry names ${value} for ${key}; rename one so they match`,
+        reason: `Codex forwards an environment variable under its own name only (env_vars) — the registry names ${value} for ${key}. Rename one so they match`,
       };
     }
     names.push(key);

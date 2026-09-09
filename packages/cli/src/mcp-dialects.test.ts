@@ -105,7 +105,7 @@ test("codex forwards a stdio env var under its own name only", () => {
     env_vars: ["GH_TOKEN"],
   });
   expect(reasonOf(renderEntry("codex", stdioNpx))).toBe(
-    "Codex forwards an environment variable under its own name only (env_vars) — the registry names ${MY_GH_TOKEN} for GH_TOKEN; rename one so they match",
+    "Codex forwards an environment variable under its own name only (env_vars) — the registry names ${MY_GH_TOKEN} for GH_TOKEN. Rename one so they match",
   );
   expect(entryOf(renderEntry("codex", plainStdio))).toEqual({ command: "my-mcp", args: ["--x"] });
 });

@@ -89,7 +89,7 @@ const carriesMarker = (element: unknown): boolean => {
 
 // Merges hook fragment entries into a settings object. Owns only array elements whose command
 // contains "wagglebot:". A foreign element keeps its position. An owned element is replaced in
-// place by the next fragment entry; a fragment entry without a slot is appended; an owned
+// place by the next fragment entry. A fragment entry without a slot is appended. An owned
 // element without a fragment entry left is stale and dropped (F22).
 export function mergeHooks(
   existingText: string,
