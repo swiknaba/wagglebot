@@ -24,7 +24,7 @@ export async function runUpdate(deps: {
   ask: Ask;
   reporter: Reporter;
   write: (line: string) => void;
-  skillsBin: string;
+  skillsBin: string | undefined;
   skipSelfUpdate?: boolean;
   // The process environment. sync-shell reads $SHELL from it, and write-mcp expands ${VAR}.
   // A test passes its own, so neither step depends on the machine that runs the suite.
@@ -46,14 +46,23 @@ export async function runUpdate(deps: {
   if (company.pin !== pinBefore && deps.skipSelfUpdate !== true) {
     write(`wagglebot pin moved ${pinBefore} -> ${company.pin}; running yarn install`);
     const install = await exec("yarn", ["install"], { cwd: root });
-    if (install.code !== 0) {
+    if (install.code === 127) {
+      // realExec maps a command that does not exist to 127. The installers below still run, with
+      // the CLI that is installed now (spec: a missing dependency warns and continues).
+      reporter.item(
+        "yarn install",
+        "skipped",
+        `yarn is not installed. The pin moved to ${company.pin}, but this run keeps the current CLI. Install yarn, run "yarn install" in the company repository, then run wagglebot update again.`,
+      );
+    } else if (install.code !== 0) {
       reporter.item("yarn install", "failed", install.stderr.split("\n")[0] ?? "");
       write(reporter.summary());
       return 1;
+    } else {
+      const rerun = await exec("yarn", ["wagglebot", "update", "--skip-self-update"], { cwd: root });
+      write(rerun.stdout);
+      return rerun.code;
     }
-    const rerun = await exec("yarn", ["wagglebot", "update", "--skip-self-update"], { cwd: root });
-    write(rerun.stdout);
-    return rerun.code;
   }
 
   const catalog = loadCatalog(company.catalogText, company.catalogPath);

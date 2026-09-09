@@ -409,3 +409,22 @@ test("rejects a short commit hash as a pin before it reaches the skills CLI", as
   expect(r.counts().failed).toBe(1);
   expect(calls.some((c) => c.includes("add"))).toBe(false);
 });
+
+test("a missing skills CLI is skipped with a remedy and fails nothing", async () => {
+  const calls: string[][] = [];
+  const r = createReporter(() => {}, false);
+  const code = await runInstallSkills({
+    lists: [{ path: "l", text: "obra/superpowers@v6.3.0\n" }],
+    exec: fakeExec(calls),
+    reporter: r,
+    skillsBin: undefined,
+    skillsAgents: ["claude-code"],
+    managedFile: managed(),
+    skillLockFile: NO_LOCK,
+    nodeVersion: NODE,
+  });
+  expect(code).toBe(0);
+  expect(calls).toEqual([]);
+  expect(r.counts().skipped).toBe(1);
+  expect(r.counts().failed).toBe(0);
+});

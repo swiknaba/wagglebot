@@ -10,12 +10,19 @@ import { loadState, saveState } from "../state";
 // under process.execPath. Both name the same Node binary that runs wagglebot.
 export const SKILLS_NODE_FLOOR = "22.20.0";
 
-export function resolveSkillsBin(): string {
-  const require = createRequire(import.meta.url);
-  const pkgPath = require.resolve("skills/package.json");
-  const pkg: { bin: string | Record<string, string> } = require("skills/package.json");
-  const rel = typeof pkg.bin === "string" ? pkg.bin : (pkg.bin.skills ?? Object.values(pkg.bin)[0] ?? "");
-  return join(dirname(pkgPath), rel);
+// The skills CLI is a dependency of this package, so a normal install always has it. A missing
+// module means a broken or partial install. The installer then skips with a remedy (spec: warn
+// and continue). It never aborts the whole update before git pull.
+export function resolveSkillsBin(): string | undefined {
+  try {
+    const require = createRequire(import.meta.url);
+    const pkgPath = require.resolve("skills/package.json");
+    const pkg: { bin: string | Record<string, string> } = require("skills/package.json");
+    const rel = typeof pkg.bin === "string" ? pkg.bin : (pkg.bin.skills ?? Object.values(pkg.bin)[0] ?? "");
+    return join(dirname(pkgPath), rel);
+  } catch {
+    return undefined;
+  }
 }
 
 // Our lists write a pin as "@<ref>". The skills CLI reads "@" as a skill-name filter and
@@ -61,7 +68,7 @@ export async function runInstallSkills(deps: {
   lists: { path: string; text: string }[];
   exec: Exec;
   reporter: Reporter;
-  skillsBin: string;
+  skillsBin: string | undefined;
   skillsAgents: string[];
   managedFile: string;
   skillLockFile: string;
@@ -112,6 +119,15 @@ export async function runInstallSkills(deps: {
     reporter.item("skills", "skipped", "no selected harness has a skills CLI adapter");
     return 0;
   }
+  if (deps.skillsBin === undefined) {
+    reporter.item(
+      "skills",
+      "skipped",
+      'the skills CLI is not installed — run "yarn install" in the company repository, then run wagglebot update again',
+    );
+    return 0;
+  }
+  const skillsBin = deps.skillsBin;
   const nodeVersion = deps.nodeVersion ?? process.version;
   if (!nodeSatisfies(nodeVersion, SKILLS_NODE_FLOOR)) {
     reporter.item(
@@ -129,7 +145,7 @@ export async function runInstallSkills(deps: {
   const repoOf = (raw: string): string => parseList(raw).entries[0]?.repo ?? raw;
 
   const removeSkill = async (name: string, reason: string): Promise<void> => {
-    const result = await exec(process.execPath, [deps.skillsBin, "remove", name, "-g", "-y", ...agentFlags]);
+    const result = await exec(process.execPath, [skillsBin, "remove", name, "-g", "-y", ...agentFlags]);
     if (result.code === 0) reporter.item(name, "updated", `removed — ${reason}`);
     else reporter.item(name, "failed", `skills remove failed — ${reason}`);
   };
@@ -145,7 +161,7 @@ export async function runInstallSkills(deps: {
     const known = skillsOfSource(loadSkillLock(deps.skillLockFile), entry.repo);
     const startedAt = Date.now();
     const args = ["add", toSkillsSource(entry), "-g", "-y", ...agentFlags];
-    const result = await exec(process.execPath, [deps.skillsBin, ...args]);
+    const result = await exec(process.execPath, [skillsBin, ...args]);
     const output = `${result.stdout}\n${result.stderr}`;
     if (result.code !== 0 || output.includes("Installation failed")) {
       const reason = output

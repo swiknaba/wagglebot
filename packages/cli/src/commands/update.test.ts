@@ -168,3 +168,31 @@ test("a failing yarn install prints the summary before it exits 1", async () => 
   expect(code).toBe(1);
   expect(lines.some((l) => l.includes("failed 1"))).toBe(true);
 });
+
+test("a missing yarn keeps the current CLI, warns, and still runs the installers", async () => {
+  const root = scaffoldCompany();
+  const home = mkdtempSync(join(tmpdir(), "wgl-home-"));
+  mkdirSync(join(home, ".claude"), { recursive: true });
+  const pinMoving = pinMovingExec(root, []);
+  const lines: string[] = [];
+  const exec: Exec = async (cmd, args, opts) => {
+    // realExec maps a command that does not exist to 127.
+    if (cmd === "yarn") return { code: 127, stdout: "", stderr: "" };
+    return pinMoving(cmd, args, opts);
+  };
+  const r = createReporter((l) => lines.push(l), false);
+  const code = await runUpdate({
+    cwd: root,
+    home,
+    exec,
+    ask: async () => "alice",
+    reporter: r,
+    write: (l) => lines.push(l),
+    skillsBin: "/bin/skills",
+    env: zshEnv,
+  });
+  expect(lines.some((l) => l.includes("yarn is not installed"))).toBe(true);
+  expect(lines.some((l) => l.includes("== Base template sync =="))).toBe(true);
+  expect(r.counts().failed).toBe(0);
+  expect(code).toBe(0);
+});
