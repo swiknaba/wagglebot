@@ -49,9 +49,9 @@ nor a microservice team (P33). Two results follow:
   stays local, and no shared search covers it. Shared memory search arrives
   with Phase 2 (D29). Declare the file now, so that layer reads it without a
   change.
-* An unknown Group or System name is a hard error. Wagglebot never invents an
-  identifier, because a silent invention writes facts into a space that no
-  search reads (P35).
+* An unknown Group or System name is a hard error when the shared layer reads
+  the file (Phase 2). Wagglebot never invents an identifier, because a silent
+  invention writes facts into a space that no search reads (P35).
 
 Add the missing Group or System to the company catalog first. Then merge the
 `catalog-info.yaml` file.
