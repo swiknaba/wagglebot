@@ -104,8 +104,27 @@ function codexStdio(p: ProxyConfig): Rendered {
   return { ok: true, entry: { ...stdioCommand(p), ...(names.length === 0 ? {} : { env_vars: names }) } };
 }
 
+// Gemini expands ${VAR}, so a credential travels as an expansion. It splits the URL field by
+// transport: httpUrl for streamable HTTP, url for SSE.
+function geminiEntry(p: ProxyConfig): Rendered {
+  if (p.namespace.includes("_")) {
+    return { ok: false, reason: "Gemini CLI mis-parses a server name with an underscore — rename the registry entry" };
+  }
+  if (p.mode === "remote_http" || p.mode === "remote_sse") {
+    const headers = p.auth === undefined ? undefined : headersFor(p.auth.scheme, p.auth.source);
+    const withHeaders = headers === undefined ? {} : { headers };
+    const url = p.endpoint;
+    return p.mode === "remote_http"
+      ? { ok: true, entry: { httpUrl: url, ...withHeaders } }
+      : { ok: true, entry: { url, ...withHeaders } };
+  }
+  const env = stdioEnv(p);
+  return { ok: true, entry: { ...stdioCommand(p), ...(Object.keys(env).length === 0 ? {} : { env }) } };
+}
+
 export function renderEntry(dialect: McpDialect, p: ProxyConfig): Rendered {
   if (dialect === "codex") return codexEntry(p);
+  if (dialect === "gemini") return geminiEntry(p);
   return { ok: true, entry: proxyToClaudeEntry(p) };
 }
 

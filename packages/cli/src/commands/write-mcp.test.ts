@@ -69,8 +69,8 @@ test("second identical run reports ok", () => {
   const r = createReporter(() => {}, false);
   runWriteMcp({ home, harnesses: HARNESSES, proxies: [remote], env: {}, reporter: r });
   expect(r.counts().updated).toBe(0);
-  // One ok per harness that writes the bearer fixture: claude-code and codex.
-  expect(r.counts().ok).toBe(2);
+  // One ok per harness that writes the bearer fixture: claude-code, codex, and gemini.
+  expect(r.counts().ok).toBe(3);
 });
 
 test("an empty registry creates no file", () => {

@@ -26,7 +26,7 @@ export type Harness = {
 
 // Which field names and which transport keys one harness expects inside its MCP config.
 // docs/harnesses.md holds the vendor table and the source of each path.
-export type McpDialect = "claude" | "codex";
+export type McpDialect = "claude" | "codex" | "gemini";
 export type McpTarget =
   // A JSON file. Ownership is per child key under parentKey, recorded in ~/.wagglebot/managed.json.
   | { format: "json"; path: string; parentKey: string; dialect: McpDialect }
@@ -95,6 +95,10 @@ export const HARNESSES: Harness[] = [
     detectDir: ".gemini",
     skillsAgent: "gemini-cli",
     templateTargets: [".gemini/GEMINI.md"],
+    // https://github.com/google-gemini/gemini-cli/blob/main/docs/reference/configuration.md and
+    // https://github.com/google-gemini/gemini-cli/blob/main/docs/tools/mcp-server.md — mcpServers
+    // sits at the top level, and Gemini expands $VAR, ${VAR}, and ${VAR:-default}.
+    mcpTarget: { format: "json", path: ".gemini/settings.json", parentKey: "mcpServers", dialect: "gemini" },
     projectTarget: { path: "GEMINI.md", mode: "import", importLine: "@./AGENTS.md" },
   },
   {

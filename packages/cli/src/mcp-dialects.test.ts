@@ -163,3 +163,26 @@ test("needsExpansion sees a ${VAR} inside the command or the args", () => {
   expect(needsExpansion({ ...plainStdio, args: ["--token=${SECRET}"] })).toBe(true);
   expect(needsExpansion({ ...plainStdio, command: "${HOME}/bin/mcp" })).toBe(true);
 });
+
+test("gemini splits the url field by transport and keeps the ${VAR} headers", () => {
+  expect(entryOf(renderEntry("gemini", remote))).toEqual({
+    httpUrl: "https://mcp.example.com/mcp",
+    headers: { Authorization: "Bearer ${EXAMPLE_TOKEN}" },
+  });
+  expect(entryOf(renderEntry("gemini", sse))).toEqual({
+    url: "https://mcp.example.com/mcp",
+    headers: { Authorization: "Bearer ${EXAMPLE_TOKEN}" },
+  });
+  expect(entryOf(renderEntry("gemini", stdioNpx))).toEqual({
+    command: "npx",
+    args: ["-y", "@example/mcp@1.4.2", "--flag"],
+    env: { GH_TOKEN: "${MY_GH_TOKEN}" },
+  });
+  expect(entryOf(renderEntry("gemini", plainRemote))).toEqual({ httpUrl: "https://plain.example/mcp" });
+});
+
+test("gemini skips a server name that carries an underscore", () => {
+  expect(reasonOf(renderEntry("gemini", { ...remote, namespace: "team_ops" }))).toBe(
+    "Gemini CLI mis-parses a server name with an underscore — rename the registry entry",
+  );
+});

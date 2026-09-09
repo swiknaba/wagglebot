@@ -49,4 +49,10 @@ test("every MCP target is home-relative and names its dialect", () => {
     table: "mcp_servers",
     dialect: "codex",
   });
+  expect(HARNESSES.find((h) => h.name === "gemini")?.mcpTarget).toEqual({
+    format: "json",
+    path: ".gemini/settings.json",
+    parentKey: "mcpServers",
+    dialect: "gemini",
+  });
 });
