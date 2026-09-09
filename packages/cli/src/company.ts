@@ -28,20 +28,29 @@ const readOptional = (path: string): string | undefined => (existsSync(path) ? r
 
 type CompanyPackage = { dependencies?: Record<string, string>; wagglebot?: { organization?: unknown } };
 
-const readPackage = (root: string): { pin?: string; organization: string[] } => {
+const readPackageJson = (root: string): CompanyPackage | undefined => {
   const pkgPath = join(root, "package.json");
-  if (!existsSync(pkgPath)) return { organization: [] };
+  if (!existsSync(pkgPath)) return undefined;
   const pkg: CompanyPackage = JSON.parse(readFileSync(pkgPath, "utf8"));
+  return pkg;
+};
+
+const readPackage = (root: string): { pin?: string; organization: string[] } => {
+  const pkg = readPackageJson(root);
+  if (pkg === undefined) return { organization: [] };
   const raw = pkg.wagglebot?.organization;
   if (raw !== undefined && !(Array.isArray(raw) && raw.every((p) => typeof p === "string"))) {
     throw new Error(
-      `${pkgPath}: "wagglebot.organization" must be a list of "host/path" prefixes, for example ["github.com/acme"]`,
+      `${join(root, "package.json")}: "wagglebot.organization" must be a list of "host/path" prefixes, for example ["github.com/acme"]`,
     );
   }
   return { pin: pkg.dependencies?.wagglebot, organization: raw ?? [] };
 };
 
-const pinOf = (root: string): string | undefined => readPackage(root).pin;
+// The walk asks one question only: does this directory pin wagglebot? A package.json of another
+// package must not fail the search, so the organization key is validated in the company
+// repository alone.
+const pinOf = (root: string): string | undefined => readPackageJson(root)?.dependencies?.wagglebot;
 
 export function findCompanyRoot(cwd: string): string {
   let dir = cwd;

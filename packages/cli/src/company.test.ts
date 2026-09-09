@@ -72,3 +72,10 @@ test("reads wagglebot.organization from package.json and defaults to an empty li
 test("a malformed wagglebot.organization is a hard error that names the key", () => {
   expect(() => loadCompanyRepo(scaffold({ organization: "github.com/acme" }))).toThrow(/wagglebot\.organization/);
 });
+
+test("a malformed wagglebot.organization below the company root does not stop the walk", () => {
+  const root = scaffold();
+  // A nested package of the same repository. It pins nothing, so it is not the company root.
+  writeFileSync(join(root, "nested/package.json"), JSON.stringify({ wagglebot: { organization: "github.com/acme" } }));
+  expect(findCompanyRoot(join(root, "nested/deep"))).toBe(root);
+});
