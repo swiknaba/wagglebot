@@ -95,3 +95,8 @@ test("replaceListLine keeps the leading indentation of the entry line", () => {
     "  obra/superpowers@v6.4.0\n",
   );
 });
+
+test("a ref that starts with a dash is rejected, so it never reaches git as an option", () => {
+  expect(() => parseList("acme/tools@--upload-pack=evil\n")).toThrow(/must not start with "-"/);
+  expect(() => parseList("https://git.acme.local/x/y.git -b\n")).toThrow(/must not start with "-"/);
+});

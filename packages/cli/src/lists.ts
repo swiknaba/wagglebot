@@ -28,6 +28,13 @@ export const insideOrganization = (entry: ListEntry, organization: string[]): bo
     .some((prefix) => hp === prefix || hp.startsWith(`${prefix}/`));
 };
 
+// A ref reaches git as an argument. One that starts with "-" would read as an option (P31).
+const rejectOptionLikeRef = (raw: string, ref: string | undefined): void => {
+  if (ref?.startsWith("-") === true) {
+    throw new Error(`list entry is malformed: "${raw}" — a ref must not start with "-"`);
+  }
+};
+
 export function parseList(text: string, options: ListOptions = {}): { entries: ListEntry[]; warnings: string[] } {
   const warnings: string[] = [];
   const entries = text
@@ -37,6 +44,7 @@ export function parseList(text: string, options: ListOptions = {}): { entries: L
     .map((raw): ListEntry => {
       if (URL_ENTRY.test(raw)) {
         const [url = raw, ref] = raw.split(/\s+/);
+        rejectOptionLikeRef(raw, ref);
         return { repo: url, ref, raw, isUrl: true };
       }
       const at = raw.indexOf("@");
@@ -45,6 +53,7 @@ export function parseList(text: string, options: ListOptions = {}): { entries: L
       if (!/^[\w.-]+\/[\w.-]+$/.test(repo) || ref === "") {
         throw new Error(`list entry is malformed: "${raw}" — expected owner/repo[@ref] or a full git URL`);
       }
+      rejectOptionLikeRef(raw, ref);
       return { repo, ref, raw };
     });
   // D32: an entry outside the organization must pin a tag. An entry the organization owns may
