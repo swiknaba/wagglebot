@@ -1,7 +1,10 @@
 import { copyFileSync, existsSync, mkdirSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
-const stamp = (d: Date): string => d.toISOString().replaceAll(/[-:]/g, "").replace("T", "-").slice(0, 15);
+// Millisecond precision: two commands inside one second must not share one set, because the
+// second would overwrite the backup of the first with an already-mutated file.
+// "20260831-100000100" — fixed width, so a name sort is a time sort.
+const stamp = (d: Date): string => d.toISOString().replaceAll(/[-:.]/g, "").replace("T", "-").slice(0, 18);
 const encode = (p: string): string => p.replaceAll("/", "%2F");
 const decode = (name: string): string => name.replaceAll("%2F", "/");
 

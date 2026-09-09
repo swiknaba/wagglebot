@@ -25,3 +25,11 @@ test("backup of a missing target is a no-op", () => {
   set.backup(join(root, "absent.md"));
   expect(restoreSet(set.dir)).toEqual([]);
 });
+
+test("two sets started inside one second get different directories", () => {
+  const root = mkdtempSync(join(tmpdir(), "wgl-"));
+  const a = startBackupSet(join(root, "backups"), new Date("2026-08-31T10:00:00.100Z"));
+  const b = startBackupSet(join(root, "backups"), new Date("2026-08-31T10:00:00.900Z"));
+  expect(a.dir).not.toBe(b.dir);
+  expect(a.dir < b.dir).toBe(true); // newestBackupSet sorts by name
+});
