@@ -70,3 +70,63 @@ test("team layer wins per namespace, shallow merge", () => {
     "c:https://c/mcp",
   ]);
 });
+
+test("an unknown key is a hard error that names the key", () => {
+  const text = "proxies:\n  - namespace: a\n    mode: remote_http\n    enpoint: https://x/mcp\n";
+  expect(() => loadRegistry(text, "r.yaml")).toThrow(/unknown key "enpoint"/);
+});
+
+test("args must be a list of strings", () => {
+  const text = "proxies:\n  - namespace: a\n    mode: stdio_cmd\n    command: run\n    args: --flag\n";
+  expect(() => loadRegistry(text, "r.yaml")).toThrow(/args must be a list of strings/);
+});
+
+test("a proxy that is not a mapping is a hard error", () => {
+  expect(() => loadRegistry("proxies:\n  - just-a-string\n", "r.yaml")).toThrow(/must be a mapping/);
+});
+
+test("a header scheme needs a name and an env scheme needs a map of strings", () => {
+  const header =
+    "proxies:\n  - namespace: a\n    mode: remote_http\n    endpoint: https://x/mcp\n    auth: { scheme: { kind: header }, source: { from: env, var: T } }\n";
+  expect(() => loadRegistry(header, "r.yaml")).toThrow(/scheme\.name/);
+  const env =
+    "proxies:\n  - namespace: a\n    mode: stdio_cmd\n    command: run\n    auth: { scheme: { kind: env, map: [X] }, source: { from: env, var: T } }\n";
+  expect(() => loadRegistry(env, "r.yaml")).toThrow(/scheme\.map/);
+});
+
+test("an endpoint that is not a string is a hard error", () => {
+  const text = "proxies:\n  - namespace: a\n    mode: remote_http\n    endpoint: 42\n";
+  expect(() => loadRegistry(text, "r.yaml")).toThrow(/endpoint must be a string/);
+});
+
+test("a basic scheme needs a username, and an env source needs a var", () => {
+  const basic =
+    "proxies:\n  - namespace: a\n    mode: remote_http\n    endpoint: https://x/mcp\n    auth: { scheme: { kind: basic }, source: { from: env, var: T } }\n";
+  expect(() => loadRegistry(basic, "r.yaml")).toThrow(/scheme\.username/);
+  const source =
+    "proxies:\n  - namespace: a\n    mode: remote_http\n    endpoint: https://x/mcp\n    auth: { scheme: { kind: bearer }, source: { from: env } }\n";
+  expect(() => loadRegistry(source, "r.yaml")).toThrow(/source\.var is required/);
+  const file =
+    "proxies:\n  - namespace: a\n    mode: remote_http\n    endpoint: https://x/mcp\n    auth: { scheme: { kind: bearer }, source: { from: file } }\n";
+  expect(() => loadRegistry(file, "r.yaml")).toThrow(/source\.path is required/);
+});
+
+test("a remote mode rejects an env auth scheme", () => {
+  const text =
+    "proxies:\n  - namespace: a\n    mode: remote_http\n    endpoint: https://x/mcp\n    auth: { scheme: { kind: env, map: { A: B } }, source: { from: env, var: T } }\n";
+  expect(() => loadRegistry(text, "r.yaml")).toThrow(
+    'auth.scheme.kind "env" needs a stdio mode (stdio_npx or stdio_cmd) — a remote server takes bearer, header, or basic',
+  );
+});
+
+test("a stdio mode rejects a bearer, header, or basic auth scheme", () => {
+  const text =
+    "proxies:\n  - namespace: a\n    mode: stdio_cmd\n    command: run\n    auth: { scheme: { kind: bearer }, source: { from: env, var: T } }\n";
+  expect(() => loadRegistry(text, "r.yaml")).toThrow(
+    'auth.scheme.kind "bearer" needs a remote mode (remote_http or remote_sse) — a stdio server takes kind "env" with a map',
+  );
+});
+
+test("an unknown mode names the value it found", () => {
+  expect(() => loadRegistry("proxies:\n  - namespace: a\n    mode: 42\n", "r.yaml")).toThrow('unknown mode "42"');
+});
