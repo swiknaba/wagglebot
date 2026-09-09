@@ -445,3 +445,31 @@ test("an unpinned third-party entry is a warning line, not a counted item", asyn
   expect(lines.some((l) => l.includes("warning") && l.includes("acme/tools"))).toBe(true);
   expect(r.counts().skipped).toBe(0);
 });
+
+test("--update on a URL entry writes the tag after a space, not after an @", async () => {
+  const written: Record<string, string> = {};
+  const exec: Exec = async (cmd, args) => {
+    if (cmd === "git" && args[0] === "ls-remote") {
+      return { code: 0, stdout: "abc\trefs/tags/v1.0.0\ndef\trefs/tags/v1.1.0\n", stderr: "" };
+    }
+    return { code: 0, stdout: "", stderr: "" };
+  };
+  const r = createReporter(() => {}, false);
+  const code = await runInstallSkills({
+    lists: [{ path: "company/skills.list", text: "https://git.acme.com/team/skills.git v1.0.0\n" }],
+    exec,
+    reporter: r,
+    skillsBin: "/fake/skills",
+    skillsAgents: ["claude-code"],
+    managedFile: managed(),
+    skillLockFile: NO_LOCK,
+    nodeVersion: NODE,
+    update: true,
+    writeList: (path, next) => {
+      written[path] = next;
+    },
+  });
+  expect(code).toBe(0);
+  expect(written["company/skills.list"]).toBe("https://git.acme.com/team/skills.git v1.1.0\n");
+  expect(r.counts().updated).toBe(1);
+});

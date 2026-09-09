@@ -250,3 +250,38 @@ test("a pin that equals the running CLI reports nothing", async () => {
   expect(code).toBe(0);
   expect(lines.join("\n")).not.toContain("the company pins wagglebot");
 });
+
+// The organization key travels from package.json through runUpdate into the list parser.
+const updateWithSkillsList = async (organization?: string[]): Promise<string[]> => {
+  const root = scaffoldCompany();
+  writeFileSync(
+    join(root, "package.json"),
+    JSON.stringify({
+      dependencies: { wagglebot: "1.4.2" },
+      ...(organization === undefined ? {} : { wagglebot: { organization } }),
+    }),
+  );
+  writeFileSync(join(root, "company/skills.list"), "acme/internal-skills\n");
+  const home = mkdtempSync(join(tmpdir(), "wgl-home-"));
+  mkdirSync(join(home, ".claude"), { recursive: true });
+  const lines: string[] = [];
+  await runUpdate({
+    cwd: root,
+    home,
+    exec: gitExec([]),
+    ask: async () => "alice",
+    reporter: createReporter((l) => lines.push(l), false),
+    write: (l) => lines.push(l),
+    skillsBin: "/bin/skills",
+    cliVersion: "1.4.2",
+    env: zshEnv,
+  });
+  return lines;
+};
+
+test("a declared wagglebot.organization silences the pin warning of an entry it owns", async () => {
+  const undeclared = await updateWithSkillsList();
+  expect(undeclared.join("\n")).toContain("acme/internal-skills: no pin");
+  const declared = await updateWithSkillsList(["github.com/acme"]);
+  expect(declared.join("\n")).not.toContain("no pin");
+});

@@ -89,3 +89,9 @@ test("an unpinned entry inside the organization produces no warning", () => {
   expect(parseList("acme/tools\n").warnings.length).toBe(1);
   expect(parseList("acme/tools\n").warnings[0]).toContain("wagglebot.organization");
 });
+
+test("replaceListLine keeps the leading indentation of the entry line", () => {
+  expect(replaceListLine("  obra/superpowers@v6.3.0\n", "obra/superpowers@v6.3.0", "obra/superpowers@v6.4.0")).toBe(
+    "  obra/superpowers@v6.4.0\n",
+  );
+});

@@ -216,16 +216,22 @@ test("installs from a private git host by full URL and checks out the ref", asyn
 test("an unpinned third-party agents entry is a warning line", async () => {
   const home = mkdtempSync(join(tmpdir(), "wgl-"));
   const lines: string[] = [];
+  const claude = HARNESSES.find((h) => h.name === "claude-code");
+  if (claude === undefined) throw new Error("fixture");
   const r = createReporter((l) => lines.push(l), false);
-  await runInstallAgents({
+  // Claude Code alone, so the only skip a harness could add stays out of the count.
+  const code = await runInstallAgents({
     home,
-    harnesses: HARNESSES,
+    harnesses: [claude],
     listTexts: [{ path: "agents.base.list", text: "acme/agents\n" }],
     agentDirs: [],
     exec: fakeGit,
     reporter: r,
   });
   expect(lines.some((l) => l.includes("warning") && l.includes("acme/agents"))).toBe(true);
+  // A warning is not a counted item, and it never fails the run.
+  expect(code).toBe(0);
+  expect(r.counts().skipped).toBe(0);
 });
 
 test("a README.md in a cloned repository is not installed as a subagent", async () => {
