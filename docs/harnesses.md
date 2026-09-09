@@ -73,9 +73,9 @@ whole file, stays out until an engineer applies the fix.
   a bearer scheme` — remove `auth.scheme.prefix`, or use `kind: bearer`.
 * `Codex has no env-var mechanism for basic auth` — use a bearer scheme or a
   header scheme.
-* `Codex expresses a credential as an environment variable name — this proxy
-  names another source` — the entry reads its credential from a file. Change
-  `auth.source` to `from: env`.
+* A non-env credential source never reaches a dialect. `write-mcp` filters a `file`
+  source first, and the loader rejects a `literal` one. The Codex dialect keeps a
+  defensive skip for that case, which no run can print.
 * `Codex forwards an environment variable under its own name only (env_vars) —
   the registry names ${SOURCE} for KEY. Rename one so they match` — give the
   `auth.scheme.map` key the same name as `auth.source.var`.
