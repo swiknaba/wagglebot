@@ -392,8 +392,8 @@ Expected: FAIL — type error on `skillsBin: undefined`; the update test sees `f
 
 ```ts
 // The skills CLI is a dependency of this package, so a normal install always has it. A missing
-// module means a broken or partial install; the installer then skips with a remedy (spec: warn
-// and continue) instead of aborting the whole update before git pull.
+// module means a broken or partial install. The installer then skips with a remedy (spec: warn
+// and continue). It never aborts the whole update before git pull.
 export function resolveSkillsBin(): string | undefined {
   try {
     const require = createRequire(import.meta.url);
@@ -434,7 +434,7 @@ if (company.pin !== pinBefore && deps.skipSelfUpdate !== true) {
     reporter.item(
       "yarn install",
       "skipped",
-      `yarn is not installed — the pin moved to ${company.pin}, but this run keeps the current CLI; install yarn, then run wagglebot update again`,
+      `yarn is not installed. The pin moved to ${company.pin}, but this run keeps the current CLI. Install yarn, run "yarn install" in the company repository, then run wagglebot update again.`,
     );
   } else if (install.code !== 0) {
     reporter.item("yarn install", "failed", install.stderr.split("\n")[0] ?? "");
@@ -580,8 +580,8 @@ Expected: FAIL — missing exports, `organization` undefined, skipped count 1, n
 ```ts
 export type ListOptions = { organization?: string[] };
 
-// "host/path" of an entry, without scheme, user, port-free host normalization, or ".git". This is
-// what a prefix under "wagglebot.organization" in the company package.json matches against.
+// The "host/path" of an entry: no scheme, no user, no ".git" suffix. A port stays part of the host.
+// A prefix under "wagglebot.organization" in the company package.json matches against this string.
 export function hostPath(entry: ListEntry): string {
   if (entry.isUrl !== true) return `github.com/${entry.repo}`;
   const url = entry.repo.replace(/\.git$/, "");
@@ -604,7 +604,7 @@ In `parseList(text: string, options: ListOptions = {})`, build each entry first,
 ```ts
 if (entry.ref === undefined && !insideOrganization(entry, options.organization ?? [])) {
   warnings.push(
-    `${entry.repo}: no pin — a repository outside your organization must pin a tag; add "@<tag>", or list its host/path prefix under "wagglebot.organization" in package.json when your organization owns it`,
+    `${entry.repo}: no pin. A repository outside your organization must pin a tag. Add "@<tag>" to the entry, or a space and the tag after a URL. If your organization owns the repository, list its host/path prefix under "wagglebot.organization" in package.json.`,
   );
 }
 ```
@@ -1633,8 +1633,8 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 
 **Why:** Hook entries are owned by the `wagglebot:` marker in their command, not by a recorded key; that survives a lost state file and is the better mechanism, so the spec follows the code. The connection block's hub and coordination topics belong to Phases 2 and 3; Phase 1 carries the memory rule only.
 
-- [ ] **Step 1:** In "Agent Base Template + Distribution", replace "It contains harness-independent instructions plus an wagglebot connection block. The connection block covers three topics: how to reach the hub, the propose-not-write memory rule, and coordination etiquette." with: "It contains harness-independent instructions plus a wagglebot connection block. In Phase 1 the block carries the memory rule: component memory is a local file, and a fact that crosses a repository waits for the shared store. How to reach the hub arrives with Phase 2, and coordination etiquette with Phase 3."
-- [ ] **Step 2:** In "Distribution" rule 1, after "and it only ever rewrites those keys.", add: "Hook entries are the exception: each entry the tool writes carries a `wagglebot:` marker in its command, and ownership follows the marker, so it survives a lost state file."
+- [ ] **Step 1:** In "Agent Base Template + Distribution", replace "It contains harness-independent instructions plus an wagglebot connection block. The connection block covers three topics: how to reach the hub, the propose-not-write memory rule, and coordination etiquette." with: "It contains harness-independent instructions plus a wagglebot connection block. In Phase 1 the block carries the memory rule. Component memory is a local file. A fact that crosses a repository waits for the shared store. How to reach the hub arrives with Phase 2, and coordination etiquette with Phase 3."
+- [ ] **Step 2:** In "Distribution" rule 1, after "and it only ever rewrites those keys.", add: "Hook entries are the exception. Each entry the tool writes carries a `wagglebot:` marker in its command. Ownership follows the marker, so it survives a lost state file."
 - [ ] **Step 3: Commit**
 
 ```bash
