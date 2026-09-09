@@ -34,14 +34,31 @@ const stdioCommand = (p: ProxyConfig): { command: string; args: string[] } =>
     ? { command: "npx", args: ["-y", p.command ?? "", ...(p.args ?? [])] }
     : { command: p.command ?? "", args: p.args ?? [] };
 
-// True when this proxy reaches the file as a ${VAR}: an env credential source, or any env value.
-// A harness that does not expand ${VAR} must skip such a proxy.
+// A ${VAR} can sit inside a longer string, for example "--token=${SECRET}".
+const VAR_IN_TEXT = /\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g;
+
+// Every environment variable name this proxy needs: the credential source, the env map, the
+// command, and the args. One scanner serves the dialects and the writer, so both read the same
+// fields.
+export function envVarNames(p: ProxyConfig): string[] {
+  const names = new Set<string>();
+  if (p.auth?.source.from === "env") names.add(p.auth.source.var);
+  for (const text of [...Object.values(p.env ?? {}), p.command ?? "", ...(p.args ?? [])]) {
+    for (const match of text.matchAll(VAR_IN_TEXT)) if (match[1] !== undefined) names.add(match[1]);
+  }
+  return [...names];
+}
+
+// True when this proxy reaches the file as a ${VAR}: an env credential source, any env value, or
+// a placeholder in the command or the args. A harness that does not expand ${VAR} must skip such
+// a proxy.
 export function needsExpansion(p: ProxyConfig): boolean {
-  if (p.auth?.source.from === "env") return true;
+  // An env entry counts whatever its value holds. A harness that expands nothing would write
+  // that value as a literal, and a literal must never reach the file (F23).
   if (Object.keys(p.env ?? {}).length > 0) return true;
-  // A command or an argument can carry a placeholder too, for example "--token=${SECRET}".
-  if (p.command?.includes("${") === true) return true;
-  return (p.args ?? []).some((arg) => arg.includes("${"));
+  if (envVarNames(p).length > 0) return true;
+  // A malformed placeholder names no variable, and it still must not reach such a harness.
+  return p.command?.includes("${") === true || (p.args ?? []).some((arg) => arg.includes("${"));
 }
 
 // Kept for the callers that render only the Claude Code shape. Equals renderEntry("claude", p).entry.

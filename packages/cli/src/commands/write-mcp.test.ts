@@ -294,3 +294,13 @@ test("a single-quoted TOML key counts as a conflicting table too", () => {
   expect(r.counts().failed).toBe(1);
   expect(readFileSync(join(home, ".codex/config.toml"), "utf8")).not.toContain("# wagglebot:begin");
 });
+
+test("missingEnvVars reports a variable that only the command or an argument names", () => {
+  const p: ProxyConfig = {
+    namespace: "local",
+    mode: "stdio_cmd",
+    command: "${TOOL_HOME}/bin/mcp",
+    args: ["--token=${LOCAL_TOKEN}"],
+  };
+  expect(missingEnvVars([p], { TOOL_HOME: "/opt/tool" })).toEqual(["LOCAL_TOKEN"]);
+});

@@ -5,7 +5,7 @@ import { startBackupSet } from "../backup";
 import type { Harness, McpTarget } from "../harness";
 import { MARKERS, removeManagedBlock, renderManagedBlock } from "../managed-block";
 import { hasJsonComments, mergeManagedSection } from "../managed-json";
-import { renderEntry, renderTomlTables } from "../mcp-dialects";
+import { envVarNames, renderEntry, renderTomlTables } from "../mcp-dialects";
 import { resolvePaths } from "../paths";
 import type { ProxyConfig } from "../registry";
 import type { Reporter } from "../report";
@@ -44,13 +44,7 @@ const definesTable = (text: string, table: string, namespace: string): boolean =
 // Every ${VAR} the written config will expand. Missing ones are reported, never guessed.
 export function missingEnvVars(proxies: ProxyConfig[], env: NodeJS.ProcessEnv): string[] {
   const names = new Set<string>();
-  for (const p of proxies) {
-    if (p.auth?.source.from === "env") names.add(p.auth.source.var);
-    for (const value of Object.values(p.env ?? {})) {
-      const m = /^\$\{([A-Za-z_][A-Za-z0-9_]*)\}$/.exec(value);
-      if (m?.[1] !== undefined) names.add(m[1]);
-    }
-  }
+  for (const p of proxies) for (const name of envVarNames(p)) names.add(name);
   return [...names].filter((n) => env[n] === undefined || env[n] === "").sort();
 }
 
