@@ -64,11 +64,12 @@ export async function runInstallAgents(deps: {
 
   const installFile = (dest: string, content: string): void => {
     produced.push(dest);
-    if (existsSync(dest) && readFileSync(dest, "utf8") === content) {
+    const fresh = !existsSync(dest);
+    if (!fresh && readFileSync(dest, "utf8") === content) {
       reporter.item(dest, "ok", "already ok");
       return;
     }
-    const fresh = !existsSync(dest);
+    if (!fresh) backups.backup(dest);
     writeFileSync(dest, content);
     reporter.item(dest, fresh ? "installed" : "updated");
   };

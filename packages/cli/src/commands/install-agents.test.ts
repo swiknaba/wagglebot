@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { startBackupSet } from "../backup";
 import type { Exec } from "../exec";
 import { HARNESSES } from "../harness";
 import { createReporter } from "../report";
@@ -249,4 +250,23 @@ test("a README.md in a cloned repository is not installed as a subagent", async 
   });
   expect(existsSync(join(home, ".claude/agents/acme__agents__README.md"))).toBe(false);
   expect(existsSync(join(home, ".claude/agents/acme__agents__reviewer.md"))).toBe(true);
+});
+
+test("an existing subagent file is backed up before it is overwritten", async () => {
+  const home = mkdtempSync(join(tmpdir(), "wgl-"));
+  const dest = join(home, ".claude/agents/acme__agents__reviewer.md");
+  mkdirSync(join(home, ".claude/agents"), { recursive: true });
+  writeFileSync(dest, "# Old\n");
+  const backups = startBackupSet(join(home, ".wagglebot/backups"));
+  await runInstallAgents({
+    home,
+    harnesses: HARNESSES,
+    listTexts: [{ path: "l", text: "acme/agents@v1\n" }],
+    agentDirs: [],
+    exec: fakeGit,
+    reporter: quiet(),
+    backups,
+  });
+  expect(readFileSync(dest, "utf8")).toBe("# Reviewer agent\n");
+  expect(readFileSync(join(backups.dir, dest.replaceAll("/", "%2F")), "utf8")).toBe("# Old\n");
 });
