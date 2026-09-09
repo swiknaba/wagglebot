@@ -1725,3 +1725,12 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 **Placeholders.** None. Task C3 carries the vendor table, verified 2026-09-09, with a source URL per harness.
 
 **Type consistency.** `resolveSkillsBin(): string | undefined` (A4) flows into `runInstallSkills.skillsBin` and `runUpdate.skillsBin`. `restoreSet` returns `RestoreResult` (B6) and `sync-agents.ts` consumes `.restored` and `.failed`. `parseList(text, options)` (A5) keeps the single-argument call in `repoOf`. `CompanyRepo.organization` (A5) is read in `index.ts` and `update.ts`, both owned by Group A. `subagentFiles` (B4) is local to `install-agents.ts`. `McpTarget` (C3) replaces the `{ path; parentKey }` shape; `help.ts:12-15` is updated in the same group.
+
+---
+
+## Deviations That Shipped
+
+- `registry.ts` narrows `mode` with `isMode` and keeps one commented cast, not two.
+- The loader rejects an `env` scheme on a remote mode, and it rejects `bearer`, `header`, and `basic` on a stdio mode (from the Group C review).
+- The `basic` scheme has no `username` field (from the final review).
+- A commented Gemini `settings.json` is skipped, not rewritten (from the final review).
