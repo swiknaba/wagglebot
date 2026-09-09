@@ -12,6 +12,54 @@ const print = (doc: JsonObject): string => `${JSON.stringify(doc, null, 2)}\n`;
 const isObject = (v: unknown): v is JsonObject => typeof v === "object" && v !== null && !Array.isArray(v);
 const normalized = (text: string): string => (text.trim() === "" ? "" : print(parseObject(text)));
 
+// Removes every // and /* */ comment from JSON text. A marker inside a string literal is data,
+// so the scan tracks the quote state and the backslash escape.
+const stripJsonComments = (text: string): string => {
+  let out = "";
+  let inString = false;
+  let escaped = false;
+  let i = 0;
+  while (i < text.length) {
+    const ch = text[i] ?? "";
+    if (inString) {
+      out += ch;
+      if (escaped) escaped = false;
+      else if (ch === "\\") escaped = true;
+      else if (ch === '"') inString = false;
+      i += 1;
+    } else if (ch === '"') {
+      inString = true;
+      out += ch;
+      i += 1;
+    } else if (ch === "/" && text[i + 1] === "/") {
+      while (i < text.length && text[i] !== "\n") i += 1;
+    } else if (ch === "/" && text[i + 1] === "*") {
+      const end = text.indexOf("*/", i + 2);
+      i = end === -1 ? text.length : end + 2;
+    } else {
+      out += ch;
+      i += 1;
+    }
+  }
+  return out;
+};
+
+const parses = (text: string): boolean => {
+  try {
+    JSON.parse(text);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+// True when the text parses only after a comment strip. Gemini CLI accepts comments in
+// settings.json, and a rewrite would drop them, so the caller skips such a file (F22). Corrupt
+// text fails both parses and reports false, which keeps it on the failure path.
+export function hasJsonComments(text: string): boolean {
+  return !parses(text) && parses(stripJsonComments(text));
+}
+
 // Owns child entries under one parent key (for example parentKey = "mcpServers").
 // previouslyOwned: child names owned from managed.json ("mcpServers/example" is stored;
 // callers pass and receive bare child names — the caller adds the "parentKey/" prefix for state).

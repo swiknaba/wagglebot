@@ -13,7 +13,7 @@ writes `${VAR}` or the name of an environment variable, never a secret (F23).
 |---|---|---|---|---|---|---|---|---|---|
 | claude-code | `~/.claude.json` | JSON | `mcpServers` | `command`, `args`, `env` | `type: "http"`, `url`, `headers` | `type: "sse"`, `url`, `headers` | Yes, `${VAR}` | `${VAR}` in `headers` and `env`. A basic scheme needs the variable to hold the base64 value of "username:password". | 2026-09-09 |
 | codex | `~/.codex/config.toml` | TOML | `[mcp_servers.<id>]` | `command`, `args`, `env_vars` (names to forward), `env` (literal sub-table, never written), `cwd` | `url`, `bearer_token_env_var`, `env_http_headers` (header name → env var name), `http_headers` (static, never written) | Not documented — skipped | None documented | `bearer_token_env_var` for a bearer scheme; `env_http_headers` for a header scheme without prefix; `env_vars` for a stdio env var whose key equals the source var | 2026-09-09 |
-| gemini | `~/.gemini/settings.json` | JSON | `mcpServers` (top level) | `command`, `args`, `env`, `cwd` | `httpUrl`, `headers` | `url`, `headers` | Yes, `$VAR`, `${VAR}`, `${VAR:-default}` | `${VAR}` in `headers` and `env`. A server name with `_` is skipped: the policy engine mis-parses it. A basic scheme needs the variable to hold the base64 value of "username:password". | 2026-09-09 |
+| gemini | `~/.gemini/settings.json` | JSON | `mcpServers` (top level) | `command`, `args`, `env`, `cwd` | `httpUrl`, `headers` | `url`, `headers` | Yes, `$VAR`, `${VAR}`, `${VAR:-default}` | `${VAR}` in `headers` and `env`. A server name with `_` is skipped: the policy engine mis-parses it. A basic scheme needs the variable to hold the base64 value of "username:password". Gemini CLI accepts comments in `settings.json`. Wagglebot skips a commented file, because a rewrite would drop the comments. | 2026-09-09 |
 | copilot | `~/.copilot/mcp-config.json` | JSON | `mcpServers` | `type: "local"`, `command`, `args`, `env`, `tools` | `type: "http"`, `url`, `headers`, `tools` | `type: "sse"`, `url`, `headers`, `tools` | None documented | None — an entry that needs a credential is skipped. `tools: ["*"]` is always written (vendor example) | 2026-09-09 |
 | cline | `~/.cline/data/settings/cline_mcp_settings.json` | JSON | `mcpServers` | `command`, `args`, `env`, `disabled`, `autoApprove`, `timeout` (seconds) | `type: "streamableHttp"`, `url`, `headers` | `type: "sse"`, `url`, `headers` | None documented | None — an entry that needs a credential is skipped. Do not write `~/.cline/mcp.json`: the docs name it, the code never reads it (cline/cline#11671) | 2026-09-09 |
 | junie | `~/.junie/mcp/mcp.json` | JSON | `mcpServers` | `command`, `args`, `env` | `url`, `headers` (no `type`) | Not documented — skipped | None documented | None — an entry that needs a credential is skipped | 2026-09-09 |
@@ -24,7 +24,11 @@ Sources:
   <https://learn.chatgpt.com/docs/config-file/config-reference>
 * Gemini —
   <https://github.com/google-gemini/gemini-cli/blob/main/docs/reference/configuration.md>,
-  <https://github.com/google-gemini/gemini-cli/blob/main/docs/tools/mcp-server.md>
+  <https://github.com/google-gemini/gemini-cli/blob/main/docs/tools/mcp-server.md>,
+  <https://raw.githubusercontent.com/google-gemini/gemini-cli/main/packages/cli/src/config/settings.ts>
+  (verified 2026-09-09: the loader imports `strip-json-comments` and calls
+  `JSON.parse(stripJsonComments(content))`, so `settings.json` accepts
+  comments)
 * Copilot —
   <https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-mcp-servers>
 * Cline — <https://docs.cline.bot/getting-started/config>,
@@ -75,6 +79,10 @@ of the file until an engineer applies the fix.
 * `already defined outside the wagglebot block in .codex/config.toml — remove it
   there, or rename the registry entry` — the file already declares that server
   table. Delete the personal table, or rename the registry namespace.
+* `the file contains comments, which a rewrite would lose — remove them, or add
+  the MCP servers by hand` — the JSON target holds `//` or `/* */` comments.
+  Gemini CLI accepts them, and wagglebot prints strict JSON, so a rewrite would
+  drop them. Remove the comments, or add the servers by hand.
 
 ## The TOML block
 

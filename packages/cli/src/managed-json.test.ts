@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mergeHooks, mergeManagedSection } from "./managed-json";
+import { hasJsonComments, mergeHooks, mergeManagedSection } from "./managed-json";
 
 test("writes owned entries, preserves foreign keys, removes stale owned entries", () => {
   const existing = JSON.stringify({ theme: "dark", mcpServers: { mine: { url: "http://x" }, old: { url: "y" } } });
@@ -64,4 +64,20 @@ test("mergeHooks appends a new owned entry and drops one the fragment no longer 
   expect(JSON.parse(shrunk.next).hooks.E).toEqual([one, { matcher: "x" }]);
   const grown = mergeHooks(JSON.stringify({ hooks: { E: [{ matcher: "x" }] } }), { hooks: { E: [one, two] } });
   expect(JSON.parse(grown.next).hooks.E).toEqual([{ matcher: "x" }, one, two]);
+});
+
+test("hasJsonComments finds a line comment and a block comment, and ignores strict JSON", () => {
+  expect(hasJsonComments('{ // my note\n  "theme": "dark" }')).toBe(true);
+  expect(hasJsonComments('{ /* my note */ "theme": "dark" }')).toBe(true);
+  expect(hasJsonComments('{ "theme": "dark" }')).toBe(false);
+});
+
+test("hasJsonComments keeps a comment marker that a string literal carries", () => {
+  // The stripper must not cut inside a value, or a commented file would read as corrupt.
+  expect(hasJsonComments('{ /* note */ "url": "https://example.com//mcp" }')).toBe(true);
+  expect(hasJsonComments('{ "quote": "he said \\" // not a comment" } // a real one')).toBe(true);
+});
+
+test("hasJsonComments reports false for corrupt JSON that also carries a comment", () => {
+  expect(hasJsonComments('{ // my note\n  "theme": ')).toBe(false);
 });

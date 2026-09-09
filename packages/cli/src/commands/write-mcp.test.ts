@@ -247,3 +247,38 @@ test("a JSON target that can write no entry says so too", () => {
   );
   expect(lines.join("\n")).not.toContain("no MCP servers in the registry");
 });
+
+const geminiHarness = (): Harness => {
+  const gemini = HARNESSES.find((h) => h.name === "gemini");
+  if (gemini?.mcpTarget === undefined) throw new Error("fixture");
+  return gemini;
+};
+
+test("a commented settings.json is skipped, and the file keeps every byte", () => {
+  const home = mkdtempSync(join(tmpdir(), "wgl-gemini-"));
+  mkdirSync(join(home, ".gemini"), { recursive: true });
+  const before = '{ // my note\n  "theme": "dark" }';
+  writeFileSync(join(home, ".gemini/settings.json"), before);
+  const lines: string[] = [];
+  const r = createReporter((l) => lines.push(l), false);
+  // The variable is set, so the only skip line this run prints is the comment one.
+  const env = { EXAMPLE_TOKEN: "set-for-the-check" };
+  const code = runWriteMcp({ home, harnesses: [geminiHarness()], proxies: [remote], env, reporter: r });
+  expect(code).toBe(0);
+  expect(r.counts().skipped).toBe(1);
+  expect(r.counts().failed).toBe(0);
+  expect(lines.join("\n")).toContain(
+    "the file contains comments, which a rewrite would lose — remove them, or add the MCP servers by hand",
+  );
+  expect(readFileSync(join(home, ".gemini/settings.json"), "utf8")).toBe(before);
+});
+
+test("a corrupt settings.json still reports failed, comment or not", () => {
+  const home = mkdtempSync(join(tmpdir(), "wgl-gemini-"));
+  mkdirSync(join(home, ".gemini"), { recursive: true });
+  writeFileSync(join(home, ".gemini/settings.json"), '{ // my note\n  "theme": ');
+  const r = createReporter(() => {}, false);
+  const code = runWriteMcp({ home, harnesses: [geminiHarness()], proxies: [remote], env: {}, reporter: r });
+  expect(code).toBe(1);
+  expect(r.counts().failed).toBe(1);
+});

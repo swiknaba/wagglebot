@@ -4,7 +4,7 @@ import type { BackupSet } from "../backup";
 import { startBackupSet } from "../backup";
 import type { Harness, McpTarget } from "../harness";
 import { MARKERS, removeManagedBlock, renderManagedBlock } from "../managed-block";
-import { mergeManagedSection } from "../managed-json";
+import { hasJsonComments, mergeManagedSection } from "../managed-json";
 import { renderEntry, renderTomlTables } from "../mcp-dialects";
 import { resolvePaths } from "../paths";
 import type { ProxyConfig } from "../registry";
@@ -74,6 +74,16 @@ function writeJsonTarget(deps: {
     return;
   }
   const existing = existsSync(path) ? readFileSync(path, "utf8") : "";
+  // Gemini CLI accepts comments in settings.json. A rewrite prints strict JSON and would drop
+  // them, so the honest outcome is a skip with the reason (F22).
+  if (existing !== "" && hasJsonComments(existing)) {
+    reporter.item(
+      target.path,
+      "skipped",
+      "the file contains comments, which a rewrite would lose — remove them, or add the MCP servers by hand",
+    );
+    return;
+  }
   const result = mergeManagedSection(existing, target.parentKey, entries, previouslyOwned);
   if (!result.changed) {
     reporter.item(target.path, "ok", "already ok");
