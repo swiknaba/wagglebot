@@ -180,8 +180,8 @@ test("a missing yarn keeps the current CLI, warns, and still runs the installers
   const pinMoving = pinMovingExec(root, []);
   const lines: string[] = [];
   const exec: Exec = async (cmd, args, opts) => {
-    // realExec maps a command that does not exist to 127.
-    if (cmd === "yarn") return { code: 127, stdout: "", stderr: "" };
+    // realExec marks a command that does not exist with notFound.
+    if (cmd === "yarn") return { code: 127, stdout: "", stderr: "", notFound: true };
     return pinMoving(cmd, args, opts);
   };
   const r = createReporter((l) => lines.push(l), false);
@@ -202,6 +202,33 @@ test("a missing yarn keeps the current CLI, warns, and still runs the installers
   expect(lines.some((l) => l.includes("== Base template sync =="))).toBe(true);
   expect(r.counts().failed).toBe(0);
   expect(code).toBe(0);
+});
+
+test("a yarn that exits 127 is a failure, not a missing yarn", async () => {
+  const root = scaffoldCompany();
+  const home = mkdtempSync(join(tmpdir(), "wgl-home-"));
+  mkdirSync(join(home, ".claude"), { recursive: true });
+  const pinMoving = pinMovingExec(root, []);
+  const lines: string[] = [];
+  const exec: Exec = async (cmd, args, opts) => {
+    if (cmd === "yarn") return { code: 127, stdout: "", stderr: "error: a lifecycle script is missing" };
+    return pinMoving(cmd, args, opts);
+  };
+  const r = createReporter((l) => lines.push(l), false);
+  const code = await runUpdate({
+    cwd: root,
+    home,
+    exec,
+    ask: async () => "alice",
+    reporter: r,
+    write: (l) => lines.push(l),
+    skillsBin: "/bin/skills",
+    cliVersion: "1.4.2",
+    env: zshEnv,
+  });
+  expect(code).toBe(1);
+  expect(r.counts().failed).toBe(1);
+  expect(lines.some((l) => l.includes("yarn is not installed"))).toBe(false);
 });
 
 test("a pin that did not move this run still reports the stale CLI", async () => {

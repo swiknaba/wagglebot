@@ -54,9 +54,9 @@ export async function runUpdate(deps: {
   if (company.pin !== pinBefore && deps.skipSelfUpdate !== true) {
     const install = await exec("yarn", ["install"], { cwd: root });
     const moved = `wagglebot pin moved ${pinBefore} -> ${company.pin}`;
-    if (install.code === 127) {
-      // realExec maps a command that does not exist to 127. The installers below still run, with
-      // the CLI that is installed now (spec: a missing dependency warns and continues).
+    if (install.notFound === true) {
+      // yarn itself is missing. The installers below still run, with the CLI that is installed
+      // now (spec: a missing dependency warns and continues). A yarn that exits 127 is a failure.
       reporter.item(
         "yarn install",
         "skipped",
