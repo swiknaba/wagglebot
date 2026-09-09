@@ -159,6 +159,23 @@ test("renderTomlTables refuses a key that no dialect declares", () => {
   );
 });
 
+test("needsExpansion sees a ${VAR} inside the endpoint, so a URL credential never lands as a literal", () => {
+  const keyed: ProxyConfig = { ...plainRemote, endpoint: "https://x.example/mcp?key=${API_KEY}" };
+  expect(needsExpansion(keyed)).toBe(true);
+  expect(renderEntry("copilot", keyed).ok).toBe(false);
+  expect(renderEntry("cline", keyed).ok).toBe(false);
+  expect(renderEntry("junie", keyed).ok).toBe(false);
+});
+
+test("a scheme of kind none needs no expansion, whatever its source says", () => {
+  const none: ProxyConfig = {
+    ...plainRemote,
+    auth: { scheme: { kind: "none" }, source: { from: "env", var: "UNUSED" } },
+  };
+  expect(needsExpansion(none)).toBe(false);
+  expect(renderEntry("copilot", none).ok).toBe(true);
+});
+
 test("needsExpansion sees a ${VAR} inside the command or the args", () => {
   expect(needsExpansion({ ...plainStdio, args: ["--token=${SECRET}"] })).toBe(true);
   expect(needsExpansion({ ...plainStdio, command: "${HOME}/bin/mcp" })).toBe(true);

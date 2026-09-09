@@ -38,12 +38,13 @@ const stdioCommand = (p: ProxyConfig): { command: string; args: string[] } =>
 const VAR_IN_TEXT = /\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g;
 
 // Every environment variable name this proxy needs: the credential source, the env map, the
-// command, and the args. One scanner serves the dialects and the writer, so both read the same
-// fields.
+// endpoint, the command, and the args. One scanner serves the dialects and the writer, so both
+// read the same fields. A scheme of kind "none" reads no credential, so its source counts for
+// nothing.
 export function envVarNames(p: ProxyConfig): string[] {
   const names = new Set<string>();
-  if (p.auth?.source.from === "env") names.add(p.auth.source.var);
-  for (const text of [...Object.values(p.env ?? {}), p.command ?? "", ...(p.args ?? [])]) {
+  if (p.auth?.source.from === "env" && p.auth.scheme.kind !== "none") names.add(p.auth.source.var);
+  for (const text of [...Object.values(p.env ?? {}), p.endpoint ?? "", p.command ?? "", ...(p.args ?? [])]) {
     for (const match of text.matchAll(VAR_IN_TEXT)) if (match[1] !== undefined) names.add(match[1]);
   }
   return [...names];
@@ -58,7 +59,7 @@ export function needsExpansion(p: ProxyConfig): boolean {
   if (Object.keys(p.env ?? {}).length > 0) return true;
   if (envVarNames(p).length > 0) return true;
   // A malformed placeholder names no variable, and it still must not reach such a harness.
-  return p.command?.includes("${") === true || (p.args ?? []).some((arg) => arg.includes("${"));
+  return [p.endpoint ?? "", p.command ?? "", ...(p.args ?? [])].some((text) => text.includes("${"));
 }
 
 // Kept for the callers that render only the Claude Code shape. Equals renderEntry("claude", p).entry.

@@ -295,6 +295,11 @@ test("a single-quoted TOML key counts as a conflicting table too", () => {
   expect(readFileSync(join(home, ".codex/config.toml"), "utf8")).not.toContain("# wagglebot:begin");
 });
 
+test("missingEnvVars reports a variable that only the endpoint names", () => {
+  const p: ProxyConfig = { namespace: "k", mode: "remote_http", endpoint: "https://x.example/mcp?key=${API_KEY}" };
+  expect(missingEnvVars([p], {})).toEqual(["API_KEY"]);
+});
+
 test("missingEnvVars reports a variable that only the command or an argument names", () => {
   const p: ProxyConfig = {
     namespace: "local",
