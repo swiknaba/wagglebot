@@ -686,9 +686,11 @@ The sync is **non-destructive** (guards F22):
    `~/.wagglebot/managed.json`, and it only ever rewrites those keys.
    Hook entries are the exception. Each entry the tool writes carries a
    `wagglebot:` marker in its command. Ownership follows the marker,
-   so it survives a lost state file. Content outside the block, and
-   every JSON key it did not write, stays untouched. The same rule
-   covers the MCP config writer and `install-agents`.
+   so it survives a lost state file. A TOML target has comment syntax,
+   so ownership is a `# wagglebot:begin/end` block that holds one table
+   per server. Content outside the block, and every JSON key it did not
+   write, stays untouched. The same rule covers the MCP config writer
+   and `install-agents`.
 2. Merge hook fragments per entry. Never replace a `hooks` key that
    contains entries this tool did not write.
 3. Back up each target file before the first mutation, under
