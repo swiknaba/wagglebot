@@ -34,10 +34,11 @@ const outsideBlock = (text: string): string => {
   return text.slice(0, begin) + text.slice(end + TOML_BLOCK_END.length);
 };
 
-// True when the text declares [<table>.<namespace>] itself, with a bare or a quoted key.
+// True when the text declares [<table>.<namespace>] itself. TOML accepts a bare key, a
+// double-quoted key, and a single-quoted key, so all three count as a conflict.
 const definesTable = (text: string, table: string, namespace: string): boolean => {
   const key = escapeRegExp(namespace);
-  return new RegExp(`^\\s*\\[${escapeRegExp(table)}\\.(?:${key}|"${key}")\\]`, "m").test(text);
+  return new RegExp(`^\\s*\\[${escapeRegExp(table)}\\.(?:${key}|"${key}"|'${key}')\\]`, "m").test(text);
 };
 
 // Every ${VAR} the written config will expand. Missing ones are reported, never guessed.

@@ -282,3 +282,15 @@ test("a corrupt settings.json still reports failed, comment or not", () => {
   expect(code).toBe(1);
   expect(r.counts().failed).toBe(1);
 });
+
+test("a single-quoted TOML key counts as a conflicting table too", () => {
+  const home = mkdtempSync(join(tmpdir(), "wgl-toml-"));
+  const codex = codexHarness();
+  mkdirSync(join(home, ".codex"), { recursive: true });
+  writeFileSync(join(home, ".codex/config.toml"), "[mcp_servers.'example']\nurl = \"https://mine/mcp\"\n");
+  const r = createReporter(() => {}, false);
+  const code = runWriteMcp({ home, harnesses: [codex], proxies: [remote], env: {}, reporter: r });
+  expect(code).toBe(1);
+  expect(r.counts().failed).toBe(1);
+  expect(readFileSync(join(home, ".codex/config.toml"), "utf8")).not.toContain("# wagglebot:begin");
+});
