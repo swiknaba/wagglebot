@@ -100,3 +100,12 @@ test("a ref that starts with a dash is rejected, so it never reaches git as an o
   expect(() => parseList("acme/tools@--upload-pack=evil\n")).toThrow(/must not start with "-"/);
   expect(() => parseList("https://git.acme.local/x/y.git -b\n")).toThrow(/must not start with "-"/);
 });
+
+test("a dot segment in a URL never matches an organization prefix", () => {
+  expect(insideOrganization(one("https://github.com/acme/../evil/x.git"), ["github.com/acme"])).toBe(false);
+  expect(insideOrganization(one("https://github.com/acme/./x.git"), ["github.com/acme"])).toBe(false);
+});
+
+test("a repository that starts with a dash is malformed", () => {
+  expect(() => parseList("-x/tools@v1\n")).toThrow(/malformed/);
+});

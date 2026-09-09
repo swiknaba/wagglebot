@@ -23,6 +23,8 @@ export function hostPath(entry: ListEntry): string {
 // The comparison ignores case, because a host and a GitHub owner name are both case-insensitive.
 export const insideOrganization = (entry: ListEntry, organization: string[]): boolean => {
   const hp = hostPath(entry).toLowerCase();
+  // A "." or ".." segment lets git resolve a different owner than the prefix names.
+  if (hp.split("/").some((segment) => segment === "." || segment === "..")) return false;
   return organization
     .map((prefix) => prefix.replace(/\/+$/, "").toLowerCase())
     .some((prefix) => hp === prefix || hp.startsWith(`${prefix}/`));
@@ -50,7 +52,7 @@ export function parseList(text: string, options: ListOptions = {}): { entries: L
       const at = raw.indexOf("@");
       const repo = at === -1 ? raw : raw.slice(0, at);
       const ref = at === -1 ? undefined : raw.slice(at + 1);
-      if (!/^[\w.-]+\/[\w.-]+$/.test(repo) || ref === "") {
+      if (!/^[\w.-]+\/[\w.-]+$/.test(repo) || ref === "" || repo.startsWith("-")) {
         throw new Error(`list entry is malformed: "${raw}" — expected owner/repo[@ref] or a full git URL`);
       }
       rejectOptionLikeRef(raw, ref);
