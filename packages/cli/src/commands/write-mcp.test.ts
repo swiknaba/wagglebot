@@ -210,3 +210,39 @@ test("a harness that can write no entry says so, instead of blaming the registry
   );
   expect(lines.join("\n")).not.toContain("no MCP servers in the registry");
 });
+
+test("a JSON dialect that expands no ${VAR} skips the credentialed proxy and writes the rest", () => {
+  const home = mkdtempSync(join(tmpdir(), "wgl-copilot-"));
+  const copilot = HARNESSES.find((h) => h.name === "copilot");
+  if (copilot?.mcpTarget === undefined) throw new Error("fixture");
+  const plain: ProxyConfig = { namespace: "docs", mode: "remote_http", endpoint: "https://docs.example/mcp" };
+  const lines: string[] = [];
+  const r = createReporter((l) => lines.push(l), false);
+  runWriteMcp({ home, harnesses: [copilot], proxies: [remote, plain], env: {}, reporter: r });
+  const text = readFileSync(join(home, ".copilot/mcp-config.json"), "utf8");
+  const doc: { mcpServers: Record<string, unknown> } = JSON.parse(text);
+  expect(doc.mcpServers.example).toBeUndefined();
+  expect(doc.mcpServers.docs).toEqual({ type: "http", url: "https://docs.example/mcp", tools: ["*"] });
+  expect(text).not.toContain("EXAMPLE_TOKEN");
+  expect(lines.join("\n")).toContain("example (copilot)");
+  expect(lines.join("\n")).toContain("does not expand");
+});
+
+test("a JSON target that can write no entry says so too", () => {
+  const home = mkdtempSync(join(tmpdir(), "wgl-copilot-"));
+  const copilot = HARNESSES.find((h) => h.name === "copilot");
+  if (copilot?.mcpTarget === undefined) throw new Error("fixture");
+  const lines: string[] = [];
+  runWriteMcp({
+    home,
+    harnesses: [copilot],
+    proxies: [remote],
+    env: {},
+    reporter: createReporter((l) => lines.push(l), false),
+  });
+  expect(existsSync(join(home, ".copilot/mcp-config.json"))).toBe(false);
+  expect(lines.join("\n")).toContain(
+    "no MCP server can be written for this harness — every entry was skipped above — file not created",
+  );
+  expect(lines.join("\n")).not.toContain("no MCP servers in the registry");
+});

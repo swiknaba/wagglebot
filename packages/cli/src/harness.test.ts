@@ -55,4 +55,10 @@ test("every MCP target is home-relative and names its dialect", () => {
     parentKey: "mcpServers",
     dialect: "gemini",
   });
+  expect(HARNESSES.find((h) => h.name === "copilot")?.mcpTarget).toEqual({
+    format: "json",
+    path: ".copilot/mcp-config.json",
+    parentKey: "mcpServers",
+    dialect: "copilot",
+  });
 });

@@ -186,3 +186,27 @@ test("gemini skips a server name that carries an underscore", () => {
     "Gemini CLI mis-parses a server name with an underscore — rename the registry entry",
   );
 });
+
+test("copilot writes tools: [*] and skips a proxy that needs a ${VAR}", () => {
+  expect(entryOf(renderEntry("copilot", plainRemote))).toEqual({
+    type: "http",
+    url: "https://plain.example/mcp",
+    tools: ["*"],
+  });
+  expect(entryOf(renderEntry("copilot", { ...plainRemote, mode: "remote_sse" }))).toEqual({
+    type: "sse",
+    url: "https://plain.example/mcp",
+    tools: ["*"],
+  });
+  expect(entryOf(renderEntry("copilot", plainStdio))).toEqual({
+    type: "local",
+    command: "my-mcp",
+    args: ["--x"],
+    tools: ["*"],
+  });
+  const reason =
+    "GitHub Copilot CLI does not expand ${VAR} in mcp-config.json — the credential would land as a literal, so the entry is left out";
+  expect(reasonOf(renderEntry("copilot", remote))).toBe(reason);
+  expect(reasonOf(renderEntry("copilot", sse))).toBe(reason);
+  expect(reasonOf(renderEntry("copilot", stdioNpx))).toBe(reason);
+});

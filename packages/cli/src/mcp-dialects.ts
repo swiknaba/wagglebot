@@ -122,9 +122,26 @@ function geminiEntry(p: ProxyConfig): Rendered {
   return { ok: true, entry: { ...stdioCommand(p), ...(Object.keys(env).length === 0 ? {} : { env }) } };
 }
 
+// GitHub Copilot CLI documents no ${VAR} expansion, so a credentialed proxy is left out instead
+// of written as a literal. Every entry carries the documented tools: ["*"].
+function copilotEntry(p: ProxyConfig): Rendered {
+  if (needsExpansion(p)) {
+    return {
+      ok: false,
+      reason:
+        "GitHub Copilot CLI does not expand ${VAR} in mcp-config.json — the credential would land as a literal, so the entry is left out",
+    };
+  }
+  const tools = ["*"];
+  if (p.mode === "remote_http") return { ok: true, entry: { type: "http", url: p.endpoint, tools } };
+  if (p.mode === "remote_sse") return { ok: true, entry: { type: "sse", url: p.endpoint, tools } };
+  return { ok: true, entry: { type: "local", ...stdioCommand(p), tools } };
+}
+
 export function renderEntry(dialect: McpDialect, p: ProxyConfig): Rendered {
   if (dialect === "codex") return codexEntry(p);
   if (dialect === "gemini") return geminiEntry(p);
+  if (dialect === "copilot") return copilotEntry(p);
   return { ok: true, entry: proxyToClaudeEntry(p) };
 }
 

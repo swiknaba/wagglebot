@@ -26,7 +26,7 @@ export type Harness = {
 
 // Which field names and which transport keys one harness expects inside its MCP config.
 // docs/harnesses.md holds the vendor table and the source of each path.
-export type McpDialect = "claude" | "codex" | "gemini";
+export type McpDialect = "claude" | "codex" | "gemini" | "copilot";
 export type McpTarget =
   // A JSON file. Ownership is per child key under parentKey, recorded in ~/.wagglebot/managed.json.
   | { format: "json"; path: string; parentKey: string; dialect: McpDialect }
@@ -106,6 +106,10 @@ export const HARNESSES: Harness[] = [
     detectDir: ".copilot",
     skillsAgent: "github-copilot",
     templateTargets: [".copilot/copilot-instructions.md"],
+    // https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-mcp-servers —
+    // no documented ${VAR} expansion, so a credentialed entry is skipped. Every entry carries
+    // the documented tools: ["*"].
+    mcpTarget: { format: "json", path: ".copilot/mcp-config.json", parentKey: "mcpServers", dialect: "copilot" },
     projectTarget: { path: ".github/copilot-instructions.md", mode: "block" },
   },
 ];

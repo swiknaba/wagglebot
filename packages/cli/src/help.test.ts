@@ -19,6 +19,7 @@ test("command help names what the command reads and writes", () => {
   expect(mcp).toContain("~/.claude.json");
   expect(mcp).toContain("~/.codex/config.toml");
   expect(mcp).toContain("~/.gemini/settings.json");
+  expect(mcp).toContain("~/.copilot/mcp-config.json");
   const shell = helpText("sync-shell");
   expect(shell).toContain("~/.zshenv");
   expect(shell).toContain(".env.credentials");
