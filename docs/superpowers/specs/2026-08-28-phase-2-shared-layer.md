@@ -223,7 +223,7 @@ fifteen engineers total.
 | Layer | Count | Holds |
 |---|---|---|
 | Local hub | 15, one per engineer | That engineer credentials |
-| Shared layer | **1**, not one per team | The registry, memory, and (Phase 2) coordination |
+| Shared layer | **1**, not one per team | The registry, memory, and (Phase 3) coordination |
 
 Deploy one shared layer, not five. Scoping already separates the teams.
 Memory scopes by catalog level.
