@@ -9,7 +9,7 @@ const RENAMES: Record<string, string> = {
   nvmrc: ".nvmrc",
   "env.credentials.example": ".env.credentials.example",
 };
-const SUBSTITUTED = new Set(["package.json", "README.md"]);
+const SUBSTITUTED = new Set(["package.json", "README.md", "company/skills.list"]);
 
 export function runInit(deps: { targetDir: string; version: string; reporter: Reporter }): number {
   const { targetDir, reporter } = deps;
