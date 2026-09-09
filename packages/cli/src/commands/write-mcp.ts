@@ -80,19 +80,20 @@ function writeJsonTarget(deps: {
     return;
   }
   const result = mergeManagedSection(existing, target.parentKey, entries, previouslyOwned);
-  if (!result.changed) {
-    reporter.item(target.path, "ok", "already ok");
-    return;
-  }
-  deps.backups.backup(path);
-  mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, result.next);
+  const written = commitTarget({
+    path,
+    label: target.path,
+    result,
+    detail: `${result.ownedNow.length} managed entries`,
+    reporter,
+    backups: deps.backups,
+  });
+  if (!written) return;
   state.jsonKeys[path] = [
     ...(state.jsonKeys[path] ?? []).filter((k) => !k.startsWith(prefix)),
     ...result.ownedNow.map((k) => `${prefix}${k}`),
   ];
   saveState(deps.managedFile, state);
-  reporter.item(target.path, "updated", `${result.ownedNow.length} managed entries`);
 }
 
 // The TOML target keeps the servers of the engineer. A namespace the file already declares
@@ -119,22 +120,45 @@ function writeTomlTarget(deps: {
     return false;
   });
   if (kept.length === 0 && !existing.includes(TOML_BLOCK_BEGIN)) {
-    reporter.item(target.path, "skipped", deps.emptyReason);
+    // A conflict already produced its failed line. Only an entry that no dialect rendered needs
+    // the extra explanation.
+    if (deps.rendered.length === 0) reporter.item(target.path, "skipped", deps.emptyReason);
     return;
   }
   const result =
     kept.length === 0
       ? removeManagedBlock(existing, "hash")
       : renderManagedBlock(existing, renderTomlTables(target.table, kept), "hash");
-  if (!result.changed) {
-    reporter.item(target.path, "ok", "already ok");
-    return;
-  }
   // No chmod: the file belongs to the harness, and the block carries no secret.
-  deps.backups.backup(path);
-  mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, result.next);
-  reporter.item(target.path, "updated", `${kept.length} managed entries`);
+  commitTarget({
+    path,
+    label: target.path,
+    result,
+    detail: `${kept.length} managed entries`,
+    reporter,
+    backups: deps.backups,
+  });
+}
+
+// Writes one target when its content changed, after a backup, and reports the outcome. Returns
+// true when the file was written.
+function commitTarget(deps: {
+  path: string;
+  label: string;
+  result: { next: string; changed: boolean };
+  detail: string;
+  reporter: Reporter;
+  backups: BackupSet;
+}): boolean {
+  if (!deps.result.changed) {
+    deps.reporter.item(deps.label, "ok", "already ok");
+    return false;
+  }
+  deps.backups.backup(deps.path);
+  mkdirSync(dirname(deps.path), { recursive: true });
+  writeFileSync(deps.path, deps.result.next);
+  deps.reporter.item(deps.label, "updated", deps.detail);
+  return true;
 }
 
 export function runWriteMcp(deps: {

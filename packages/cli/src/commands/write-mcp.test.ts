@@ -309,3 +309,20 @@ test("missingEnvVars reports a variable that only the command or an argument nam
   };
   expect(missingEnvVars([p], { TOOL_HOME: "/opt/tool" })).toEqual(["LOCAL_TOKEN"]);
 });
+
+test("a namespace that only conflicts prints its failed line and no extra skipped line", () => {
+  const home = mkdtempSync(join(tmpdir(), "wgl-toml-"));
+  const codex = codexHarness();
+  mkdirSync(join(home, ".codex"), { recursive: true });
+  writeFileSync(join(home, ".codex/config.toml"), '[mcp_servers.example]\nurl = "https://mine/mcp"\n');
+  const lines: string[] = [];
+  runWriteMcp({
+    home,
+    harnesses: [codex],
+    proxies: [remote],
+    env: {},
+    reporter: createReporter((l) => lines.push(l), false),
+  });
+  expect(lines.filter((l) => l.includes("already defined outside the wagglebot block")).length).toBe(1);
+  expect(lines.some((l) => l.includes("every entry was skipped above"))).toBe(false);
+});
