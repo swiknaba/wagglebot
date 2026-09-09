@@ -37,7 +37,9 @@ export function nodeSatisfies(version: string, floor: string): boolean {
   return true;
 }
 
-const isSha = (ref: string | undefined): boolean => ref !== undefined && /^[0-9a-f]{40}$/i.test(ref);
+// Seven to forty hex characters is a commit hash, short or full. The skills CLI checks out a tag
+// or a branch only.
+const isSha = (ref: string | undefined): boolean => ref !== undefined && /^[0-9a-f]{7,40}$/i.test(ref);
 const sameAgents = (a: string[] | undefined, b: string[]): boolean => JSON.stringify(a ?? null) === JSON.stringify(b);
 
 // Highest tag by numeric comparison of "v1.2.3"-like names. Non-numeric tags sort last.

@@ -391,3 +391,21 @@ test("--update bumps a version tag, keeps a branch pin, and rewrites only the en
   expect(r.counts().updated).toBe(1);
   expect(r.counts().skipped).toBe(1);
 });
+
+test("rejects a short commit hash as a pin before it reaches the skills CLI", async () => {
+  const calls: string[][] = [];
+  const r = createReporter(() => {}, false);
+  const code = await runInstallSkills({
+    lists: [{ path: "l", text: "acme/skills@1a2b3c4\n" }],
+    exec: fakeExec(calls),
+    reporter: r,
+    skillsBin: "/fake/skills",
+    skillsAgents: ["claude-code"],
+    managedFile: managed(),
+    skillLockFile: NO_LOCK,
+    nodeVersion: NODE,
+  });
+  expect(code).toBe(1);
+  expect(r.counts().failed).toBe(1);
+  expect(calls.some((c) => c.includes("add"))).toBe(false);
+});
