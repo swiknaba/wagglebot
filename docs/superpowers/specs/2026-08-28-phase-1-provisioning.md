@@ -407,10 +407,12 @@ trade.
 ## Agent Base Template + Distribution
 
 `AGENTS.base.md` ships inside the wagglebot package (D35) as the
-**shared agent base template**. It contains harness-independent instructions plus an
-wagglebot connection block. The connection block covers three topics:
-how to reach the hub, the propose-not-write memory rule, and
-coordination etiquette. Teams append company instructions from the
+**shared agent base template**. It contains harness-independent
+instructions plus a wagglebot connection block. In Phase 1 the block
+carries the memory rule. Component memory is a local file. A fact
+that crosses a repository waits for the shared store. How to reach the
+hub arrives with Phase 2, and coordination etiquette with Phase 3.
+Teams append company instructions from the
 company repository. Composition is plain concatenation:
 `AGENTS.base.md` + `instructions/*.md` → the rendered template. YAGNI: no
 templating engine. The base is never edited in place: a company
@@ -675,9 +677,11 @@ The sync is **non-destructive** (guards F22):
    targets have no comment syntax, so ownership is per entry: the tool
    records every key it wrote in a local state file,
    `~/.wagglebot/managed.json`, and it only ever rewrites those keys.
-   Content outside the block, and every JSON key it did not write,
-   stays untouched. The same rule covers the MCP config writer and
-   `install-agents`.
+   Hook entries are the exception. Each entry the tool writes carries a
+   `wagglebot:` marker in its command. Ownership follows the marker,
+   so it survives a lost state file. Content outside the block, and
+   every JSON key it did not write, stays untouched. The same rule
+   covers the MCP config writer and `install-agents`.
 2. Merge hook fragments per entry. Never replace a `hooks` key that
    contains entries this tool did not write.
 3. Back up each target file before the first mutation, under
