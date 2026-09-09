@@ -21,6 +21,7 @@ export function runSyncAgents(deps: {
   reporter: Reporter;
   options?: SyncOptions;
   backups?: BackupSet;
+  fragmentsDir?: string;
 }): number {
   const { home, reporter } = deps;
   const options = deps.options ?? {};
@@ -71,15 +72,18 @@ export function runSyncAgents(deps: {
     }
   };
 
+  const fragmentsDir = deps.fragmentsDir ?? join(templatesDir(), "hooks");
+  const readFragment = (file: string): { hooks: Record<string, unknown[]> } =>
+    JSON.parse(readFileSync(join(fragmentsDir, file), "utf8"));
+
   for (const harness of deps.harnesses) {
     for (const relative of harness.templateTargets) {
       writeTarget(relative, (existing) => renderManagedBlock(existing, rendered), 0o600);
     }
     const hooksTarget = harness.hooksTarget;
     if (hooksTarget !== undefined) {
-      const fragmentText = readFileSync(join(templatesDir(), "hooks", hooksTarget.fragmentFile), "utf8");
-      const fragment: { hooks: Record<string, unknown[]> } = JSON.parse(fragmentText);
-      writeTarget(hooksTarget.path, (existing) => mergeHooks(existing, fragment));
+      // The fragment is read inside the try of writeTarget: a bad fragment fails this item only.
+      writeTarget(hooksTarget.path, (existing) => mergeHooks(existing, readFragment(hooksTarget.fragmentFile)));
     }
   }
   return reporter.failed() ? 1 : 0;

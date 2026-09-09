@@ -85,3 +85,20 @@ test("writes only the selected harnesses and appends team instructions after com
   const text = readFileSync(join(home, ".codex/AGENTS.md"), "utf8");
   expect(text.indexOf("## Company")).toBeLessThan(text.indexOf("## Team"));
 });
+
+test("a corrupt hook fragment fails the hooks item only, and the template targets still sync", () => {
+  const { home, instructionsDir } = setup();
+  const fragmentsDir = mkdtempSync(join(tmpdir(), "wgl-frag-"));
+  writeFileSync(join(fragmentsDir, "claude-code.json"), "{ not json");
+  const r = createReporter(() => {}, false);
+  const code = runSyncAgents({
+    home,
+    harnesses: HARNESSES,
+    instructionDirs: [instructionsDir],
+    reporter: r,
+    fragmentsDir,
+  });
+  expect(code).toBe(1);
+  expect(r.counts().failed).toBe(1);
+  expect(existsSync(join(home, ".claude/CLAUDE.md"))).toBe(true);
+});
