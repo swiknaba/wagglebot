@@ -27,3 +27,25 @@ export function parseList(text: string): { entries: ListEntry[]; warnings: strin
     });
   return { entries, warnings };
 }
+
+// A pin that names a release: "v1.2.3" or "1.2". A branch or a commit never matches.
+export const VERSION_TAG = /^v?\d+(\.\d+)*$/;
+
+// Rewrites the one list line whose entry text equals `raw`, and keeps everything else on that
+// line: indentation and a trailing comment. A comment that mentions the same text, and any
+// second identical line, stay untouched.
+export function replaceListLine(text: string, raw: string, next: string): string {
+  let done = false;
+  return text
+    .split("\n")
+    .map((line) => {
+      if (done) return line;
+      const hash = line.indexOf("#");
+      const code = hash === -1 ? line : line.slice(0, hash);
+      if (code.trim() !== raw) return line;
+      done = true;
+      const start = code.indexOf(raw);
+      return `${line.slice(0, start)}${next}${line.slice(start + raw.length)}`;
+    })
+    .join("\n");
+}

@@ -349,3 +349,45 @@ test("removes every skill of a source that no list names any more", async () => 
   expect(Object.keys(JSON.parse(readFileSync(lock, "utf8")).skills)).toEqual(["alpha"]);
   expect(loadState(file).skills).toEqual({ "a/b@v1": ["claude-code"] });
 });
+
+test("--update bumps a version tag, keeps a branch pin, and rewrites only the entry line", async () => {
+  const written: Record<string, string> = {};
+  const exec: Exec = async (cmd, args) => {
+    if (cmd === "git" && args[0] === "ls-remote") {
+      return { code: 0, stdout: "abc\trefs/tags/v6.3.0\ndef\trefs/tags/v6.4.0\n", stderr: "" };
+    }
+    return { code: 0, stdout: "", stderr: "" };
+  };
+  const text = [
+    "# obra/superpowers@v6.3.0 was chosen because it is stable",
+    "obra/superpowers@v6.3.0   # keep this comment",
+    "ayghri/i-have-adhd@main",
+    "",
+  ].join("\n");
+  const r = createReporter(() => {}, false);
+  const code = await runInstallSkills({
+    lists: [{ path: "company/skills.list", text }],
+    exec,
+    reporter: r,
+    skillsBin: "/fake/skills",
+    skillsAgents: ["claude-code"],
+    managedFile: managed(),
+    skillLockFile: NO_LOCK,
+    nodeVersion: NODE,
+    update: true,
+    writeList: (path, next) => {
+      written[path] = next;
+    },
+  });
+  expect(code).toBe(0);
+  expect(written["company/skills.list"]).toBe(
+    [
+      "# obra/superpowers@v6.3.0 was chosen because it is stable",
+      "obra/superpowers@v6.4.0   # keep this comment",
+      "ayghri/i-have-adhd@main",
+      "",
+    ].join("\n"),
+  );
+  expect(r.counts().updated).toBe(1);
+  expect(r.counts().skipped).toBe(1);
+});

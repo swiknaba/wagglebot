@@ -1,7 +1,7 @@
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import type { Exec } from "../exec";
-import { type ListEntry, parseList } from "../lists";
+import { type ListEntry, parseList, replaceListLine, VERSION_TAG } from "../lists";
 import type { Reporter } from "../report";
 import { loadSkillLock, skillsOfSource, staleSkills } from "../skill-lock";
 import { loadState, saveState } from "../state";
@@ -45,7 +45,7 @@ const highestTag = (lsRemote: string): string | undefined =>
   lsRemote
     .split("\n")
     .map((line) => line.split("refs/tags/")[1])
-    .filter((t): t is string => t !== undefined && t !== "" && /^v?\d+(\.\d+)*$/.test(t))
+    .filter((t): t is string => t !== undefined && t !== "" && VERSION_TAG.test(t))
     .sort((x, y) => {
       const a = parts(x);
       const b = parts(y);
@@ -77,6 +77,10 @@ export async function runInstallSkills(deps: {
     for (const l of parsed) {
       let text = l.text;
       for (const entry of l.entries.filter((e) => e.ref !== undefined)) {
+        if (!VERSION_TAG.test(entry.ref ?? "")) {
+          reporter.item(entry.repo, "skipped", `pin "${entry.ref}" is a branch or a commit, not a version tag — kept`);
+          continue;
+        }
         const url = entry.isUrl === true ? entry.repo : `https://github.com/${entry.repo}.git`;
         const remote = await exec("git", ["ls-remote", "--tags", "--refs", url]);
         const tag = remote.code === 0 ? highestTag(remote.stdout) : undefined;
@@ -89,7 +93,7 @@ export async function runInstallSkills(deps: {
           continue;
         }
         const next = entry.isUrl === true ? `${entry.repo} ${tag}` : `${entry.repo}@${tag}`;
-        text = text.replace(entry.raw, next);
+        text = replaceListLine(text, entry.raw, next);
         reporter.item(entry.repo, "updated", `pin ${entry.ref} -> ${tag}`);
       }
       if (text !== l.text) deps.writeList?.(l.path, text);
