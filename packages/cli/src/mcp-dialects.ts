@@ -142,14 +142,19 @@ function geminiEntry(p: ProxyConfig): Rendered {
 
 // GitHub Copilot CLI documents no ${VAR} expansion, so a credentialed proxy is left out instead
 // of written as a literal. Every entry carries the documented tools: ["*"].
+// The skip every harness without ${VAR} expansion reports for a proxy that needs one. The vendor
+// name and the file name make the line specific, so the three reasons stay distinct.
+const noExpansion = (vendor: string, file: string, p: ProxyConfig): Rendered | undefined =>
+  needsExpansion(p)
+    ? {
+        ok: false,
+        reason: `${vendor} does not expand \${VAR} in ${file} — the credential would land as a literal, so the entry is left out`,
+      }
+    : undefined;
+
 function copilotEntry(p: ProxyConfig): Rendered {
-  if (needsExpansion(p)) {
-    return {
-      ok: false,
-      reason:
-        "GitHub Copilot CLI does not expand ${VAR} in mcp-config.json — the credential would land as a literal, so the entry is left out",
-    };
-  }
+  const skip = noExpansion("GitHub Copilot CLI", "mcp-config.json", p);
+  if (skip !== undefined) return skip;
   const tools = ["*"];
   if (p.mode === "remote_http") return { ok: true, entry: { type: "http", url: p.endpoint, tools } };
   if (p.mode === "remote_sse") return { ok: true, entry: { type: "sse", url: p.endpoint, tools } };
@@ -159,13 +164,8 @@ function copilotEntry(p: ProxyConfig): Rendered {
 // Cline documents no ${VAR} expansion either, and it names the streamable HTTP transport
 // "streamableHttp".
 function clineEntry(p: ProxyConfig): Rendered {
-  if (needsExpansion(p)) {
-    return {
-      ok: false,
-      reason:
-        "Cline does not expand ${VAR} in cline_mcp_settings.json — the credential would land as a literal, so the entry is left out",
-    };
-  }
+  const skip = noExpansion("Cline", "cline_mcp_settings.json", p);
+  if (skip !== undefined) return skip;
   if (p.mode === "remote_http") return { ok: true, entry: { type: "streamableHttp", url: p.endpoint } };
   if (p.mode === "remote_sse") return { ok: true, entry: { type: "sse", url: p.endpoint } };
   return { ok: true, entry: stdioCommand(p) };
@@ -174,14 +174,10 @@ function clineEntry(p: ProxyConfig): Rendered {
 // Junie documents no ${VAR} expansion and no SSE transport. Its remote entry carries the url
 // alone, with no type field.
 function junieEntry(p: ProxyConfig): Rendered {
-  if (needsExpansion(p)) {
-    return {
-      ok: false,
-      reason:
-        "Junie does not expand ${VAR} in mcp.json — the credential would land as a literal, so the entry is left out",
-    };
-  }
+  // The missing transport is the blocker nothing in the registry can fix, so it is named first.
   if (p.mode === "remote_sse") return { ok: false, reason: "Junie documents no SSE transport" };
+  const skip = noExpansion("Junie", "mcp.json", p);
+  if (skip !== undefined) return skip;
   if (p.mode === "remote_http") return { ok: true, entry: { url: p.endpoint } };
   return { ok: true, entry: stdioCommand(p) };
 }

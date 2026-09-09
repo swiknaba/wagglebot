@@ -255,3 +255,9 @@ test("junie writes a bare url, and skips sse and a proxy that needs a ${VAR}", (
   expect(reasonOf(renderEntry("junie", remote))).toBe(reason);
   expect(reasonOf(renderEntry("junie", stdioNpx))).toBe(reason);
 });
+
+test("Junie names the missing SSE transport before the expansion gap", () => {
+  const rendered = renderEntry("junie", sse);
+  expect(rendered.ok).toBe(false);
+  if (!rendered.ok) expect(rendered.reason).toBe("Junie documents no SSE transport");
+});
