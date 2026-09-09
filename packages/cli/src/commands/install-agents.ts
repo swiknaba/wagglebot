@@ -27,7 +27,7 @@ export function resolveSource(entry: ListEntry): AgentSource {
   return { cloneUrl: entry.repo, ref: entry.ref, id: segments.join("__") };
 }
 
-// The Markdown subagents of one directory, sorted. A README documents the directory; it is not an agent.
+// The Markdown subagents of one directory, sorted. A README documents the directory. It is not an agent.
 const subagentFiles = (dir: string): string[] =>
   readdirSync(dir)
     .filter((f) => f.endsWith(".md"))
