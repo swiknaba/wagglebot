@@ -9,6 +9,8 @@
     "url": "git+https://github.com/swiknaba/wagglebot.git"
   },
   "homepage": "https://github.com/swiknaba/wagglebot#readme",
+  "bugs": "https://github.com/swiknaba/wagglebot/issues",
+  "author": "Lud <lud@reinmiedl.com> (https://github.com/swiknaba)",
   "bin": {
     "wagglebot": "bin/wagglebot.js"
   },
@@ -22,7 +24,8 @@
     "node": ">=22.20.0"
   },
   "scripts": {
-    "build": "bun build src/index.ts --target=node --outdir dist"
+    "build": "bun build src/index.ts --target=node --outdir dist",
+    "test": "bun test"
   },
   "dependencies": {
     "skills": "1.5.23"
