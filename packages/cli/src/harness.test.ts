@@ -61,4 +61,11 @@ test("every MCP target is home-relative and names its dialect", () => {
     parentKey: "mcpServers",
     dialect: "copilot",
   });
+  // The Cline code reads data/settings/, not the ~/.cline/mcp.json the public docs name.
+  expect(HARNESSES.find((h) => h.name === "cline")?.mcpTarget).toEqual({
+    format: "json",
+    path: ".cline/data/settings/cline_mcp_settings.json",
+    parentKey: "mcpServers",
+    dialect: "cline",
+  });
 });

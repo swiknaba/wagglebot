@@ -210,3 +210,19 @@ test("copilot writes tools: [*] and skips a proxy that needs a ${VAR}", () => {
   expect(reasonOf(renderEntry("copilot", sse))).toBe(reason);
   expect(reasonOf(renderEntry("copilot", stdioNpx))).toBe(reason);
 });
+
+test("cline names the streamable HTTP transport and skips a proxy that needs a ${VAR}", () => {
+  expect(entryOf(renderEntry("cline", plainRemote))).toEqual({
+    type: "streamableHttp",
+    url: "https://plain.example/mcp",
+  });
+  expect(entryOf(renderEntry("cline", { ...plainRemote, mode: "remote_sse" }))).toEqual({
+    type: "sse",
+    url: "https://plain.example/mcp",
+  });
+  expect(entryOf(renderEntry("cline", plainStdio))).toEqual({ command: "my-mcp", args: ["--x"] });
+  const reason =
+    "Cline does not expand ${VAR} in cline_mcp_settings.json — the credential would land as a literal, so the entry is left out";
+  expect(reasonOf(renderEntry("cline", remote))).toBe(reason);
+  expect(reasonOf(renderEntry("cline", stdioNpx))).toBe(reason);
+});

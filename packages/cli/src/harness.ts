@@ -26,7 +26,7 @@ export type Harness = {
 
 // Which field names and which transport keys one harness expects inside its MCP config.
 // docs/harnesses.md holds the vendor table and the source of each path.
-export type McpDialect = "claude" | "codex" | "gemini" | "copilot";
+export type McpDialect = "claude" | "codex" | "gemini" | "copilot" | "cline";
 export type McpTarget =
   // A JSON file. Ownership is per child key under parentKey, recorded in ~/.wagglebot/managed.json.
   | { format: "json"; path: string; parentKey: string; dialect: McpDialect }
@@ -88,6 +88,16 @@ export const HARNESSES: Harness[] = [
     detectDir: ".cline",
     skillsAgent: "cline",
     templateTargets: [".cline/rules/wagglebot.md"],
+    // https://docs.cline.bot/getting-started/config plus resolveMcpSettingsPath in
+    // sdk/packages/shared/src/storage/paths.ts. The docs also name ~/.cline/mcp.json, which the
+    // code never reads (https://github.com/cline/cline/issues/11671), so wagglebot writes
+    // data/settings/. No documented ${VAR} expansion, so a credentialed entry is skipped.
+    mcpTarget: {
+      format: "json",
+      path: ".cline/data/settings/cline_mcp_settings.json",
+      parentKey: "mcpServers",
+      dialect: "cline",
+    },
     projectTarget: { path: "AGENTS.md", mode: "block" },
   },
   {

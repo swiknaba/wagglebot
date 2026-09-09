@@ -138,10 +138,26 @@ function copilotEntry(p: ProxyConfig): Rendered {
   return { ok: true, entry: { type: "local", ...stdioCommand(p), tools } };
 }
 
+// Cline documents no ${VAR} expansion either, and it names the streamable HTTP transport
+// "streamableHttp".
+function clineEntry(p: ProxyConfig): Rendered {
+  if (needsExpansion(p)) {
+    return {
+      ok: false,
+      reason:
+        "Cline does not expand ${VAR} in cline_mcp_settings.json — the credential would land as a literal, so the entry is left out",
+    };
+  }
+  if (p.mode === "remote_http") return { ok: true, entry: { type: "streamableHttp", url: p.endpoint } };
+  if (p.mode === "remote_sse") return { ok: true, entry: { type: "sse", url: p.endpoint } };
+  return { ok: true, entry: stdioCommand(p) };
+}
+
 export function renderEntry(dialect: McpDialect, p: ProxyConfig): Rendered {
   if (dialect === "codex") return codexEntry(p);
   if (dialect === "gemini") return geminiEntry(p);
   if (dialect === "copilot") return copilotEntry(p);
+  if (dialect === "cline") return clineEntry(p);
   return { ok: true, entry: proxyToClaudeEntry(p) };
 }
 
