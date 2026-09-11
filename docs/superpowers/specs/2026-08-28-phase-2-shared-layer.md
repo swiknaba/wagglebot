@@ -1,5 +1,16 @@
 # Phase 2 — The Shared Layer
 
+> **Historical baseline:** This document preserves the original Phase 2
+> boundaries and security decisions. For implementation, the approved
+> [Phase 2 Memory Roadmap](2026-09-11-phase-2-memory-roadmap.md) and
+> [Shared Memory Foundation Design](2026-09-11-shared-memory-foundation-design.md)
+> replace Chroma with MemPalace 3.9.0 backed by PostgreSQL/pgvector. The
+> [Phase 1 provisioning spec](2026-08-28-phase-1-provisioning.md) replaces the
+> flat registry filenames with `company/registry.yaml` and
+> `teams/<team>/registry.yaml`. The [API reference](../../api-reference.md)
+> replaces the schematic endpoint names. Retain the behavioral requirements in
+> this document unless one of those newer authorities explicitly supersedes it.
+
 > Companion to the [wagglebot design spec](2026-08-28-wagglebot-design.md).
 > Phase 2 deploys one shared server for the team: the memory worker
 > with Chroma, the SSH auth (D26), registry serving, and the MCP hub as
@@ -408,4 +419,3 @@ Wagglebot does not build it. Choose the second deployment instead.
 13. **Scope isolation.** Team A publishes a fact through
     `.wagglebot/public.md`. Team B finds it in a memory search. Team B
     never finds a working-memory record of Team A.
-
