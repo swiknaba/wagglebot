@@ -1,5 +1,15 @@
 # Wagglebot Design Spec
 
+> **Phase 2 authority note (2026-09-12):** This document remains the source of
+> the D-numbered architectural decisions. The approved
+> [Phase 2 Memory Roadmap](2026-09-11-phase-2-memory-roadmap.md) replaces Chroma
+> with MemPalace 3.9.0 backed by PostgreSQL/pgvector. The
+> [Phase 1 provisioning spec](2026-08-28-phase-1-provisioning.md) defines the
+> current `company/` and `teams/<team>/` repository layout, and
+> [the API reference](../../api-reference.md) defines the authoritative
+> versioned Phase 2 wire contracts. Historical Chroma, flat-registry, and
+> unversioned endpoint examples below are not implementation instructions.
+
 > **Related specs:**
 > - [Service contracts](2026-08-28-service-contracts.md) — behavior
 >   contracts for the hub and the memory worker. The pitfall register
@@ -330,9 +340,9 @@ never a floating `bunx wagglebot init`.
 
 ## Before Implementation
 
-One document is still missing, and it gates the Phase 2 code:
-`api-reference.md`. It must give, for every HTTP endpoint and every MCP
-tool:
+The Phase 2 gate is the authoritative [API reference](../../api-reference.md).
+Before implementation begins, it must give, for every HTTP endpoint and every
+MCP tool:
 
 * The request and response shape, versioned.
 * The error codes, the size limits, and the rate limits.

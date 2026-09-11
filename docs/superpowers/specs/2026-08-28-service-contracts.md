@@ -1,5 +1,16 @@
 # Service Behavior Contracts
 
+> **Phase 2 authority note (2026-09-12):** The security, failure, trust, and
+> lifecycle behaviors in this document remain requirements. The approved
+> [Phase 2 Memory Roadmap](2026-09-11-phase-2-memory-roadmap.md) and
+> [Shared Memory Foundation Design](2026-09-11-shared-memory-foundation-design.md)
+> replace C3's Chroma implementation with MemPalace 3.9.0 and
+> PostgreSQL/pgvector. The [Phase 1 provisioning spec](2026-08-28-phase-1-provisioning.md)
+> defines the current company/team registry paths, and the
+> [API reference](../../api-reference.md) defines the versioned endpoint and
+> tool schemas. Historical storage names, flat registry filenames, and
+> unversioned routes below are explanatory only.
+
 > Companion to the [wagglebot design spec](2026-08-28-wagglebot-design.md).
 > This document gives the behavior contracts for the framework services.
 > It also gives a register of known design traps (P-numbers). The
