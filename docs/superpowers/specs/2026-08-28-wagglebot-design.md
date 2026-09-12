@@ -77,7 +77,7 @@ and deploy. No team must fork the internals of a different company.
 |---|---|
 | D1 | The full stack is **TypeScript (Bun)**. The hub is built on `@modelcontextprotocol/sdk`. |
 | D2 | **An extractor serves document ingestion only, never the session path (D24).** When a deployment enables the batch mode, the extractor uses **OpenAI-compatible HTTP only**. It does not load models in-process. The optional compose profile ships a `llama.cpp` server container with a small Qwen GGUF (~1.1 GB, CPU-friendly). A remote endpoint needs only a different `EXTRACTOR_API_BASE` value, no code change. |
-| D3 | There is **no MCP wrapper service in front of Chroma**. The memory worker uses the official Chroma JS client. The memory worker also exposes a first-party MCP surface for search and proposals. The hub registers that surface like any upstream (guards P17). |
+| D3 | There is **no MCP wrapper service in front of Postgres**. The memory worker uses Postgres with pgvector via a standard client. The memory worker also exposes a first-party MCP surface for search and proposals. The hub registers that surface like any upstream (guards P17). |
 | D4 | Coordination runs as a **standalone container**. The hub registers it via `registry.yaml` like any other upstream. It never embeds in the hub. |
 | D5 | (Phase 2) Task board: **FIFO claiming with an optional integer `priority`** (default 0, order `priority DESC, created_at ASC`). No deadlines, no scheduler. Each claim carries a **lease with a heartbeat and a monotonic fencing token**. An expired lease returns the task to the board. Delivery is **at-least-once**: completion requires the current fence, and external effects deduplicate on an idempotency key. |
 | D6 | Messages are **persistent with replay**: an append-only log, cursor-based replay over SSE (`Last-Event-ID`), a 7-day TTL, and a SQLite store. |
@@ -87,10 +87,10 @@ and deploy. No team must fork the internals of a different company.
 | D10 | **The config splits in two.** The shared registry declares each upstream and names its credential. It stores no secret. The local hub resolves each credential from the workstation. A team-wide token uses the same mechanism, with different distribution. |
 | D12 | **People connect by username, never by address.** Each engineer registers with the company username (SSO name). All agent traffic flows outbound through the shared coordination service. A direct connection between two people requires an approval: the receiver sees who asks and accepts or rejects. No VPN, tunnel, or IP exchange exists in this design. |
 | D13 | **Every executable dependency is pinned.** `stdio_npx` packages carry exact versions, container images pin digests, and `skills.list` pins revisions. Nothing installs `latest`. |
-| D14 | **Four phases, each with a clean trigger.** **Phase 1 is local provisioning:** one central git repository and one update command install the skills, the base prompts, the subagents, the MCP configs, and the local memory files. A project command also publishes repository instructions from `.agents/instructions/*.md` to each supported harness. Zero services run, and no authentication exists, because git access is the access control (D15). **Phase 2 is the shared layer:** the memory worker with Chroma, the SSH auth (D26), registry serving, and the MCP hub. Its trigger: a team wants cross-repository memory search, or the tool count needs aggregation. **Phase 3 is collaboration:** presence, messaging, and the task board. Its trigger: two agents need to run at one time. **Phase 4 is document ingestion** (D25). Its trigger: bulk knowledge, for example Confluence pages, wanted in memory. |
+| D14 | **Four phases, each with a clean trigger.** **Phase 1 is local provisioning:** one central git repository and one update command install the skills, the base prompts, the subagents, the MCP configs, and the local memory files. A project command also publishes repository instructions from `.agents/instructions/*.md` to each supported harness. Zero services run, and no authentication exists, because git access is the access control (D15). **Phase 2 is the shared layer:** the memory worker with Postgres (pgvector), the SSH auth (D26), registry serving, and the MCP hub. Its trigger: a team wants cross-repository memory search, or the tool count needs aggregation. **Phase 3 is collaboration:** presence, messaging, and the task board. Its trigger: two agents need to run at one time. **Phase 4 is document ingestion** (D25). Its trigger: bulk knowledge, for example Confluence pages, wanted in memory. |
 | D15 | **Trusted coworkers.** Every registered engineer is trusted. Identity serves routing, context, and attribution. Teams and scopes never deny an operation between registered users. Git and the company identity provider control code access. Only impersonation protection and operator actions stay restricted (P34). |
 | D16 | **The catalog uses the full Backstage entity model.** Component (one repository or subtree) sits in a System (one project), which sits in a Domain (a business area). A Group owns each entity, with `parent` for subteams. Ownership stays separate from grouping, so a reorganization edits one `owner` field. A branch is context, never identity (P33). |
-| D19 | **Embeddings use the Chroma built-in default** (`all-MiniLM-L6-v2`, 384 dimensions, cosine distance). No second model service, no extra container, no GPU. Chroma persists the embedding function in the collection configuration, so every deployment stays consistent. Each collection still records the provider, the model, the dimension, the distance function, and a schema version, because a later model change needs a full re-embed. |
+| D19 | **Embeddings use `all-MiniLM-L6-v2`** (384 dimensions, cosine distance), generated in-process by the memory worker. No second model service, no extra container, no GPU. Stored in Postgres via pgvector. The worker records the provider, the model, the dimension, the distance function, and a schema version in a metadata table, because a later model change needs a full re-embed. |
 | D20 | **Catalog files use Backstage YAML.** The central `catalog.yaml` holds Domain, System, and Group entities. Each repository declares its components in `catalog-info.yaml`, or in `.wagglebot/catalog.yaml` with the identical schema. An organization already running Backstage points wagglebot at its existing files. Wagglebot never infers from a Git remote. An undeclared repository gets no system scope, and an unknown value is a hard error. |
 | D21 | **Memory scopes follow the catalog: `component`, `system`, `domain`, `org`.** One scope exists per catalog level. A search reads component, then system, then domain, then organization. |
 | D22 | **Agent writes default to `component`, with confirmed promotion to `system`.** The agent classifies each memory. A system classification is a proposal: the interactive agent asks its engineer in session. A background process never asks. A timeout or an uncertain classification falls back to `component`. A fact can land too low, never too high. |
@@ -178,7 +178,7 @@ graph TB
     subgraph SH["SHARED — deployed one time for the team"]
         REG["Registry endpoint<br/>GET /registry"]
         MEM["Memory worker<br/>POST /memory/proposals<br/>POST /memories/upsert<br/>POST /memories/invalidate<br/>POST /run-once"]
-        CHROMA[("Chroma<br/>volume: /chroma/chroma")]
+        POSTGRES[("Postgres + pgvector<br/>volume: pgdata")]
         COORD["Coordination service<br/>MCP + SSE"]
         SQLITE[("SQLite<br/>volume: channels, tasks")]
     end
@@ -194,7 +194,7 @@ graph TB
     HUB -->|proxies| REMOTE
     HUB -->|proxies| STDIO
 
-    MEM --> CHROMA
+    MEM --> POSTGRES
     COORD --> SQLITE
 
     style CREDS fill:#ffe6e6
@@ -230,7 +230,7 @@ talks to three things, and always by MCP. Credentials touch one box.
  │      ▼                       │ pull └────────────────────────────┘
  │  mcp-hub :9000 (Ph. 2)       │      ┌────────────────────────────┐
  │  + engineer credentials      │─────▶│  memory-worker :3011       │
- │      │                       │ MCP  │    │ chroma-db :8000       │
+ │      │                       │ MCP  │    │ postgres :5432        │
  │      ├──────────────┐        │      │    └ extractor (optional)  │
  │      ▼              ▼        │      └────────────────────────────┘
  │  stdio MCP     remote MCP    │      ┌────────────────────────────┐
@@ -345,12 +345,6 @@ start that implementation.
 
 ## Open Questions
 
-- Does the Chroma JS client require a scope fan-out workaround for
-  array-valued metadata (`scope_id_0..5`, `$or` caps — P16)? Verify
-  during implementation.
-- Does the pinned Chroma JS client resolve the persisted embedding
-  function on `getCollection`, or does it still require the function as
-  a parameter (D19)? Verify before the first write.
 - (Phase 3) What does the message bus return for an expired replay
   cursor, and how does a client resynchronize? Define the ordering and
   the backpressure behavior with the Phase 3 API shapes.

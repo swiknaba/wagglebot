@@ -256,7 +256,7 @@ propose_memory({ facts: [...] })   → POST /memory/proposals
     → filesystem queue ($MEMORY_STORAGE_ROOT/memory-queue/{queued,running,done,failed})
       → poll loop (3 s) claims via atomic rename(queued→running)
         → normalize → reconcile against manifest.json / patterns.json
-          → preflight Chroma query (skip if content_hash matches and active)
+          → preflight Postgres query (skip if content_hash matches and active)
             → shadow-deactivate superseded records → upsert
               → save manifests → complete()
 ```
@@ -335,7 +335,7 @@ A non-JSON completion fails the job into the normal retry path.
 **Canonicalization:**
 - `canonicalKey = kind:subject:relation:value` (all parts slugged).
   `identityKey = kind:subject:relation` ("same slot, maybe new value").
-- `chromaId = sha256(canonicalKey)`.
+- `recordId = sha256(canonicalKey)`.
 - A content banlist rejects candidates that contain `secret, token,
   password, api key, ...`.
 - Reconcile, same key: merge (max confidence, union of tags and scopes,
@@ -344,34 +344,42 @@ A non-JSON completion fails the job into the normal retry path.
 - Reconcile, new value in an existing identity slot: the highest
   confidence wins. The loser gets `supersededBy`. The winner gets
   `supersedes`.
-- Tombstones in Chroma metadata: `active: 1|0`, `superseded_by`,
+- Tombstones in database columns: `active: boolean`, `superseded_by`,
   `invalidated_at`, `invalidation_reason`, `content_hash`,
   `provenance_count`.
 
-**Chroma conventions:**
-- Collection routing: `episode→memory_episodes`,
-  `decision→memory_decisions`, `person→memory_people`, else
-  `memory_facts`. Raw episodes go to `memory_episode_drawers`.
-- Score = `1/(1+distance)`. The default `minScore` for search is 0.35.
-- Chroma metadata may not hold arrays reliably. In that case, fan scopes
-  out to `scope_id_0..5` and build `$or` queries. Test the clause cap,
-  so extra scopes fail loudly instead of a silent drop (P16). Verify
-  whether the Chroma JS client removes the need for this workaround.
-- **Embeddings use the Chroma built-in default** (D19). The worker sends
-  documents, and the server embeds them. Record the embedding metadata
-  on each collection at creation time:
-  `{provider: "chroma-default", model: "all-MiniLM-L6-v2", dimension:
+**Postgres and pgvector conventions:**
+- Table schema: a unified `memories` table (or partitioned tables
+  `memory_episodes`, `memory_decisions`, `memory_people`,
+  `memory_facts`, plus `memory_episode_drawers`). Columns include:
+  `id text PRIMARY KEY` (`recordId`), `canonical_key text UNIQUE`,
+  `identity_key text`, `kind text`, `title text`, `text text`,
+  `scopes text[]`, `embedding vector(384)`, `confidence real`,
+  `tags text[]`, `provenance jsonb`, `active boolean DEFAULT true`,
+  `superseded_by text`, `invalidated_at timestamptz`,
+  `invalidation_reason text`, `content_hash text`,
+  `created_at timestamptz DEFAULT now()`,
+  `updated_at timestamptz DEFAULT now()`.
+- Scope filtering: use native PostgreSQL array operations
+  (`scopes && $1`) with a GIN index on `scopes`. This removes
+  metadata array limits and fan-out workarounds (P16).
+- Distance and scoring: cosine distance using the `<=>` operator.
+  Score = `1 / (1 + distance)`. The default `minScore` for search is
+  0.35. An HNSW index on `embedding vector_cosine_ops` accelerates
+  queries.
+- **Embeddings use `all-MiniLM-L6-v2`** (384 dimensions, cosine distance)
+  (D19). The `memory-worker` computes embeddings in-process using
+  `@xenova/transformers` (local ONNX runtime on CPU) before writing to
+  Postgres.
+- The worker records embedding metadata in a `memory_schema_metadata`
+  table:
+  `{provider: "xenova-transformers", model: "all-MiniLM-L6-v2", dimension:
   384, distance: "cosine", schemaVersion: 1}`.
 - The worker compares that metadata at startup. A mismatch aborts
   startup with a message that names the required re-embed. A silent
   dimension change would corrupt every search result.
-- **Verify at implementation:** Chroma persists the embedding function
-  in the collection configuration since v1.1.13, but some JS client
-  versions still require the embedding function on `getCollection`.
-  Confirm the behavior of the pinned version before the first write.
-- Documents are line-prefixed plain text (`Kind:`, `Title:`, ...). A
-  parser reads them back by prefix. This format is fragile but simple.
-  It is acceptable.
+- Documents are structured relational records with plain text payload
+  (`Kind:`, `Title:`, ...). A parser reads them back by prefix when needed.
 
 **`MemoryProvider` seam** — the pipeline depends only on this interface.
 Backends are swappable:
@@ -760,8 +768,8 @@ is stable. The decisions in the main spec reference these.
 | P12 | Dead helpers with formats incompatible with live code | Do not carry dead code |
 | P13 | Generic webhooks without ids collapse into one conversation | Random fallback event key |
 | P14 | Orphaned payload contracts that nothing produces | Ship only `session_run` and document the envelope |
-| P16 | `$or` scope clauses silently truncated | Verify against the Chroma JS client and test scope fan-out |
-| P17 | Backend tool names discovered heuristically over MCP | Use the official Chroma client (D3) |
+| P16 | `$or` scope clauses silently truncated | Resolved by Postgres native arrays (`scopes text[]`) and GIN indexing |
+| P17 | Backend tool names discovered heuristically over MCP | Use the standard Postgres client in memory-worker (D3) |
 | P18 | Dockerfiles hard-code the workspace package list | Generate or lint the list in CI |
 | P19 | Images built with a different package manager than CI tests | One package manager everywhere |
 | P20 | Two CI systems drift apart | One CI system |

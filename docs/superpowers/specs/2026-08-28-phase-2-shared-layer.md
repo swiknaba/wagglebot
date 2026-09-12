@@ -2,7 +2,7 @@
 
 > Companion to the [wagglebot design spec](2026-08-28-wagglebot-design.md).
 > Phase 2 deploys one shared server for the team: the memory worker
-> with Chroma, the SSH auth (D26), registry serving, and the MCP hub as
+> with Postgres (pgvector), the SSH auth (D26), registry serving, and the MCP hub as
 > the aggregation upgrade (D14).
 >
 > **Trigger:** a team wants cross-repository memory search, or the tool
@@ -63,7 +63,7 @@ it as an upstream, so agents reach memory through their own hub.
   whatever the source.
 - **Document ingestion is Phase 4** (D25). See the
   [phase 4 spec](2026-08-28-phase-4-document-ingestion.md).
-- **Storage:** Chroma via the official JS client (D3). Collection
+- **Storage:** Postgres with pgvector via a standard client (D3). Table
   routing, tombstone and supersede conventions, and preflight dedup
   follow contracts §C3.
 - **Auth:** an SSH key challenge issues a session token (D26). Every
@@ -85,10 +85,10 @@ it as an upstream, so agents reach memory through their own hub.
 - **Memory rules live in the base prompt, not in a server policy file
   (D24).** The agent decides what deserves memory, so the rules must
   reach the agent. `AGENTS.base.md` carries them.
-- **Persistence:** named Docker volumes hold Chroma (`/chroma/chroma`)
+- **Persistence:** named Docker volumes hold Postgres data (`pgdata`)
   and the coordination SQLite file. A volume survives a restart, but
   not a disk loss or a bad migration. The stack therefore ships `dump`
-  and `restore` commands for both stores.
+  and `restore` commands (`pg_dump` and SQLite backup).
 
 ### 3. How The Agent Knows Which Upstream To Use
 
@@ -156,10 +156,16 @@ services:
     ports: ["9000:9000"]
 
   # ── shared profile: deployed one time for the team ────────────────
-  chroma-db:
-    image: chromadb/chroma@sha256:<pinned-digest>   # never :latest (D13)
+  postgres:
+    image: pgvector/pgvector:pg16@sha256:<pinned-digest>   # never :latest (D13)
     profiles: [shared]
-    ports: ["18000:8000"]
+    environment:
+      POSTGRES_DB: wagglebot
+      POSTGRES_USER: wagglebot
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports: ["5432:5432"]
 
   extractor-llm:                   # optional, Phase 4 only (D2, D25)
     image: ghcr.io/ggml-org/llama.cpp:server
@@ -177,11 +183,11 @@ services:
       MEMORY_WORKER_PORT: 3011
       MEMORY_WORKER_BEARER_TOKEN: ${MEMORY_WORKER_BEARER_TOKEN}
       EXTRACTOR_API_BASE: ${EXTRACTOR_API_BASE:-}   # only for batch ingestion
-      CHROMA_URL: http://chroma-db:8000
+      DATABASE_URL: postgres://wagglebot:${POSTGRES_PASSWORD}@postgres:5432/wagglebot
       MEMORY_STORAGE_ROOT: /data
     volumes:
       - memory_data:/data
-    depends_on: [chroma-db]
+    depends_on: [postgres]
     ports: ["3011:3011"]
 
   coordination:                    # Phase 3 (D14)
@@ -388,7 +394,7 @@ Wagglebot does not build it. Choose the second deployment instead.
 7. A user adds an upstream to `registry.yaml` and restarts the hub. The
    new tools appear in `list_available_mcps`.
 8. An agent calls `propose_memory` with a fact. The fact passes the
-   credential scan (D28), deduplicates, and reaches Chroma. No model
+   credential scan (D28), deduplicates, and reaches Postgres. No external model
    runs on that path.
 9. **Credential scan.** A fact containing an AWS key is redacted before
    storage. A fact that is mostly key material is rejected. Neither
