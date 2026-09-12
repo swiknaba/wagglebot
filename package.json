@@ -2,7 +2,8 @@
   "name": "wagglebot-monorepo",
   "private": true,
   "workspaces": [
-    "packages/*"
+    "packages/*",
+    "services/*"
   ],
   "scripts": {
     "check": "biome check .",
