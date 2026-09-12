@@ -1,0 +1,16 @@
+# Synthetic Phase 2 fixture. It contains no real company or repository data.
+repositoryIdentity:
+  component: synthetic-catalog-cli
+  system: synthetic-platform
+  domain: synthetic-engineering
+  owner: synthetic-team
+  branch: fixture-main
+  head: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+  workingTree: clean
+  catalogState: resolved
+scopes:
+  - kind: system
+    name: synthetic-platform
+  - kind: domain
+    name: synthetic-engineering
+  - kind: org
