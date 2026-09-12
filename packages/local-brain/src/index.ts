@@ -2,6 +2,8 @@ export type { Ranked } from "./bm25/index";
 export { Bm25Index } from "./bm25/index";
 export { tokenize } from "./bm25/tokenize";
 export { CodeGraphProvider } from "./codegraph/provider";
+export { GitProvider } from "./git/provider";
+export { createLocalBrain, type LocalBrain } from "./local-brain";
 export { type LocalMemoryDocument, MemoryParseError, parseMemory } from "./memory/parse";
 export { MarkdownMemoryProvider } from "./memory/provider";
 export { writeMemoryAtomically } from "./memory/write";
