@@ -1,6 +1,17 @@
 export type { Ranked } from "./bm25/index";
 export { Bm25Index } from "./bm25/index";
 export { tokenize } from "./bm25/tokenize";
+export type { GitExecutor, LocalBrainErrorCode, ResolvedProject } from "./path-policy";
+export {
+  assertInside,
+  executeGit,
+  isSecretPath,
+  LocalBrainError,
+  resolveProjectPath,
+  resolveSafeFile,
+} from "./path-policy";
+export type { CompanyCatalog } from "./project-identity";
+export { identifyProject } from "./project-identity";
 export type {
   CodeGraphResult,
   CodeGraphStatus,
