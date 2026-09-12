@@ -11,6 +11,8 @@ export type LocalBrainErrorCode =
   | "proposal_invalid"
   | "proposal_conflict"
   | "secret_rejected"
+  | "codegraph_missing"
+  | "codegraph_unavailable"
   | "local_brain_internal";
 
 export class LocalBrainError extends Error {
