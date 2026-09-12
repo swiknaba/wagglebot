@@ -1,7 +1,17 @@
 import { realpath } from "node:fs/promises";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 
-export type LocalBrainErrorCode = "path_forbidden" | "path_outside_repository" | "project_not_found";
+export type LocalBrainErrorCode =
+  | "path_forbidden"
+  | "path_outside_repository"
+  | "project_not_found"
+  | "local_memory_invalid"
+  | "local_memory_too_large"
+  | "memory_changed"
+  | "proposal_invalid"
+  | "proposal_conflict"
+  | "secret_rejected"
+  | "local_brain_internal";
 
 export class LocalBrainError extends Error {
   constructor(
