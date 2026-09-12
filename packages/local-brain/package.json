@@ -1,0 +1,13 @@
+{
+  "name": "@wagglebot/local-brain",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": "./src/index.ts",
+  "dependencies": {
+    "@colbymchenry/codegraph": "1.6.0",
+    "@wagglebot/contracts": "workspace:*",
+    "@wagglebot/secret-scanner": "workspace:*",
+    "yaml": "2.8.3"
+  }
+}
