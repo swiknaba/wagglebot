@@ -43,6 +43,23 @@ export {
   SharedScopeSchema,
 } from "./base";
 export type {
+  CodeModeExecuteInput,
+  DiscoveryState,
+  HubConfig,
+  HubErrorCode,
+  HubProxyConfig,
+  HubRegistryInput,
+  HubToolCatalog,
+  TrustRecord,
+} from "./hub";
+export {
+  CodeModeExecuteInputSchema,
+  DiscoveryStateSchema,
+  HubConfigSchema,
+  HubErrorCodeSchema,
+  TrustRecordSchema,
+} from "./hub";
+export type {
   AdminReindexRequest,
   AdminReindexResponse,
   AdminRescanRequest,

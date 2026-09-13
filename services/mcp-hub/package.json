@@ -1,0 +1,14 @@
+{
+  "name": "@wagglebot/mcp-hub",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "bun test",
+    "start": "bun src/index.ts"
+  },
+  "dependencies": {
+    "@wagglebot/contracts": "workspace:*",
+    "zod": "4.6.1"
+  }
+}
