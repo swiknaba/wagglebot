@@ -1,0 +1,13 @@
+{
+  "name": "@wagglebot/registry",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": { "test": "bun test", "start": "bun src/index.ts" },
+  "dependencies": {
+    "@wagglebot/company-config": "workspace:*",
+    "@wagglebot/contracts": "workspace:*",
+    "yaml": "2.8.3",
+    "zod": "4.6.1"
+  }
+}
