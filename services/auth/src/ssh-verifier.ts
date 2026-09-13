@@ -41,11 +41,13 @@ export class OpenSshSignatureVerifier implements SshSignatureVerifier {
       directory = await mkdtemp(join(tmpdir(), "wagglebot-auth-verify-"));
       const allowedSignersPath = join(directory, "allowed-signers");
       const signaturePath = join(directory, "signature");
+      const payloadPath = join(directory, "payload");
       await Promise.all([
         writeFile(allowedSignersPath, `${input.username} ${input.authorizedKey}\n`, { mode: 0o600 }),
         writeFile(signaturePath, input.signature, { mode: 0o600 }),
+        writeFile(payloadPath, input.payload, { mode: 0o600 }),
       ]);
-      await Promise.all([chmod(allowedSignersPath, 0o600), chmod(signaturePath, 0o600)]);
+      await Promise.all([chmod(allowedSignersPath, 0o600), chmod(signaturePath, 0o600), chmod(payloadPath, 0o600)]);
       processHandle = Bun.spawn(
         [
           this.sshKeygenPath,
