@@ -1,4 +1,4 @@
-import type { ProxyConfig } from "@wagglebot/contracts";
+import { type ProxyConfig, ProxyConfigSchema } from "@wagglebot/contracts";
 import { parse } from "yaml";
 
 export type { AuthScheme, CredentialSource, ProxyConfig } from "@wagglebot/contracts";
@@ -126,7 +126,7 @@ export function loadRegistry(text: string, fileName: string): ProxyConfig[] {
       }
     }
     if (item.auth !== undefined) validateAuth(fileName, ns, mode, item.auth);
-    out.push({
+    const candidate = {
       namespace: ns,
       mode,
       ...(typeof item.endpoint === "string" ? { endpoint: item.endpoint } : {}),
@@ -135,7 +135,10 @@ export function loadRegistry(text: string, fileName: string): ProxyConfig[] {
       ...(isRecord(item.env) ? { env } : {}),
       // validateAuth checked the kind, the source, and every field each of them requires.
       ...(item.auth !== undefined ? { auth: item.auth as ProxyConfig["auth"] } : {}),
-    });
+    };
+    const parsed = ProxyConfigSchema.safeParse(candidate);
+    if (!parsed.success) fail(fileName, ns, parsed.error.issues[0]?.message ?? "invalid proxy");
+    out.push(parsed.data);
   }
   return out;
 }
