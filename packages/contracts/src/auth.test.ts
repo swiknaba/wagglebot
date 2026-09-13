@@ -70,20 +70,19 @@ describe("D26 authentication contracts", () => {
       }),
     ).toThrow();
 
+    const validSessionRequest = {
+      schemaVersion: 1,
+      challengeId: validChallengeId,
+      nonce: "1234567890123456789012345678901234567890123",
+      username: "alice",
+      signature: "x".repeat(80),
+    } as const;
+    expect(AuthSessionRequestSchema.parse(validSessionRequest)).toEqual(validSessionRequest);
+    expect(() => AuthSessionRequestSchema.parse({ ...validSessionRequest, nonce: undefined })).toThrow();
+    expect(() => AuthSessionRequestSchema.parse({ ...validSessionRequest, signature: "short" })).toThrow();
     expect(() =>
       AuthSessionRequestSchema.parse({
-        schemaVersion: 1,
-        challengeId: validChallengeId,
-        username: "alice",
-        signature: "short",
-      }),
-    ).toThrow();
-    expect(() =>
-      AuthSessionRequestSchema.parse({
-        schemaVersion: 1,
-        challengeId: validChallengeId,
-        username: "alice",
-        signature: "x".repeat(80),
+        ...validSessionRequest,
         extra: true,
       }),
     ).toThrow();

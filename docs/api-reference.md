@@ -213,6 +213,7 @@ The trailing newline is required. The OpenSSH SSHSIG namespace is exactly
 {
   "schemaVersion": 1,
   "challengeId": "ch_...",
+  "nonce": "base64url-32-byte-value",
   "username": "alice",
   "signature": "openssh-sshsig-text"
 }
@@ -233,10 +234,14 @@ Response:
 }
 ```
 
-The JWT lifetime is 900 seconds. Claims are `iss`, `sub`, `aud`, `iat`, `exp`,
-and `jti`. Verifiers allow only `EdDSA`, require the configured issuer and exact
-audience, and use 30 seconds of clock tolerance. A signature, username,
-challenge, namespace, or audience mismatch returns generic `401 auth_invalid`.
+The session request echoes the challenge nonce. The service hashes that value
+and compares it with the nonce hash in the in-memory challenge record before
+reconstructing the canonical signed payload; it never persists or logs the raw
+nonce. The JWT lifetime is 900 seconds. Claims are `iss`, `sub`, `aud`, `iat`,
+`exp`, and `jti`. Verifiers allow only `EdDSA`, require the configured issuer
+and exact audience, and use 30 seconds of clock tolerance. A signature,
+username, nonce, challenge, namespace, or audience mismatch returns generic
+`401 auth_invalid`.
 The endpoint is one-use, not idempotent: replay after a successful exchange or
 after the attempt cap returns the same generic error. Other errors are `400
 auth_invalid` and `503 auth_unavailable`; the three-attempt challenge cap is

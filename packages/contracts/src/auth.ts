@@ -29,6 +29,7 @@ export const AuthSessionRequestSchema = z
   .object({
     schemaVersion: z.literal(1),
     challengeId: z.string().regex(/^ch_[A-Za-z0-9_-]{28}$/),
+    nonce: z.string().regex(/^[A-Za-z0-9_-]{43}$/),
     username,
     signature: z.string().min(80).max(16_384),
   })

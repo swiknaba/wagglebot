@@ -43,6 +43,11 @@ describe("D26 client", () => {
     expect(requests).toHaveLength(2);
     expect(requests[0]?.headers.has("authorization")).toBe(false);
     expect(requests[1]?.headers.has("authorization")).toBe(false);
+    expect(await requests[1]?.json()).toMatchObject({
+      challengeId: challenge.challengeId,
+      nonce: challenge.nonce,
+      username: "alice",
+    });
   });
 
   test("retries exactly once after a 401", async () => {

@@ -83,6 +83,7 @@ export class D26Client implements SessionTokenProvider {
     const sessionRequest = AuthSessionRequestSchema.parse({
       schemaVersion: 1,
       challengeId: challenge.challengeId,
+      nonce: challenge.nonce,
       username: this.username,
       signature,
     });

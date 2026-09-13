@@ -206,6 +206,7 @@ export const AuthChallengeResponseSchema = z.object({
 export const AuthSessionRequestSchema = z.object({
   schemaVersion: z.literal(1),
   challengeId: z.string().regex(/^ch_[A-Za-z0-9_-]{28}$/),
+  nonce: z.string().regex(/^[A-Za-z0-9_-]{43}$/),
   username: z.string().regex(/^[a-z0-9][a-z0-9._-]{0,63}$/),
   signature: z.string().min(80).max(16_384),
 }).strict();
@@ -428,7 +429,7 @@ the final principal to the verified catalog key.
 
 `get` posts `{ schemaVersion: 1, username, audience }` to
 `POST /v1/auth/challenge`, signs the canonical challenge bytes, posts
-`{ schemaVersion: 1, challengeId, username, signature }` to
+`{ schemaVersion: 1, challengeId, nonce, username, signature }` to
 `POST /v1/auth/session`, validates the response, and stores one cache entry per
 audience. Send no bearer header during the challenge exchange. Use HTTPS
 unless the URL is loopback in an explicitly enabled development test.
@@ -585,10 +586,12 @@ type StoredChallenge = {
 ```
 
 Issue a random 32-byte nonce and 21-byte ID, hash the nonce with SHA-256, and
-return only the base64url nonce in the response. On session exchange, atomically
-load-and-increment the attempt, reject expired/maxed records, and delete the
-record on a successful signature. Keep challenge cleanup bounded to 1,000
-records per operation so an attacker cannot force an unbounded sweep.
+return only the base64url nonce in the response. The client echoes that nonce in
+the session request; hash it and compare it with the stored value before
+reconstructing canonical bytes for verification. On session exchange,
+atomically load-and-increment the attempt, reject expired/maxed records, and
+delete the record on a successful signature. Keep challenge cleanup bounded to
+1,000 records per operation so an attacker cannot force an unbounded sweep.
 
 - [ ] **Step 3: Implement the `ssh-keygen -Y verify` adapter**
 
