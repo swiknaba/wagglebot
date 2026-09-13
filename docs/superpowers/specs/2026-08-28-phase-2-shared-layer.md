@@ -85,10 +85,127 @@ it as an upstream, so agents reach memory through their own hub.
 - **Memory rules live in the base prompt, not in a server policy file
   (D24).** The agent decides what deserves memory, so the rules must
   reach the agent. `AGENTS.base.md` carries them.
-- **Persistence:** named Docker volumes hold Postgres data (`pgdata`)
-  and the coordination SQLite file. A volume survives a restart, but
-  not a disk loss or a bad migration. The stack therefore ships `dump`
-  and `restore` commands (`pg_dump` and SQLite backup).
+- **Persistence:** named Docker volumes hold worker data and the
+  coordination SQLite file. A volume survives a restart, but not disk
+  loss or a bad migration. The stack ships scoped dump and restore commands.
+
+## Shared Database and Migrations
+
+**Required for Phase 2, with or without the dashboard.**
+
+| Item | Requirement |
+|---|---|
+| Tool | Ruby Sequel with `pg` |
+| Location | `services/database` |
+| Runtime | Separate migration container that exits after execution |
+| Migration files | Timestamped Ruby files with explicit `up` and `down` blocks |
+| Version table | `wagglebot_schema_migrations` |
+| Connection | `DATABASE_URL`, with TLS and a supplied CA certificate for remote PostgreSQL |
+| Local database | Optional PostgreSQL container with pgvector and a persistent volume |
+
+- Adapt the commands from the [kirei wrapper](https://github.com/swiknaba/kirei/blob/main/spec/test_app/lib/tasks/db.rake).
+- Keep Ruby out of application containers.
+- Target one configured database per command.
+- If `DATABASE_URL` is empty, stop the migration command before connecting.
+- Do not add database create or drop commands.
+- Do not select multiple environments automatically.
+- Use `table: :wagglebot_schema_migrations` in the Sequel runner.
+- Use `use_advisory_lock: true` to prevent simultaneous migration runs.
+- Keep PostgreSQL credentials out of output and logs.
+- Keep coordination SQLite setup in the coordination service.
+
+| Command | Requirement |
+|---|---|
+| `db:generate` | Create a timestamped migration with `up` and `down` blocks. |
+| `db:migrate` | Apply pending migrations, then run `db:check` before reporting success. |
+| `db:rollback` | Require an explicit target version. |
+| `db:status` | Report applied and pending migrations. |
+| `db:check` | Compare the database migration history with the version file shipped with the application. |
+| `db:schema:dump` | Export application object definitions to `services/database/schema.sql`. |
+
+### Release Version and SQL Schema
+
+| File | Content |
+|---|---|
+| `services/database/migration-version.json` | Latest migration timestamp and ordered migration filenames |
+| `services/database/schema.sql` | SQL definitions for application tables, indexes, and sequences |
+
+- Generate the version file from local migration filenames.
+- Update it when `db:generate` creates a migration.
+- Commit the version file with the migration.
+- Before release, verify that the file matches the migration directory.
+- Ship the version file with the migration container and each application that uses PostgreSQL.
+- Do not replace this file with values read from the deployment database.
+- After deployment migrations, compare the database history with the shipped file through `db:check`.
+- Compare all migration filenames as well as the latest timestamp.
+- Reject missing or unexpected migrations, even when the latest timestamp matches.
+- Keep `db:check` read-only.
+- Fail deployment when the versions do not match.
+- Apply the same check before the application accepts database work.
+- Show expected and actual migration versions in the dashboard.
+
+SQL reference:
+
+- Apply local migrations before running `db:schema:dump`.
+- Use PostgreSQL `pg_dump --schema-only --no-owner --no-privileges` through the Sequel task wrapper.
+- Export only the explicit application objects and their required definitions.
+- Include the migration table definition, without its rows.
+- Preserve vector column types and index definitions.
+- Exclude data, unrelated objects, and extension installation commands.
+- Commit `schema.sql` with each database change.
+- Include `schema.sql` in the release files.
+- Generate the reference from a local development database, not a production database.
+- Check the reference against a fresh database with all migrations applied before release.
+- Keep migrations as the deployment source.
+
+Sequel exports [Ruby migration definitions](https://sequel.jeremyevans.net/rdoc-plugins/classes/Sequel/SchemaDumper.html).
+Use [pg_dump](https://www.postgresql.org/docs/current/app-pgdump.html) for the SQL reference.
+
+### Table Ownership
+
+- Prefix all application tables, indexes, and sequences with `wagglebot_`.
+- Permit an optional dedicated schema.
+- Maintain an explicit application table list for metrics, backup, and restore.
+- Update the list when a migration adds or removes a table.
+- Do not infer ownership from a prefix or all visible objects.
+- Preserve unrelated objects and data during migrations, rollback, and restore.
+
+| Initial table | Purpose |
+|---|---|
+| `wagglebot_memories` | Memory records and indexes from [contract C3](2026-08-28-service-contracts.md). |
+| `wagglebot_memory_schema_metadata` | Embedding and schema metadata from contract C3. |
+| `wagglebot_schema_migrations` | Sequel migration history. |
+
+### Initial Migration
+
+1. Verify that the selected database has the `vector` extension.
+2. Verify access to the vector type and required cosine operators.
+3. If a check fails, stop with an instruction that identifies the missing prerequisite.
+4. Create the memory tables and indexes from contract C3.
+5. Initialize the embedding metadata from contract C3.
+
+- Run these steps in one transaction.
+- On rollback, remove only the objects this migration created.
+- Leave the shared `vector` extension installed.
+- For the bundled database, install `vector` through the PostgreSQL initialization script before migrations run.
+- Use `CREATE EXTENSION IF NOT EXISTS vector;` in `services/database/init-vector.sql`.
+- For an external database, require the operator to install pgvector before deployment.
+
+### Deployment and Recovery
+
+- Use the same migration command for bundled and external PostgreSQL.
+- Do not require a local PostgreSQL container for an external database.
+- Run the migration job before the memory worker starts.
+- Create a new migration job for each deployment.
+- Limit the database connection wait to 30 seconds.
+- If migration fails, stop startup of the memory worker.
+- Run `db:check` before the memory worker starts.
+- Reject work when the migration version or embedding metadata is unsupported.
+- Return `503` from `/readyz` until both checks pass.
+- Provide dump and restore commands for the application tables and their required indexes and sequences.
+- Include migration history and embedding metadata in each dump.
+- Preserve unrelated data and the shared extension during restore.
+- Provide a separate SQLite backup for coordination data.
 
 ### 3. How The Agent Knows Which Upstream To Use
 
@@ -125,11 +242,12 @@ background cycle.
 
 ---
 
-## Docker Compose — Two Profiles
+## Docker Compose — Profiles
 
-One compose file carries both layers. The `local` profile runs on each
-workstation. The `shared` profile runs one time for the team. A solo
-engineer starts both profiles on one machine.
+One compose file carries the local and shared layers. The `local` profile
+runs on each workstation. The `shared` profile runs one time for the team.
+The optional `local-db` profile provides PostgreSQL with pgvector for full
+local tests. Shared services require `DATABASE_URL` in every deployment.
 
 NOTE: The block below is **schematic**. It omits the registry serving
 and bind-address
@@ -155,17 +273,28 @@ services:
       - ./registry.yaml:/config/registry.yaml:ro
     ports: ["9000:9000"]
 
-  # ── shared profile: deployed one time for the team ────────────────
+  # ── optional local database: full local tests only ────────────────
   postgres:
     image: pgvector/pgvector:pg16@sha256:<pinned-digest>   # never :latest (D13)
-    profiles: [shared]
+    profiles: [local-db]
     environment:
       POSTGRES_DB: wagglebot
       POSTGRES_USER: wagglebot
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - pgdata:/var/lib/postgresql/data
+      - ./services/database/init-vector.sql:/docker-entrypoint-initdb.d/init-vector.sql:ro
     ports: ["5432:5432"]
+
+  # ── shared profile: deployed one time for the team ────────────────
+  db-migrate:
+    build: ./services/database
+    profiles: [shared]
+    command: bundle exec rake db:migrate
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-}
+    restart: "no"
+    # The runner waits for DATABASE_URL with a bounded timeout.
 
   extractor-llm:                   # optional, Phase 4 only (D2, D25)
     image: ghcr.io/ggml-org/llama.cpp:server
@@ -183,11 +312,13 @@ services:
       MEMORY_WORKER_PORT: 3011
       MEMORY_WORKER_BEARER_TOKEN: ${MEMORY_WORKER_BEARER_TOKEN}
       EXTRACTOR_API_BASE: ${EXTRACTOR_API_BASE:-}   # only for batch ingestion
-      DATABASE_URL: postgres://wagglebot:${POSTGRES_PASSWORD}@postgres:5432/wagglebot
+      DATABASE_URL: ${DATABASE_URL:-}
       MEMORY_STORAGE_ROOT: /data
     volumes:
       - memory_data:/data
-    depends_on: [postgres]
+    depends_on:
+      db-migrate:
+        condition: service_completed_successfully
     ports: ["3011:3011"]
 
   coordination:                    # Phase 3 (D14)
@@ -201,15 +332,22 @@ services:
     ports: ["3020:3020"]
 
 volumes:
+  pgdata:
   memory_data:
   coord_data:
 ```
 
+For a remote CA, mount its file into the migration and memory containers.
+Set the certificate path in each client connection configuration.
+Use `verify-full` for remote TLS verification.
+
 Start commands:
 
 * Each engineer: `docker compose --profile local up`
-* The team deployment: `docker compose --profile shared up`
-* One solo engineer: `docker compose --profile local --profile shared up`
+* Shared deployment: `DATABASE_URL=... docker compose --profile shared up --force-recreate`
+* Full local stack: set `DATABASE_URL` to the bundled `postgres` service.
+  Set `POSTGRES_PASSWORD` to match the password in `DATABASE_URL`.
+  Run `docker compose --profile local --profile local-db --profile shared up --force-recreate`.
 * Batch document ingestion (Phase 4): add `--profile ingest`
 * Collaboration, in Phase 3: add `--profile collab`
 
@@ -387,31 +525,41 @@ Wagglebot does not build it. Choose the second deployment instead.
 
 ## Success Criteria
 
-6. Both profiles start a working stack on one machine. The required
-   inputs are an empty `registry.yaml` and the generated service bearer
-   tokens (D7). No model download is needed, because no model runs on
-   the default path (D24).
-7. A user adds an upstream to `registry.yaml` and restarts the hub. The
+6. Start the shared services with external PostgreSQL and no local
+   PostgreSQL container. Start the full local stack with `local-db`.
+   Both runs require `DATABASE_URL`, an empty `registry.yaml`, and
+   generated service bearer tokens (D7). No model download is needed.
+7. Run `db:migrate` twice and verify that the second run changes nothing.
+   Run `db:rollback` with a target version. Verify that it preserves the
+   vector extension and unrelated database objects. Start two runners.
+   Verify that each migration applies once. Verify clear failures for a
+   missing vector extension, unsupported migration, or embedding metadata.
+   Verify `503` from `/readyz` when either version check fails.
+   Verify that dump and restore preserve unrelated tables and data.
+   Verify deployment failure for an older, newer, or incomplete migration history.
+   Verify failure when the local version file differs from the migration directory.
+   Verify that `schema.sql` matches a fresh migrated database.
+   Verify that `schema.sql` excludes unrelated objects and table data.
+8. A user adds an upstream to `registry.yaml` and restarts the hub. The
    new tools appear in `list_available_mcps`.
-8. An agent calls `propose_memory` with a fact. The fact passes the
+9. An agent calls `propose_memory` with a fact. The fact passes the
    credential scan (D28), deduplicates, and reaches Postgres. No external model
    runs on that path.
-9. **Credential scan.** A fact containing an AWS key is redacted before
+10. **Credential scan.** A fact containing an AWS key is redacted before
    storage. A fact that is mostly key material is rejected. Neither
    error message echoes the content.
-10. **Direct commit.** An engineer says "remember this for the system".
-    The agent calls `remember` with that scope, and the fact is stored
-    without a promotion question (D30). A `forget` call on the same
-    record removes it from later searches.
-11. **Credential isolation.** Two engineers pull the same registry.
-    Each hub authenticates as its own engineer. No engineer credential
-    and no upstream MCP credential appears in the shared layer, in the
-    registry, or in any log. The shared layer holds only its own
-    service bearer tokens (D9).
-12. **Graceful skip.** An engineer lacks the credential for one
-    upstream. That namespace is absent from `list_available_mcps`.
-    Every other namespace still works.
-13. **Scope isolation.** Team A publishes a fact through
+11. **Direct commit.** An engineer says "remember this for the system".
+   The agent calls `remember` with that scope, and the fact is stored
+   without a promotion question (D30). A `forget` call on the same
+   record removes it from later searches.
+12. **Credential isolation.** Two engineers pull the same registry.
+   Each hub authenticates as its own engineer. No engineer credential
+   and no upstream MCP credential appears in the shared layer, in the
+   registry, or in any log. The shared layer holds only its own
+   service bearer tokens (D9).
+13. **Graceful skip.** An engineer lacks the credential for one
+   upstream. That namespace is absent from `list_available_mcps`.
+   Every other namespace still works.
+14. **Scope isolation.** Team A publishes a fact through
     `.wagglebot/public.md`. Team B finds it in a memory search. Team B
     never finds a working-memory record of Team A.
-

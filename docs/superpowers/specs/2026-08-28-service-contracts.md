@@ -349,9 +349,9 @@ A non-JSON completion fails the job into the normal retry path.
   `provenance_count`.
 
 **Postgres and pgvector conventions:**
-- Table schema: a unified `memories` table (or partitioned tables
-  `memory_episodes`, `memory_decisions`, `memory_people`,
-  `memory_facts`, plus `memory_episode_drawers`). Columns include:
+- Require the [Phase 2 database tooling](2026-08-28-phase-2-shared-layer.md#shared-database-and-migrations), including Sequel migrations.
+- Use `wagglebot_schema_migrations` for migration history.
+- Use one `wagglebot_memories` table. Columns include:
   `id text PRIMARY KEY` (`recordId`), `canonical_key text UNIQUE`,
   `identity_key text`, `kind text`, `title text`, `text text`,
   `scopes text[]`, `embedding vector(384)`, `confidence real`,
@@ -371,7 +371,7 @@ A non-JSON completion fails the job into the normal retry path.
   (D19). The `memory-worker` computes embeddings in-process using
   `@xenova/transformers` (local ONNX runtime on CPU) before writing to
   Postgres.
-- The worker records embedding metadata in a `memory_schema_metadata`
+- The worker records embedding metadata in a `wagglebot_memory_schema_metadata`
   table:
   `{provider: "xenova-transformers", model: "all-MiniLM-L6-v2", dimension:
   384, distance: "cosine", schemaVersion: 1}`.
