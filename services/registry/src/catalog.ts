@@ -18,6 +18,7 @@ export type CatalogSnapshot = {
 };
 export type ValidatedSourceSnapshot = {
   sourceRevision: string;
+  generatedAt: string;
   catalog: CatalogSnapshot;
   company: ProxyConfig[];
   teams: Map<string, ProxyConfig[]>;
@@ -101,6 +102,7 @@ export function loadCatalog(root: string, sourceRevision: string): ValidatedSour
     teams.set(team.name, parseRegistry(team.registryText, join(team.dir, "registry.yaml")));
   return {
     sourceRevision,
+    generatedAt: new Date().toISOString(),
     catalog,
     company: parseRegistry(repo.company.registryText, join(repo.company.dir, "registry.yaml")),
     teams,
