@@ -19,7 +19,7 @@ Dependencies:
 
 | Requirement | Spec |
 |---|---|
-| Shared database and required Sequel tooling | [Phase 2](2026-08-28-phase-2-shared-layer.md#shared-database-and-migrations) |
+| Shared database and governed migration tooling | [Phase 2](2026-08-28-phase-2-shared-layer.md#shared-database-and-migrations) |
 | Presence, messages, and tasks | [Phase 3](2026-08-28-phase-3-collaboration.md) |
 | Task fields and claim rules | [Contract C4](2026-08-28-service-contracts.md#c4-task-envelope-and-delegated-job-vocabulary-phase-3) |
 

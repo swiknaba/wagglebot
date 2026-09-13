@@ -69,10 +69,10 @@ runs on an internal container network and accepts calls only from the worker.
 PostgreSQL is also private. The worker verifies the D26 session token or the
 administrator publication principal before it reads or mutates memory.
 
-All Wagglebot-owned runtime code is TypeScript on Bun. MemPalace's Python
-runtime is accepted as a pinned external container in the same way that
-PostgreSQL and gitleaks are external runtime dependencies. Wagglebot does not
-fork or patch MemPalace.
+All Wagglebot-owned runtime and database-management code is TypeScript on Bun.
+MemPalace's Python runtime is accepted as a pinned external container in the
+same way that PostgreSQL and gitleaks are external runtime dependencies.
+Wagglebot does not fork or patch MemPalace.
 
 ## Sources of Truth
 
@@ -243,6 +243,45 @@ The Wagglebot database schema owns:
 
 Database constraints reject `component` scope, an unknown status/kind, a blank
 scope name, and more than one active row for the same `(scope, canonical_key)`.
+
+## Database Migrations and Recovery
+
+The database-management requirements added in Ludwig's 2026-09-13 shared-layer
+update apply to this design as operational controls, with two deliberate
+adaptations: the migration runner remains TypeScript/Bun, and the normalized
+tables above remain canonical. The older `wagglebot_memories` monolith and
+in-worker embedding columns do not replace the canonical record/outbox model or
+the private MemPalace index.
+
+- Run migrations in a one-shot deployment job before the memory worker starts.
+- Store migration history in `wagglebot_schema_migrations` and serialize runners
+  with a PostgreSQL advisory lock.
+- Ship `services/memory-worker/migration-version.json` containing the latest
+  version and the complete ordered migration filename list. Readiness compares
+  both values with database history and rejects missing, unexpected, older, or
+  newer migrations.
+- Give every migration explicit up and down SQL. Rollback requires an explicit
+  target version and removes only objects created by Wagglebot migrations.
+- Commit `services/memory-worker/schema.sql` as a schema-only reference generated
+  from a clean migrated development database. Migrations, not `schema.sql`, are
+  the deployment source of truth.
+- Maintain an explicit application-object list for migration checks, schema
+  dumps, backup, restore, metrics, and future admin tooling. Never infer
+  ownership from a name prefix or enumerate unrelated database objects.
+- Target exactly one `MEMORY_DATABASE_URL` per command. Do not add database
+  create/drop commands or automatically select an environment.
+- Require `vector` before applying application migrations. The optional local
+  PostgreSQL profile installs it during database initialization; operators must
+  install it on an external database before deployment.
+- Require a supplied CA and full hostname verification for remote PostgreSQL.
+  Keep DSNs and credentials out of command output and logs.
+- Scope logical dump/restore to the explicit Wagglebot object list, including
+  migration history and embedding-profile metadata, while preserving unrelated
+  objects and the shared `vector` extension.
+
+The 2026-09-13 admin-dashboard design consumes these version, health, and
+content-free metrics later. It depends on Phase 3 collaboration data and does
+not add a dashboard, admin API, or database-reading browser surface to Phase 2.
 
 ## MemPalace Mapping
 
@@ -526,6 +565,7 @@ Runtime-only variables include:
 MEMPALACE_PGVECTOR_DSN
 MEMPALACE_MCP_TOKEN
 MEMORY_DATABASE_URL
+MEMORY_DATABASE_CA_FILE
 MEMORY_ADMIN_BEARER_TOKEN
 MEMORY_SESSION_TOKEN_PUBLIC_KEY_FILE
 MEMORY_TLS_CERT_FILE
@@ -533,7 +573,9 @@ MEMORY_TLS_KEY_FILE
 ```
 
 The config loader rejects literal DSNs, passwords, tokens, certificate bodies,
-and private keys in `wagglebot.yaml`.
+and private keys in `wagglebot.yaml`. A non-loopback PostgreSQL endpoint
+requires `MEMORY_DATABASE_CA_FILE`; the runtime uses full certificate and
+hostname verification.
 
 The embedding profile is immutable after its first indexed record. A model,
 dimension, or distance change creates a new profile and requires `memory

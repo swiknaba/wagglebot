@@ -360,37 +360,25 @@ A non-JSON completion fails the job into the normal retry path.
   `provenance_count`.
 
 **Postgres and pgvector conventions:**
-- Require the [Phase 2 database tooling](2026-08-28-phase-2-shared-layer.md#shared-database-and-migrations), including Sequel migrations.
-- Use `wagglebot_schema_migrations` for migration history.
-- Use one `wagglebot_memories` table. Columns include:
-  `id text PRIMARY KEY` (`recordId`), `canonical_key text UNIQUE`,
-  `identity_key text`, `kind text`, `title text`, `text text`,
-  `scopes text[]`, `embedding vector(384)`, `confidence real`,
-  `tags text[]`, `provenance jsonb`, `active boolean DEFAULT true`,
-  `superseded_by text`, `invalidated_at timestamptz`,
-  `invalidation_reason text`, `content_hash text`,
-  `created_at timestamptz DEFAULT now()`,
-  `updated_at timestamptz DEFAULT now()`.
-- Scope filtering: use native PostgreSQL array operations
-  (`scopes && $1`) with a GIN index on `scopes`. This removes
-  metadata array limits and fan-out workarounds (P16).
-- Distance and scoring: cosine distance using the `<=>` operator.
-  Score = `1 / (1 + distance)`. The default `minScore` for search is
-  0.35. An HNSW index on `embedding vector_cosine_ops` accelerates
-  queries.
-- **Embeddings use `all-MiniLM-L6-v2`** (384 dimensions, cosine distance)
-  (D19). The `memory-worker` computes embeddings in-process using
-  `@xenova/transformers` (local ONNX runtime on CPU) before writing to
-  Postgres.
-- The worker records embedding metadata in a `wagglebot_memory_schema_metadata`
-  table:
-  `{provider: "xenova-transformers", model: "all-MiniLM-L6-v2", dimension:
-  384, distance: "cosine", schemaVersion: 1}`.
-- The worker compares that metadata at startup. A mismatch aborts
-  startup with a message that names the required re-embed. A silent
-  dimension change would corrupt every search result.
-- Documents are structured relational records with plain text payload
-  (`Kind:`, `Title:`, ...). A parser reads them back by prefix when needed.
+- Require the [Phase 2 database tooling](2026-08-28-phase-2-shared-layer.md#shared-database-and-migrations), using the TypeScript/Bun one-shot migration job.
+- Use `wagglebot_schema_migrations` for complete ordered migration history.
+- Use the normalized canonical tables in the
+  [Shared Memory Foundation Design](2026-09-11-shared-memory-foundation-design.md#data-model):
+  `memory_records`, `memory_provenance`, `memory_sources`,
+  `memory_index_jobs`, `memory_embedding_profiles`, and
+  `memory_audit_events`.
+- Filter lexical queries by `scope_kind` and `scope_name` before ranking.
+  PostgreSQL remains canonical and immediately searchable while indexing is
+  delayed.
+- MemPalace owns embeddings, cosine search, and its pgvector structures behind
+  the private provider adapter. The memory worker does not store an embedding
+  column or load an in-process embedding model.
+- The worker records the expected MemPalace provider, model, dimension,
+  distance, and schema version in `memory_embedding_profiles`. A mismatch
+  prevents readiness and requires an explicit reindex.
+- Provider documents use the parseable envelope from the newer shared-memory
+  design; public clients receive only canonical records joined back through
+  their Wagglebot memory IDs.
 
 **`MemoryProvider` seam** — the pipeline depends only on this interface.
 Backends are swappable:

@@ -85,9 +85,9 @@ and deploy. No team must fork the internals of a different company.
 
 | # | Decision |
 |---|---|
-| D1 | Application services use **TypeScript (Bun)**. Database migrations use **Ruby Sequel** in a separate container. The hub uses `@modelcontextprotocol/sdk`. |
+| D1 | Application services and database-management tooling use **TypeScript (Bun)**. Migrations run as a separate one-shot deployment job. The hub uses `@modelcontextprotocol/sdk`. |
 | D2 | **An extractor serves document ingestion only, never the session path (D24).** When a deployment enables the batch mode, the extractor uses **OpenAI-compatible HTTP only**. It does not load models in-process. The optional compose profile ships a `llama.cpp` server container with a small Qwen GGUF (~1.1 GB, CPU-friendly). A remote endpoint needs only a different `EXTRACTOR_API_BASE` value, no code change. |
-| D3 | The memory worker uses PostgreSQL with pgvector through a standard client. Require the [Phase 2 database tooling](2026-08-28-phase-2-shared-layer.md#shared-database-and-migrations), including Sequel migrations. Register the worker MCP interface with the hub. Do not add an MCP wrapper around PostgreSQL (P17). |
+| D3 | The memory worker uses PostgreSQL with pgvector through a standard client. Require the [Phase 2 database tooling](2026-08-28-phase-2-shared-layer.md#shared-database-and-migrations), including the advisory-locked TypeScript/Bun migration job. Register the worker MCP interface with the hub. Do not add an MCP wrapper around PostgreSQL (P17). |
 | D4 | Coordination runs as a **standalone container**. The hub registers it via `registry.yaml` like any other upstream. It never embeds in the hub. |
 | D5 | Phase 3: order tasks by `priority DESC, created_at ASC`, with `priority` default 0. Omit deadlines and a scheduler. Use a lease and heartbeat for each claim. Increase the claim version (`fence`) with each new claim. Reject heartbeats and completion from an expired or older claim. Return expired tasks to the queue within the attempt limit. Use `idempotencyKey` to prevent duplicate external actions. |
 | D6 | Messages are **persistent with replay**: an append-only log, cursor-based replay over SSE (`Last-Event-ID`), a 7-day TTL, and a SQLite store. |

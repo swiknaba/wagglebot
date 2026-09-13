@@ -6,7 +6,7 @@
 
 **Architecture:** A TypeScript/Bun memory worker remains the only public memory boundary. It commits canonical records and an index outbox to PostgreSQL, then a narrow adapter files and searches those records through a private MemPalace 3.9.0 service using pgvector. Reviewed knowledge is published from committed Git Markdown; component memory never enters this service.
 
-**Tech Stack:** TypeScript 5.9.2, Bun, PostgreSQL with pgvector, `pg` 8.23.0, `zod` 4.6.1, `yaml` 2.8.3, `jose` 6.2.12, `@modelcontextprotocol/sdk` 1.30.0, `@wagglebot/d26-auth`, MemPalace 3.9.0, gitleaks 8.30.1.
+**Tech Stack:** TypeScript 5.9.2, Bun, PostgreSQL with pgvector, `pg` 8.23.0, SQL migrations managed by a TypeScript/Bun one-shot job, `zod` 4.6.1, `yaml` 2.8.3, `jose` 6.2.12, `@modelcontextprotocol/sdk` 1.30.0, `@wagglebot/d26-auth`, MemPalace 3.9.0, gitleaks 8.30.1.
 
 **Spec:** `docs/superpowers/specs/2026-09-11-shared-memory-foundation-design.md`
 
@@ -23,7 +23,13 @@
   when `wake: true`.
 - Wake retrieval reads PostgreSQL only, returns at most three active,
   high-confidence, unexpired records, and never calls MemPalace.
-- Keep Wagglebot-owned runtime code in TypeScript/Bun. Treat MemPalace as a pinned private service dependency.
+- Keep Wagglebot-owned runtime and database-management code in TypeScript/Bun. Treat MemPalace as a pinned private service dependency.
+- Run migrations as a one-shot deployment job before the memory worker. Serialize
+  runners with a PostgreSQL advisory lock and require the shipped ordered
+  migration manifest to match database history before readiness.
+- Preserve unrelated database objects and the shared `vector` extension. Use an
+  explicit Wagglebot object list for schema export, backup, restore, metrics,
+  and checks; never infer ownership from a prefix.
 - Pin `mempalace==3.9.0`; deploy its image by immutable digest. CI must reject a tag-only production image reference.
 - Pin every npm dependency exactly. Do not use `^`, `~`, a range, or `latest`.
 - Use PostgreSQL parameterized statements. Never compose SQL from user values.
@@ -67,8 +73,12 @@ services/memory-worker/
   src/principal.ts
   src/scopes.ts
   src/db/migrate.ts
+  src/db/migration-status.ts
   src/db/repository.ts
-  src/db/migrations/001_memory.sql
+  src/db/migrations/001_memory.up.sql
+  src/db/migrations/001_memory.down.sql
+  migration-version.json
+  schema.sql
   src/memory/canonicalize.ts
   src/memory/reconcile.ts
   src/memory/write-service.ts
@@ -91,6 +101,7 @@ packages/cli/src/commands/
 
 deploy/
   docker-compose.memory.yml
+  init-vector.sql
   mempalace.Dockerfile
   README.md
 
@@ -109,7 +120,7 @@ endpoints; they do not import worker internals.
 
 ---
 
-### Task 1: Add memory wire contracts and workspace support
+### Task 1: Add memory wire contracts and workspace support (complete in `3c473ea`)
 
 **Files:**
 - Modify: `package.json`
@@ -124,7 +135,7 @@ endpoints; they do not import worker internals.
 - Produces: `SharedScopeSchema`, `MemoryRecordSchema`, `MemorySearchInputSchema`, `MemorySearchResultSchema`, `PrincipalSchema`, and their inferred TypeScript types.
 - Consumes: nothing.
 
-- [ ] **Step 1: Write failing schema tests**
+- [x] **Step 1: Write failing schema tests**
 
 ```typescript
 import { expect, test } from "bun:test";
@@ -182,13 +193,13 @@ test("wake search has no query and is capped at three", () => {
 });
 ```
 
-- [ ] **Step 2: Run the tests and confirm the module is absent**
+- [x] **Step 2: Run the tests and confirm the module is absent**
 
 Run: `bun test packages/contracts/src/memory.test.ts`
 
 Expected: FAIL with `Cannot find module './memory'`.
 
-- [ ] **Step 3: Add exact workspace packages and schemas**
+- [x] **Step 3: Add exact workspace packages and schemas**
 
 Change the root workspace list to:
 
@@ -257,13 +268,13 @@ closed 20-fact/256-chunk batch limits. HTTP schemas require
 `schemaVersion: 1`; MCP tool schemas are negotiated as v1 and omit only that
 repeated HTTP field. Export every schema and inferred type from `src/index.ts`.
 
-- [ ] **Step 4: Install, test, and check type exports**
+- [x] **Step 4: Install, test, and check type exports**
 
 Run: `bun install && bun test packages/contracts && bun run typecheck`
 
 Expected: PASS. `bun.lock` contains exact versions.
 
-- [ ] **Step 5: Commit the contracts**
+- [x] **Step 5: Commit the contracts**
 
 ```bash
 git add package.json bun.lock packages/contracts services/memory-worker/package.json
@@ -305,7 +316,9 @@ test("system proposals carry fresh confirmation by the same principal", () => {
 
 Add config cases that reject `MEMPALACE_BACKEND=chroma`, a missing public key,
 a DSN literal in company YAML, and an embedding dimension other than 384 for the
-`minilm` profile.
+`minilm` profile. Also reject a non-loopback PostgreSQL URL without
+`MEMORY_DATABASE_CA_FILE`; tests must prove the resulting error does not echo
+the URL, username, password, or CA path.
 
 - [ ] **Step 2: Run tests and verify missing modules fail**
 
@@ -320,6 +333,7 @@ Use a strict Zod schema:
 ```typescript
 const MemoryConfigSchema = z.object({
   databaseUrl: z.string().min(1),
+  databaseCaFile: z.string().min(1).optional(),
   mempalaceUrl: z.string().url(),
   mempalaceToken: z.string().min(32),
   sessionPublicKeyFile: z.string().min(1),
@@ -376,8 +390,14 @@ git commit -m "feat(memory): enforce shared memory identity and scopes"
 ### Task 3: Add the canonical PostgreSQL schema and repository
 
 **Files:**
-- Create: `services/memory-worker/src/db/migrations/001_memory.sql`
+- Modify: `services/memory-worker/package.json`
+- Create: `services/memory-worker/src/db/migrations/001_memory.up.sql`
+- Create: `services/memory-worker/src/db/migrations/001_memory.down.sql`
 - Create: `services/memory-worker/src/db/migrate.ts`
+- Create: `services/memory-worker/src/db/migration-status.ts`
+- Create: `services/memory-worker/src/db/migration.test.ts`
+- Create: `services/memory-worker/migration-version.json`
+- Create: `services/memory-worker/schema.sql`
 - Create: `services/memory-worker/src/db/repository.ts`
 - Create: `services/memory-worker/src/db/repository.test.ts`
 - Create: `services/memory-worker/integration/postgres.test.ts`
@@ -386,7 +406,9 @@ git commit -m "feat(memory): enforce shared memory identity and scopes"
 - Consumes: memory contract types and a `pg.Pool`.
 - Produces: `MemoryRepository` methods `insertOrReconcile`, `replaceSource`,
   `invalidate`, `get`, `searchLexical`, `searchWakeEligible`, `claimIndexJobs`,
-  `completeIndexJob`, `failIndexJob`, and `recordAudit`.
+  `completeIndexJob`, `failIndexJob`, and `recordAudit`; plus `migrate`,
+  `rollbackTo`, `migrationStatus`, and `checkMigrationState` for one configured
+  database.
 
 - [ ] **Step 1: Write migration assertions**
 
@@ -402,7 +424,14 @@ test("database constraint rejects component scope", async () => {
 });
 ```
 
-Add tests for one-active-canonical-key uniqueness, provenance immutability, and `FOR UPDATE SKIP LOCKED` returning each job to one concurrent claimant.
+Add tests for one-active-canonical-key uniqueness, provenance immutability, and
+`FOR UPDATE SKIP LOCKED` returning each job to one concurrent claimant. Add
+migration tests proving two concurrent runners apply each version once, a
+second migration run is a no-op, rollback requires an explicit target, and
+rollback preserves the `vector` extension and unrelated objects. Prove
+`checkMigrationState` rejects missing, unexpected, older, newer, or reordered
+history even when the latest version matches. Prove a missing `vector`
+extension fails before application objects are created.
 
 - [ ] **Step 2: Run the integration test against an empty database**
 
@@ -410,15 +439,43 @@ Run: `MEMORY_TEST_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55432/wagg
 
 Expected: FAIL because the migration runner and tables do not exist.
 
-- [ ] **Step 3: Write the first migration**
+- [ ] **Step 3: Write the migration manifest and explicit up/down migration**
 
-The SQL must begin with:
+`migration-version.json` contains the latest version, the complete ordered
+up-migration filename list, and the explicit Wagglebot application-object list.
+The migration runner owns the transaction and advisory lock. The up SQL begins
+with the application schema; it does not create a database or install the
+shared `vector` extension:
+
+```json
+{
+  "schemaVersion": 1,
+  "latest": "001_memory",
+  "migrations": [
+    {
+      "version": "001_memory",
+      "up": "001_memory.up.sql",
+      "down": "001_memory.down.sql"
+    }
+  ],
+  "tables": [
+    "wagglebot_schema_migrations",
+    "memory_embedding_profiles",
+    "memory_records",
+    "memory_provenance",
+    "memory_sources",
+    "memory_index_jobs",
+    "memory_audit_events"
+  ],
+  "indexes": [
+    "memory_one_active_canonical",
+    "memory_search_gin",
+    "memory_wake_lookup"
+  ]
+}
+```
 
 ```sql
-BEGIN;
-CREATE EXTENSION IF NOT EXISTS pgcrypto;
-CREATE EXTENSION IF NOT EXISTS vector;
-
 CREATE TABLE memory_embedding_profiles (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   provider text NOT NULL,
@@ -467,9 +524,39 @@ CREATE INDEX memory_wake_lookup
   WHERE status = 'active' AND wake = true AND confidence = 'high';
 ```
 
-Add `memory_provenance`, `memory_sources`, `memory_index_jobs`, and `memory_audit_events` with foreign keys, operation-key uniqueness, attempt count, `next_attempt_at`, and content-free audit columns. Finish with `COMMIT`.
+Add `memory_provenance`, `memory_sources`, `memory_index_jobs`, and
+`memory_audit_events` with foreign keys, operation-key uniqueness, attempt
+count, `next_attempt_at`, and content-free audit columns. The down migration
+drops exactly these application objects in reverse dependency order; it never
+drops `vector`, another extension, an unrelated table, or the database.
 
-- [ ] **Step 4: Implement migration and repository transactions**
+Generate `schema.sql` from a clean database after applying all migrations with
+`pg_dump --schema-only --no-owner --no-privileges`, scoped to the manifest's
+application-object list plus `wagglebot_schema_migrations`. It contains no rows,
+extension installation, owner, privilege, credential, or unrelated object.
+
+- [ ] **Step 4: Implement migration governance and repository transactions**
+
+`migrate` connects only to `MEMORY_DATABASE_URL`, begins one transaction, takes
+`pg_advisory_xact_lock` using a fixed Wagglebot migration key, verifies the
+`vector` extension and cosine operators, creates/reads
+`wagglebot_schema_migrations`, validates its complete ordered history against
+the manifest, and applies each pending up file exactly once. `rollbackTo`
+requires an explicit version and applies down files under the same lock.
+`migrationStatus` is read-only. `checkMigrationState` compares complete ordered
+history and the active embedding profile; the memory worker returns `503` from
+`/readyz` until both match.
+
+The history table stores `version`, `filename`, and `applied_at`. Add exact
+package scripts `db:migrate`, `db:status`, `db:check`, `db:rollback`, and
+`db:schema:dump`; `db:rollback` exits before connecting unless `--to
+<version>` is present. The schema-dump command reads the manifest object list
+and invokes `pg_dump` without a shell.
+
+Every command targets one configured database, uses bounded connection waits,
+supports remote TLS with a supplied CA and full hostname verification, and
+never prints the DSN or credentials. Do not add database create/drop or
+multi-environment selection commands.
 
 Use one connection per transaction and release it in `finally`:
 
@@ -503,10 +590,19 @@ Run: `MEMORY_TEST_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55432/wagg
 
 Expected: PASS.
 
+Then run migration, status, check, and explicit-target rollback against a fresh
+test database. Regenerate `schema.sql` and run:
+
+```bash
+git diff --exit-code -- services/memory-worker/schema.sql services/memory-worker/migration-version.json
+```
+
+Expected: no output.
+
 - [ ] **Step 6: Commit persistence**
 
 ```bash
-git add services/memory-worker/src/db services/memory-worker/integration/postgres.test.ts
+git add services/memory-worker/package.json services/memory-worker/src/db services/memory-worker/integration/postgres.test.ts services/memory-worker/migration-version.json services/memory-worker/schema.sql
 git commit -m "feat(memory): persist canonical records and index jobs"
 ```
 
@@ -1077,6 +1173,7 @@ git commit -m "feat(cli): publish and maintain shared knowledge"
 - Create: `packages/cli/templates/init/wagglebot.yaml`
 - Create: `packages/cli/templates/init/company/knowledge/README.md`
 - Create: `deploy/docker-compose.memory.yml`
+- Create: `deploy/init-vector.sql`
 - Create: `deploy/README.md`
 - Create: `services/memory-worker/Dockerfile`
 - Create: `services/memory-worker/integration/e2e.test.ts`
@@ -1113,9 +1210,19 @@ expire from automatic delivery, and remain explicitly searchable afterward.
 
 Add the `wagglebot.yaml` shape from the spec, knowledge READMEs with the exact front-matter contract, and environment names in `.env.credentials.example`. Run `bun run regen:test-app` and verify a second run is clean.
 
-- [ ] **Step 3: Add pinned containers and private networking**
+- [ ] **Step 3: Add pinned containers, a one-shot migration job, and private networking**
 
-Compose must include PostgreSQL with `vector`, MemPalace, and memory-worker. Publish only the worker port. Give MemPalace and PostgreSQL no host ports in the production profile. Pass DSNs/tokens through secrets or environment, add health checks, set `MEMPALACE_MCP_IDLE_HOURS=0`, and mount no repository or transcript path into MemPalace.
+Compose must include an optional local PostgreSQL profile with `vector`, a
+one-shot `db-migrate` job, MemPalace, and memory-worker. The shared profile also
+works with only an external `MEMORY_DATABASE_URL`; it must not require the local
+PostgreSQL container. The memory worker starts only after the migration job
+succeeds, then refuses readiness unless migration history and embedding
+metadata match its shipped files. Publish only the worker port. Give MemPalace
+and PostgreSQL no host ports in the production profile. Pass DSNs/tokens
+through secrets or environment, mount a remote PostgreSQL CA read-only when
+configured, add health checks, set `MEMPALACE_MCP_IDLE_HOURS=0`, and mount no
+repository or transcript path into MemPalace. `deploy/init-vector.sql` installs
+`vector` only for the optional local database.
 
 Add a CI script that rejects `image: .*:latest`, tag-only MemPalace production references, `MEMPALACE_BACKEND=chroma`, and a missing digest in `deploy/vendor-lock.json`.
 
@@ -1124,7 +1231,7 @@ Add a CI script that rejects `image: .*:latest`, tag-only MemPalace production r
 The test must:
 
 ```text
-1. migrate a clean PostgreSQL database;
+1. migrate a clean PostgreSQL database twice and prove the second run is a no-op;
 2. publish one domain document and one team public contract;
 3. submit one confirmed system fact;
 4. run the index outbox;
@@ -1137,13 +1244,25 @@ The test must:
 11. publish four wake-eligible facts plus ordinary and expired records;
 12. prove wake retrieval returns three eligible facts in deterministic order,
     reports the additional count, and records zero MemPalace calls.
+13. run two migration jobs concurrently and prove each version applies once;
+14. reject older, newer, incomplete, or reordered migration history at readiness;
+15. roll back to an explicit target and prove unrelated objects and `vector` remain;
+16. regenerate `schema.sql` from a fresh migrated database and prove it matches the committed reference without data or unrelated objects.
 ```
 
 Capture service logs and assert that fixture content, query text, DSNs, tokens, and absolute paths are absent.
 
 - [ ] **Step 5: Document operations and recovery**
 
-`deploy/README.md` must give exact commands for startup, `/livez`, `/readyz`, PostgreSQL logical dump, restore into an empty database, full MemPalace reindex, admin-token rotation, D26 public-key rotation, and a failed-index investigation. It must explain that Git-published documents can be rebuilt, while confirmed system facts require the PostgreSQL backup.
+`deploy/README.md` must give exact commands for migration status/check/apply,
+explicit-target rollback, startup with bundled or external PostgreSQL, `/livez`,
+`/readyz`, schema-reference regeneration, scoped PostgreSQL logical dump,
+restore into an empty database, full MemPalace reindex, admin-token rotation,
+D26 public-key rotation, and a failed-index investigation. Dump/restore uses the
+manifest's explicit object list, includes migration history and embedding
+metadata, preserves unrelated objects and `vector`, and never prints a DSN. The
+runbook explains that Git-published documents can be rebuilt, while confirmed
+system facts require the PostgreSQL backup.
 
 - [ ] **Step 6: Run the full release gate**
 
@@ -1159,6 +1278,8 @@ docker compose -f deploy/docker-compose.memory.yml config
 ```
 
 Then run the container-backed end-to-end test with its documented environment. Expected: all checks PASS; `git diff --exit-code test-app` prints nothing.
+Also require the migration manifest to match its directory and the committed
+`schema.sql` to match a fresh fully migrated database.
 
 - [ ] **Step 7: Commit the deployable milestone**
 
@@ -1171,11 +1292,16 @@ git commit -m "feat(memory): deliver the shared memory foundation"
 
 ## Plan Completion Gate
 
-Before starting the Local Repository Brain plan:
+Before declaring the Shared Memory Foundation milestone complete:
 
 - All ten task commits are green.
 - The MemPalace contract suite records version 3.9.0.
 - Production compose resolves every executable image to a digest.
+- Migration history matches the shipped ordered manifest; concurrent and
+  repeated migration runs are safe, and explicit rollback preserves unrelated
+  objects and the `vector` extension.
+- The committed `schema.sql` matches a clean fully migrated database and
+  contains neither table data nor unrelated objects.
 - An accepted system fact survives a full service restart.
 - Git source replacement and deletion are reflected immediately in search.
 - MemPalace outage leaves lexical search and canonical writes operational.

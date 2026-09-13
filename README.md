@@ -114,7 +114,7 @@ Three points apply:
 |---|---|
 | [Design](docs/superpowers/specs/2026-08-28-wagglebot-design.md) | Goals, decisions, architecture, and the phase index. |
 | [Phase 1 — provisioning](docs/superpowers/specs/2026-08-28-phase-1-provisioning.md) | Workstation setup plus local project instruction sync. |
-| [Phase 2 — shared layer](docs/superpowers/specs/2026-08-28-phase-2-shared-layer.md) | The memory worker, required Sequel migrations, database deployment, the hub, and auth. |
+| [Phase 2 — shared layer](docs/superpowers/specs/2026-08-28-phase-2-shared-layer.md) | The memory worker, governed PostgreSQL migrations, database deployment, the hub, and auth. |
 | [Phase 3 — collaboration](docs/superpowers/specs/2026-08-28-phase-3-collaboration.md) | Cross-machine agent collaboration. |
 | [Phase 4 — ingestion](docs/superpowers/specs/2026-08-28-phase-4-document-ingestion.md) | Documents into memory, with an optional batch extractor. |
 | [Admin dashboard](docs/superpowers/specs/2026-09-13-admin-dashboard.md) | Developer UI, task controls, and database metrics. |
