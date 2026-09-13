@@ -117,6 +117,7 @@ Three points apply:
 | [Phase 2 — shared layer](docs/superpowers/specs/2026-08-28-phase-2-shared-layer.md) | The memory worker, required Sequel migrations, database deployment, the hub, and auth. |
 | [Phase 3 — collaboration](docs/superpowers/specs/2026-08-28-phase-3-collaboration.md) | Cross-machine agent collaboration. |
 | [Phase 4 — ingestion](docs/superpowers/specs/2026-08-28-phase-4-document-ingestion.md) | Documents into memory, with an optional batch extractor. |
+| [Admin dashboard](docs/superpowers/specs/2026-09-13-admin-dashboard.md) | Developer UI, task controls, and database metrics. |
 | [Service contracts](docs/superpowers/specs/2026-08-28-service-contracts.md) | Behavior contracts for each service, and the pitfall register. |
 | [Harness reference](docs/harnesses.md) | Every file wagglebot writes per harness, and the MCP config format of each. |
 
