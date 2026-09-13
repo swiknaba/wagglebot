@@ -54,6 +54,17 @@
       "name": "@wagglebot/secret-scanner",
       "version": "0.0.0",
     },
+    "services/auth": {
+      "name": "@wagglebot/auth",
+      "version": "0.0.0",
+      "dependencies": {
+        "@wagglebot/contracts": "workspace:*",
+        "@wagglebot/d26-auth": "workspace:*",
+        "jose": "6.2.12",
+        "yaml": "2.8.3",
+        "zod": "4.6.1",
+      },
+    },
     "services/context-engine": {
       "name": "@wagglebot/context-engine",
       "version": "0.0.0",
@@ -125,6 +136,8 @@
     "@types/pg": ["@types/pg@8.23.1", "", { "dependencies": { "@types/node": "*", "pg-protocol": "*", "pg-types": "^2.2.0" } }, "sha512-fKVHpikPdg4GKks3JuLEhvwSyvwzF23hnabPy6DD8ljVbC7+6J5dQzdv4arV6jqq57djnMgs1HKBxX4P8aBI3A=="],
 
     "@types/react": ["@types/react@19.2.18", "", { "dependencies": { "csstype": "^3.2.2" } }, "sha512-AnzbBERsrLKtk2XSfTbYRLjQPdy116Sty4q+T+Bp3IC4l6jNBvreVPAHmpq9qhXQM7CXZPjLVmGMw9sy+hxQ3w=="],
+
+    "@wagglebot/auth": ["@wagglebot/auth@workspace:services/auth"],
 
     "@wagglebot/context-engine": ["@wagglebot/context-engine@workspace:services/context-engine"],
 
