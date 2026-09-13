@@ -24,7 +24,9 @@ test("loads strict registry configuration", () => {
 });
 
 test("rejects missing, malformed, and unknown configuration", () => {
-  expect(() => loadRegistryConfig({ ...valid, REGISTRY_ISSUER: "http://auth.example.test" })).toThrow(/REGISTRY_ISSUER/);
+  expect(() => loadRegistryConfig({ ...valid, REGISTRY_ISSUER: "http://auth.example.test" })).toThrow(
+    /REGISTRY_ISSUER/,
+  );
   expect(() => loadRegistryConfig({ ...valid, REGISTRY_PORT: "0" })).toThrow(/REGISTRY_PORT/);
   expect(() => loadRegistryConfig({ ...valid, EXTRA: "x" })).toThrow(/EXTRA/);
   expect(() => loadRegistryConfig({ ...valid, REGISTRY_REFRESH_SECONDS: "0" })).toThrow(/REGISTRY_REFRESH_SECONDS/);
