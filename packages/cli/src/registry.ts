@@ -1,26 +1,7 @@
+import type { ProxyConfig } from "@wagglebot/contracts";
 import { parse } from "yaml";
 
-export type AuthScheme =
-  | { kind: "none" }
-  | { kind: "bearer" }
-  | { kind: "header"; name: string; prefix?: string }
-  // basic: ${VAR} holds the base64 value of "username:password". A harness expands the variable
-  // only, so wagglebot cannot encode it.
-  | { kind: "basic" }
-  | { kind: "env"; map: Record<string, string> };
-export type CredentialSource =
-  | { from: "env"; var: string }
-  | { from: "file"; path: string }
-  | { from: "literal"; value: string };
-export type ProxyConfig = {
-  namespace: string;
-  mode: "remote_http" | "remote_sse" | "stdio_npx" | "stdio_cmd";
-  endpoint?: string;
-  command?: string;
-  args?: string[];
-  env?: Record<string, string>;
-  auth?: { scheme: AuthScheme; source: CredentialSource };
-};
+export type { AuthScheme, CredentialSource, ProxyConfig } from "@wagglebot/contracts";
 
 // Every key a proxy entry may carry. A typo such as "enpoint" is a hard error, never a silent
 // default: the engineer must see which key the loader does not know (P35).

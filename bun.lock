@@ -18,6 +18,7 @@
         "wagglebot": "bin/wagglebot.js",
       },
       "dependencies": {
+        "@wagglebot/contracts": "workspace:*",
         "@wagglebot/local-brain": "workspace:*",
         "skills": "1.5.23",
       },

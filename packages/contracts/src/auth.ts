@@ -1,6 +1,7 @@
 import { z } from "zod";
 
-const username = z.string().regex(/^[a-z0-9][a-z0-9._-]{0,63}$/);
+export const UsernameSchema = z.string().regex(/^[a-z0-9][a-z0-9._-]{0,63}$/);
+const username = UsernameSchema;
 const signatureNamespace = "wagglebot-auth@wagglebot.dev" as const;
 
 export const D26AudienceSchema = z.enum(["wagglebot-registry", "wagglebot-memory", "wagglebot-coordination"]);

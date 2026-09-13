@@ -18,6 +18,7 @@ export {
   AuthSessionResponseSchema,
   D26AudienceSchema,
   D26SessionClaimsSchema,
+  UsernameSchema,
 } from "./auth";
 export type {
   EvidenceRef,
@@ -98,3 +99,19 @@ export {
 } from "./memory";
 export type { Principal } from "./principal";
 export { PrincipalSchema } from "./principal";
+export type {
+  AuthScheme,
+  CredentialSource,
+  ProxyConfig,
+  RegistryErrorCode,
+  RegistrySnapshot,
+  ToolCatalog,
+} from "./registry";
+export {
+  AuthSchemeSchema,
+  CredentialSourceSchema,
+  ProxyConfigSchema,
+  RegistryErrorCodeSchema,
+  RegistrySnapshotSchema,
+  ToolCatalogSchema,
+} from "./registry";
