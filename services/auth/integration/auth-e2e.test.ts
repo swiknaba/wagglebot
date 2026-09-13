@@ -174,6 +174,46 @@ test("real SSHSIG verification rejects a replay and mismatched challenge values"
   ).rejects.toThrow("authentication failed");
 });
 
+test("a catalog key rotation rejects new old-key exchanges without revoking issued tokens", async () => {
+  const environment = await fixture();
+  const client = new D26Client({
+    baseUrl: "https://auth.example.test",
+    username: "alice",
+    signer: { sign: (payload) => sign(environment.privateKeyPath, payload) },
+    fetch: environment.fetch,
+    clock: () => new Date("2026-09-13T12:00:00.000Z"),
+  });
+  const issued = await client.get("wagglebot-memory", new AbortController().signal);
+
+  const replacementKeyPath = join(dirname(environment.privateKeyPath), "id_replacement");
+  await run(["ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-f", replacementKeyPath]);
+  const replacementPublicKey = (await readFile(`${replacementKeyPath}.pub`, "utf8")).trim();
+  await writeFile(
+    environment.catalogPath,
+    `apiVersion: backstage.io/v1alpha1\nkind: User\nmetadata:\n  name: alice\n  annotations:\n    wagglebot.dev/ssh-key: ${JSON.stringify(replacementPublicKey)}\n`,
+  );
+  await environment.resolver.refresh(new AbortController().signal);
+
+  await expect(
+    verifyD26SessionToken(issued.token, {
+      issuer: "https://auth.example.test",
+      audience: "wagglebot-memory",
+      publicKey: environment.issuerPublicKey,
+      clock: () => new Date("2026-09-13T12:00:00.000Z"),
+    }),
+  ).resolves.toMatchObject({ username: "alice" });
+  const staleKeyClient = new D26Client({
+    baseUrl: "https://auth.example.test",
+    username: "alice",
+    signer: { sign: (payload) => sign(environment.privateKeyPath, payload) },
+    fetch: environment.fetch,
+    clock: () => new Date("2026-09-13T12:00:00.000Z"),
+  });
+  await expect(staleKeyClient.get("wagglebot-registry", new AbortController().signal)).rejects.toThrow(
+    "D26 auth request failed",
+  );
+});
+
 test("an isolated ssh-agent signs an SSHSIG without exposing its private key", async () => {
   const environment = await fixture();
   const originalSocket = process.env.SSH_AUTH_SOCK;
