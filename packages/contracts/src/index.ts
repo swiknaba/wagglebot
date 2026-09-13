@@ -1,4 +1,25 @@
 export type {
+  AuthChallengeRecord,
+  AuthChallengeRequest,
+  AuthChallengeResponse,
+  AuthErrorCode,
+  AuthSessionRequest,
+  AuthSessionResponse,
+  D26Audience,
+  D26Principal,
+  D26SessionClaims,
+  D26SessionToken,
+} from "./auth";
+export {
+  AuthChallengeRequestSchema,
+  AuthChallengeResponseSchema,
+  AuthErrorCodeSchema,
+  AuthSessionRequestSchema,
+  AuthSessionResponseSchema,
+  D26AudienceSchema,
+  D26SessionClaimsSchema,
+} from "./auth";
+export type {
   EvidenceRef,
   PacketMetadata,
   ProjectIdentity,

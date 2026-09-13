@@ -32,6 +32,14 @@
         "zod": "4.6.1",
       },
     },
+    "packages/d26-auth": {
+      "name": "@wagglebot/d26-auth",
+      "version": "0.0.0",
+      "dependencies": {
+        "@wagglebot/contracts": "workspace:*",
+        "jose": "6.2.12",
+      },
+    },
     "packages/local-brain": {
       "name": "@wagglebot/local-brain",
       "version": "0.0.0",
@@ -121,6 +129,8 @@
     "@wagglebot/context-engine": ["@wagglebot/context-engine@workspace:services/context-engine"],
 
     "@wagglebot/contracts": ["@wagglebot/contracts@workspace:packages/contracts"],
+
+    "@wagglebot/d26-auth": ["@wagglebot/d26-auth@workspace:packages/d26-auth"],
 
     "@wagglebot/local-brain": ["@wagglebot/local-brain@workspace:packages/local-brain"],
 
