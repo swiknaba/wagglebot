@@ -294,6 +294,15 @@ revision. Errors are `401 auth_required`, `401 auth_invalid`, `413
 registry_response_too_large`, and `503 registry_unavailable`. The error body
 never reveals whether a user, Group, or registry entry exists.
 
+The registry service is configured with `REGISTRY_HOST`, `REGISTRY_PORT`,
+`REGISTRY_ISSUER`, `REGISTRY_D26_PUBLIC_KEY_FILE`, `REGISTRY_COMPANY_ROOT`,
+`REGISTRY_SOURCE_REVISION`, `REGISTRY_REFRESH_SECONDS`, and
+`REGISTRY_MAX_RESPONSE_BYTES`. The company repository is mounted read-only;
+the public key file is the only D26 credential mounted into the service.
+`/readyz` reports a degraded `source` dependency until the first complete
+catalog-backed snapshot is accepted. Refresh failures retain the last accepted
+snapshot.
+
 ## Local MCP hub
 
 The hub runs on the engineer workstation. It requires its local

@@ -1,5 +1,10 @@
 import { createHash } from "node:crypto";
-import type { D26Principal, ProxyConfig, RegistrySnapshot } from "@wagglebot/contracts";
+import {
+  type D26Principal,
+  type ProxyConfig,
+  type RegistrySnapshot,
+  RegistrySnapshotSchema,
+} from "@wagglebot/contracts";
 import type { ValidatedSourceSnapshot } from "./catalog";
 
 function canonical(value: unknown): string {
@@ -23,14 +28,18 @@ export function composeRegistry(
   for (const entry of [...source.company, ...groups.flatMap((group) => source.teams.get(group) ?? [])])
     merged.set(entry.namespace, entry);
   const proxies = [...merged.values()].sort((a, b) => a.namespace.localeCompare(b.namespace));
-  const digest = `wagglebot:registry:v1\0${source.sourceRevision}\0${principal.username}\0${canonical(proxies)}`;
-  return {
+  const candidate = {
     schemaVersion: 1,
-    revision: `reg_${createHash("sha256").update(digest).digest("hex")}`,
+    revision: `reg_${"0".repeat(64)}`,
     sourceRevision: source.sourceRevision,
     generatedAt: source.generatedAt,
     principal: { username: principal.username },
     proxies,
     toolCatalog: source.toolCatalog,
   };
+  const digest = `wagglebot:registry:v1\0${source.sourceRevision}\0${principal.username}\0${canonical({ proxies, toolCatalog: source.toolCatalog })}`;
+  return RegistrySnapshotSchema.parse({
+    ...candidate,
+    revision: `reg_${createHash("sha256").update(digest).digest("hex")}`,
+  });
 }

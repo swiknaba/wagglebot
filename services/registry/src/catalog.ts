@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { assertTeamDirsKnown, type CompanyRepo, loadCompanyRepo } from "@wagglebot/company-config";
 import {
@@ -89,8 +89,10 @@ function parseCatalog(repo: CompanyRepo): CatalogSnapshot {
 export function loadCatalog(root: string, sourceRevision: string): ValidatedSourceSnapshot {
   if (!FullGitShaSchema.safeParse(sourceRevision).success) throw new Error("source revision must be a full Git SHA");
   const repo = loadCompanyRepo(root);
-  for (const old of ["registry.base.yaml", "registry.team.yaml"])
-    if (existsSync(join(root, old))) throw new Error(`removed registry layout: ${old}`);
+  for (const old of readdirSync(root).filter(
+    (name) => name === "registry.base.yaml" || /^registry\.team\..+\.yaml$/.test(name),
+  ))
+    throw new Error(`removed registry layout: ${old}`);
   const toolPath = join(root, "tool_catalog.yaml");
   if (!existsSync(toolPath)) throw new Error("tool_catalog.yaml is required");
   const toolResult = ToolCatalogSchema.safeParse(parse(readFileSync(toolPath, "utf8")));

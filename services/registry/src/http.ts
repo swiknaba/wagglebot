@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { D26Principal, RegistrySnapshot } from "@wagglebot/contracts";
 import { composeRegistry } from "./compose";
 import type { RegistrySource } from "./source";
@@ -7,8 +8,12 @@ const errorBody = (code: string, retryable: boolean) => ({
   schemaVersion: 1,
   error: {
     code,
-    message: code.startsWith("auth_") ? "authentication failed" : "registry unavailable",
-    correlationId: "corr_registry",
+    message: code.startsWith("auth_")
+      ? "authentication failed"
+      : code === "registry_response_too_large"
+        ? "registry response is too large"
+        : "registry unavailable",
+    correlationId: `corr_${randomUUID().replaceAll("-", "")}`,
     retryable,
   },
 });
@@ -22,7 +27,14 @@ export function createApp(options: { source: RegistrySource; verify: Verify; max
         return Response.json({ schemaVersion: 1, status: "live" });
       if (request.method === "GET" && url.pathname === "/readyz") {
         const ready = options.source.current() !== undefined;
-        return Response.json({ schemaVersion: 1, status: ready ? "ready" : "degraded" }, { status: ready ? 200 : 503 });
+        return Response.json(
+          {
+            schemaVersion: 1,
+            status: ready ? "ready" : "degraded",
+            dependencies: { source: ready ? "ready" : "unavailable" },
+          },
+          { status: ready ? 200 : 503 },
+        );
       }
       if (request.method !== "GET" || url.pathname !== "/registry") return new Response(null, { status: 404 });
       const header = request.headers.get("authorization");

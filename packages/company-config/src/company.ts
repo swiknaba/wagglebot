@@ -42,7 +42,11 @@ export function findCompanyRoot(cwd: string): string {
   while (true) {
     if (pinOf(dir) !== undefined) return dir;
     const parent = dirname(dir);
-    if (parent === dir) throw new Error(`no company repository found above ${cwd}`);
+    if (parent === dir) {
+      throw new Error(
+        `no company repository found above ${cwd}. Run this command inside the repository scaffolded by "wagglebot init" — its package.json pins the "wagglebot" dependency.`,
+      );
+    }
     dir = parent;
   }
 }
