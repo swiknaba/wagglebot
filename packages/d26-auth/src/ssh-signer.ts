@@ -32,7 +32,7 @@ export class SshAgentSigner implements SshSigner {
       await writeFile(payloadPath, payload, { mode: 0o600 });
       await chmod(payloadPath, 0o600);
       processHandle = Bun.spawn(
-        [this.sshKeygenPath, "-Y", "sign", "-f", keyPath, "-n", D26_SIGNATURE_NAMESPACE, "-U", payloadPath],
+        [this.sshKeygenPath, "-Y", "sign", "-f", keyPath, "-n", D26_SIGNATURE_NAMESPACE, payloadPath],
         { stdin: "ignore", stdout: "ignore", stderr: "ignore" },
       );
 

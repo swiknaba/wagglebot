@@ -1,7 +1,7 @@
 import { afterEach, expect, test } from "bun:test";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { join } from "node:path";
-import { canonicalChallengeBytes, D26Client, verifyD26SessionToken } from "@wagglebot/d26-auth";
+import { dirname, join } from "node:path";
+import { canonicalChallengeBytes, D26Client, SshAgentSigner, verifyD26SessionToken } from "@wagglebot/d26-auth";
 import { generateKeyPair } from "jose";
 import { createCatalogPublicKeyResolver } from "../src/catalog-keys";
 import { InMemoryChallengeStore } from "../src/challenge-store";
@@ -14,6 +14,38 @@ const directories: string[] = [];
 async function run(args: string[]): Promise<void> {
   const process = Bun.spawn(args, { stdout: "ignore", stderr: "ignore" });
   if ((await process.exited) !== 0) throw new Error("OpenSSH is required for D26 end-to-end tests");
+}
+
+async function agent(privateKeyPath: string) {
+  const socketPath = join(dirname(privateKeyPath), "agent.sock");
+  const agentProcess = Bun.spawn(["ssh-agent", "-a", socketPath, "-s"], { stdout: "pipe", stderr: "ignore" });
+  const output = await new Response(agentProcess.stdout).text();
+  if ((await agentProcess.exited) !== 0) throw new Error("ssh-agent is required for D26 end-to-end tests");
+  const socket = output.match(/SSH_AUTH_SOCK=([^;]+);/)?.[1];
+  const processId = output.match(/SSH_AGENT_PID=(\d+);/)?.[1];
+  if (!socket || !processId) throw new Error("ssh-agent did not report a socket");
+  const environment = { ...process.env, SSH_AUTH_SOCK: socket, SSH_AGENT_PID: processId };
+  const added = Bun.spawn(["ssh-add", privateKeyPath], {
+    env: environment,
+    stdout: "ignore",
+    stderr: "ignore",
+  });
+  if ((await added.exited) !== 0) throw new Error("ssh-agent could not add the test key");
+  const listed = Bun.spawn(["ssh-add", "-L"], { env: environment, stdout: "pipe", stderr: "ignore" });
+  const agentKeys = await new Response(listed.stdout).text();
+  if ((await listed.exited) !== 0 || !agentKeys.includes((await readFile(`${privateKeyPath}.pub`, "utf8")).trim())) {
+    throw new Error("ssh-agent did not retain the test key");
+  }
+  return { socket, processId };
+}
+
+async function stopAgent(agentSocket: string, processId: string): Promise<void> {
+  const agentProcess = Bun.spawn(["ssh-agent", "-k"], {
+    env: { ...process.env, SSH_AUTH_SOCK: agentSocket, SSH_AGENT_PID: processId },
+    stdout: "ignore",
+    stderr: "ignore",
+  });
+  await agentProcess.exited;
 }
 
 async function sign(privateKeyPath: string, payload: Uint8Array, namespace = "wagglebot-auth@wagglebot.dev") {
@@ -140,4 +172,35 @@ test("real SSHSIG verification rejects a replay and mismatched challenge values"
       signature: changedSignature,
     }),
   ).rejects.toThrow("authentication failed");
+});
+
+test("an isolated ssh-agent signs an SSHSIG without exposing its private key", async () => {
+  const environment = await fixture();
+  const originalSocket = process.env.SSH_AUTH_SOCK;
+  const originalProcessId = process.env.SSH_AGENT_PID;
+  const isolatedAgent = await agent(environment.privateKeyPath);
+  process.env.SSH_AUTH_SOCK = isolatedAgent.socket;
+  process.env.SSH_AGENT_PID = isolatedAgent.processId;
+  try {
+    const signer = new SshAgentSigner({ publicKeyPath: `${environment.privateKeyPath}.pub` });
+    await expect(
+      signer.sign(new TextEncoder().encode("agent proof\n"), new AbortController().signal),
+    ).resolves.toContain("BEGIN SSH SIGNATURE");
+    const client = new D26Client({
+      baseUrl: "https://auth.example.test",
+      username: "alice",
+      signer,
+      fetch: environment.fetch,
+      clock: () => new Date("2026-09-13T12:00:00.000Z"),
+    });
+    await expect(client.get("wagglebot-coordination", new AbortController().signal)).resolves.toMatchObject({
+      token: expect.any(String),
+    });
+  } finally {
+    if (originalSocket === undefined) delete process.env.SSH_AUTH_SOCK;
+    else process.env.SSH_AUTH_SOCK = originalSocket;
+    if (originalProcessId === undefined) delete process.env.SSH_AGENT_PID;
+    else process.env.SSH_AGENT_PID = originalProcessId;
+    await stopAgent(isolatedAgent.socket, isolatedAgent.processId);
+  }
 });

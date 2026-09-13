@@ -14,7 +14,7 @@
 
 - Phase 1 remains unauthenticated. Git access is the Phase 1 access mechanism; do not add D26 to local memory, Wake, or Context Bridge.
 - D26 is for shared network services only. The local MCP hub uses it when calling the shared registry or shared memory; it does not forward the D26 token to an upstream MCP server.
-- The private SSH key stays on the workstation. Production signing uses `ssh-agent` and `ssh-keygen -Y sign -U`; the auth service receives only the OpenSSH signature and public-key identity lookup data.
+- The private SSH key stays on the workstation. Production signing uses `ssh-agent` and `ssh-keygen -Y sign`; the auth service receives only the OpenSSH signature and public-key identity lookup data.
 - Use the fixed OpenSSH signature namespace `wagglebot-auth@wagglebot.dev` and sign a canonical, versioned challenge payload. Never verify an un-namespaced or caller-supplied payload.
 - The server creates a cryptographically random 32-byte nonce, stores only a hash of it with the challenge record, accepts a challenge once, expires it after 60 seconds, and permits at most three signature attempts.
 - Session tokens are JWTs signed with EdDSA, have a 15-minute lifetime, are audience-specific, and are refreshed when less than 60 seconds remain. Verifiers allow only `EdDSA` and require issuer, audience, `sub`, `iat`, `exp`, and `jti`.
@@ -325,7 +325,7 @@ export class SshAgentSigner implements SshSigner {
 
 The implementation writes the payload to a `0600` temporary file, invokes
 `ssh-keygen` without a shell using the exact argument vector
-`-Y sign -f <publicKeyPath> -n wagglebot-auth@wagglebot.dev -U <payloadFile>`,
+`-Y sign -f <publicKeyPath> -n wagglebot-auth@wagglebot.dev <payloadFile>`,
 reads the generated `.sig` file, deletes both files, and returns the ASCII
 OpenSSH signature. Set a 5-second timeout and terminate the child on abort.
 Never include the payload, key path, or stderr in an error message. The
@@ -806,8 +806,7 @@ git commit -m "feat(auth): expose the D26 authentication service"
 
 Generate a temporary Ed25519 keypair and a temporary catalog User entity. Use
 the real `ssh-keygen -Y sign` and `ssh-keygen -Y verify` adapters in an isolated
-temporary directory. Test both direct signing and an isolated `ssh-agent` with
-`-U`; fail with a clear environment error if OpenSSH is unavailable rather
+temporary directory. Test both direct signing and an isolated `ssh-agent`; fail with a clear environment error if OpenSSH is unavailable rather
 than silently skipping the security test.
 
 Prove:
