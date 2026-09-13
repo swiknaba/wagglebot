@@ -2,11 +2,13 @@
 
 One AI agent setup for a whole engineering team.
 
-> **Status.** Phase 1 is complete in [`packages/cli`](packages/cli/):
+> **Status.** Phase 1 is complete in [`packages/cli`](packages/cli/), and the
+> local Repository Brain is implemented in `packages/local-brain` and
+> `services/context-engine`:
 > workstation provisioning, repository instruction sync
 > (`wagglebot sync-project`), MCP configs for six harnesses, and the
-> three first-party skills under [`skills/`](skills/). Phases 2–4 stay
-> at the specification stage. The [design specs](docs/superpowers/specs/)
+> three first-party skills under [`skills/`](skills/). The shared D26 layer
+> remains at the specification stage. The [design specs](docs/superpowers/specs/)
 > define the system.
 
 ## Why

@@ -12,6 +12,7 @@ const SECTIONS = new Set<LocalMemorySection>([
   "Warnings",
   "Learnings",
 ]);
+const TEMPLATE_SECTIONS = new Set(["Purpose", ...SECTIONS]);
 
 type Heading = {
   level: number;
@@ -100,7 +101,7 @@ export const parseMemory = (text: string, path: ".agents/memory.md"): LocalMemor
   if (!headings.some((heading) => heading.level === 1)) throw new MemoryParseError("memory requires an H1 heading");
 
   for (const heading of headings) {
-    if (heading.level === 2 && !SECTIONS.has(heading.title as LocalMemorySection)) {
+    if (heading.level === 2 && !TEMPLATE_SECTIONS.has(heading.title)) {
       throw new MemoryParseError("unknown memory section");
     }
   }

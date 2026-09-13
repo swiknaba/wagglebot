@@ -28,6 +28,7 @@
     "test": "bun test"
   },
   "dependencies": {
+    "@wagglebot/local-brain": "workspace:*",
     "skills": "1.5.23"
   },
   "devDependencies": {

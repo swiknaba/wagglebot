@@ -101,6 +101,21 @@ const SECTIONS: Record<string, Section> = {
     reads: [],
     writes: ["package.json, README.md, company/, teams/team-payments/, and the example files"],
   },
+  brain: {
+    title: "brain <init|remember|status>",
+    purpose: "Maintains local component memory, CodeGraph, and Git evidence. It does not contact shared services.",
+    reads: ["the current Git repository", ".agents/memory.md when it exists"],
+    writes: [
+      ".agents/memory.md only with brain remember --save",
+      ".gitignore with the owned .codegraph/ block",
+      ".codegraph/ (generated and ignored)",
+    ],
+    flags: [
+      "init [path]       Create local memory and initialize CodeGraph.",
+      "remember [path]   Preview a proposal, or save it with --save.",
+      "status [path]     Report local providers. Use --json for typed output.",
+    ],
+  },
 };
 
 const render = (s: Section): string[] => [
@@ -128,6 +143,7 @@ const GENERAL = (): string[] => [
   "  sync-project       Publish the .agents/instructions/ of this repository to every harness.",
   "  sync-shell         Load .env.credentials into new shells.",
   "  write-mcp          Write MCP server configs from the registry.",
+  "  brain              Maintain local component memory and repository evidence.",
   "",
   "Options:",
   "  --version          Print the wagglebot version.",

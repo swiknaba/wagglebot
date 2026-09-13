@@ -34,6 +34,15 @@ test("rejects invalid memory before returning partial content", () => {
   );
 });
 
+test("accepts the documented Purpose section in the initialized template", () => {
+  expect(() =>
+    parseMemory(
+      "# Component Memory\n\n## Purpose\n\nDescribe the component.\n\n## Warnings\n\nKeep this warning.\n",
+      ".agents/memory.md",
+    ),
+  ).not.toThrow();
+});
+
 test("splits long chunks without exceeding the documented bound", () => {
   const paragraph = "a".repeat(2_100);
   const doc = parseMemory(`# Component Memory\n\n## Learnings\n\n${paragraph}\n\n${paragraph}\n`, ".agents/memory.md");
