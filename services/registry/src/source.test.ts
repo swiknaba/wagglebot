@@ -24,3 +24,10 @@ test("retains the previous accepted source when refresh fails", async () => {
   expect(failed.ok).toBe(false);
   expect(source.current()?.sourceRevision).toBe("a".repeat(40));
 });
+
+test("exposes the documented load operation", async () => {
+  const dir = root();
+  const source = new RegistrySource({ companyRoot: dir, sourceRevision: "b".repeat(40) });
+  const result = await source.load();
+  expect(result.sourceRevision).toBe("b".repeat(40));
+});

@@ -30,4 +30,7 @@ test("rejects missing, malformed, and unknown configuration", () => {
   expect(() => loadRegistryConfig({ ...valid, REGISTRY_PORT: "0" })).toThrow(/REGISTRY_PORT/);
   expect(() => loadRegistryConfig({ ...valid, EXTRA: "x" })).toThrow(/EXTRA/);
   expect(() => loadRegistryConfig({ ...valid, REGISTRY_REFRESH_SECONDS: "0" })).toThrow(/REGISTRY_REFRESH_SECONDS/);
+  expect(() => loadRegistryConfig({ ...valid, REGISTRY_MAX_RESPONSE_BYTES: "262145" })).toThrow(
+    /REGISTRY_MAX_RESPONSE_BYTES/,
+  );
 });

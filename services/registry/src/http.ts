@@ -26,7 +26,7 @@ export function createApp(options: { source: RegistrySource; verify: Verify; max
       if (request.method === "GET" && url.pathname === "/livez")
         return Response.json({ schemaVersion: 1, status: "live" });
       if (request.method === "GET" && url.pathname === "/readyz") {
-        const ready = options.source.current() !== undefined;
+        const ready = options.source.current() !== undefined && !options.source.isDegraded();
         return Response.json(
           {
             schemaVersion: 1,

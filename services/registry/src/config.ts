@@ -34,8 +34,8 @@ export function loadRegistryConfig(env: Record<string, string | undefined>): Reg
   if (!Number.isInteger(port) || port < 1 || port > 65_535) throw new Error("REGISTRY_PORT: must be 1..65535");
   if (!Number.isInteger(refreshSeconds) || refreshSeconds < 1 || refreshSeconds > 86_400)
     throw new Error("REGISTRY_REFRESH_SECONDS: must be 1..86400");
-  if (!Number.isInteger(maxResponseBytes) || maxResponseBytes < 1 || maxResponseBytes > 1_048_576)
-    throw new Error("REGISTRY_MAX_RESPONSE_BYTES: must be 1..1048576");
+  if (!Number.isInteger(maxResponseBytes) || maxResponseBytes < 1 || maxResponseBytes > 262_144)
+    throw new Error("REGISTRY_MAX_RESPONSE_BYTES: must be 1..262144");
   return {
     bindHost: parsed.data.REGISTRY_HOST,
     port,
