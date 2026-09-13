@@ -6,6 +6,7 @@ export type AuthConfig = {
   issuer: string;
   signingPrivateKeyFile: string;
   catalogPath: string;
+  catalogRefreshSeconds: number;
   keySource: "catalog" | "github";
   githubKeysHost?: string;
   challengeTtlSeconds: 60;
@@ -23,6 +24,7 @@ const environmentSchema = z
     D26_AUTH_ISSUER: z.url().refine((value) => new URL(value).protocol === "https:"),
     D26_AUTH_SIGNING_PRIVATE_KEY_FILE: z.string().min(1),
     D26_AUTH_CATALOG_PATH: z.string().min(1),
+    D26_AUTH_CATALOG_REFRESH_SECONDS: z.coerce.number().int().min(1).max(86_400),
     D26_AUTH_KEY_SOURCE: z.enum(["catalog", "github"]),
     D26_AUTH_GITHUB_KEYS_HOST: z.string().min(1).optional(),
   })
@@ -41,6 +43,7 @@ export function loadAuthConfig(env: Record<string, string | undefined> = process
     issuer: parsed.data.D26_AUTH_ISSUER,
     signingPrivateKeyFile: parsed.data.D26_AUTH_SIGNING_PRIVATE_KEY_FILE,
     catalogPath: parsed.data.D26_AUTH_CATALOG_PATH,
+    catalogRefreshSeconds: parsed.data.D26_AUTH_CATALOG_REFRESH_SECONDS,
     keySource: parsed.data.D26_AUTH_KEY_SOURCE,
     ...(parsed.data.D26_AUTH_GITHUB_KEYS_HOST ? { githubKeysHost: parsed.data.D26_AUTH_GITHUB_KEYS_HOST } : {}),
     challengeTtlSeconds: 60,

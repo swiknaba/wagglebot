@@ -8,6 +8,7 @@ const validEnvironment = {
   D26_AUTH_ISSUER: "https://auth.example.test",
   D26_AUTH_SIGNING_PRIVATE_KEY_FILE: "/run/secrets/d26-private-key.pem",
   D26_AUTH_CATALOG_PATH: "/app/catalog.yaml",
+  D26_AUTH_CATALOG_REFRESH_SECONDS: "60",
   D26_AUTH_KEY_SOURCE: "catalog",
 };
 
@@ -18,6 +19,7 @@ test("loads the strict D26 issuer configuration", () => {
     issuer: "https://auth.example.test",
     signingPrivateKeyFile: "/run/secrets/d26-private-key.pem",
     catalogPath: "/app/catalog.yaml",
+    catalogRefreshSeconds: 60,
     keySource: "catalog",
     challengeTtlSeconds: 60,
     sessionTtlSeconds: 900,
@@ -33,6 +35,7 @@ test("rejects missing or invalid required settings", () => {
     "D26_AUTH_ISSUER",
     "D26_AUTH_SIGNING_PRIVATE_KEY_FILE",
     "D26_AUTH_CATALOG_PATH",
+    "D26_AUTH_CATALOG_REFRESH_SECONDS",
     "D26_AUTH_KEY_SOURCE",
   ]) {
     const environment = { ...validEnvironment };
@@ -44,6 +47,9 @@ test("rejects missing or invalid required settings", () => {
     "invalid D26 auth configuration",
   );
   expect(() => loadAuthConfig({ ...validEnvironment, D26_AUTH_PORT: "0" })).toThrow("invalid D26 auth configuration");
+  expect(() => loadAuthConfig({ ...validEnvironment, D26_AUTH_CATALOG_REFRESH_SECONDS: "0" })).toThrow(
+    "invalid D26 auth configuration",
+  );
   expect(() => loadAuthConfig({ ...validEnvironment, D26_AUTH_KEY_SOURCE: "unsupported" })).toThrow(
     "invalid D26 auth configuration",
   );

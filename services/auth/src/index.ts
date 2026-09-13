@@ -9,6 +9,7 @@ export async function createServer(config: AuthConfig) {
   const keyResolver = createKeyResolver(config);
   if (config.keySource === "catalog") {
     await keyResolver.refresh(new AbortController().signal).catch(() => undefined);
+    scheduleCatalogRefresh(keyResolver, config.catalogRefreshSeconds);
   }
   const signingKey = await loadIssuerSigningKey(config.signingPrivateKeyFile);
   const issuer = new AuthIssuer({
@@ -26,6 +27,23 @@ export async function createServer(config: AuthConfig) {
     }),
   });
   return Bun.serve({ hostname: config.bindHost, port: config.port, fetch: app.fetch });
+}
+
+export function scheduleCatalogRefresh(
+  resolver: Pick<PublicKeyResolver, "refresh">,
+  refreshSeconds: number,
+  timers: {
+    every: (callback: () => Promise<void>, intervalMs: number) => unknown;
+    clear: (timer: unknown) => void;
+  } = {
+    every: (callback, intervalMs) => setInterval(callback, intervalMs),
+    clear: (timer) => clearInterval(timer as ReturnType<typeof setInterval>),
+  },
+): () => void {
+  const timer = timers.every(async () => {
+    await resolver.refresh(new AbortController().signal).catch(() => undefined);
+  }, refreshSeconds * 1_000);
+  return () => timers.clear(timer);
 }
 
 function createKeyResolver(config: AuthConfig): PublicKeyResolver {

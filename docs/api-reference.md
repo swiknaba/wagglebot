@@ -248,7 +248,7 @@ auth_invalid` and `503 auth_unavailable`; the three-attempt challenge cap is
 the session endpoint's abuse bound.
 
 The auth service loads the merged catalog before readiness and refreshes it on
-the configured interval. An invalid refresh keeps the last accepted public-key
+the required `D26_AUTH_CATALOG_REFRESH_SECONDS` interval. An invalid refresh keeps the last accepted public-key
 set and marks readiness degraded; an initial failure prevents readiness.
 Catalog changes affect new challenges after the next accepted refresh. The
 optional pinned-host GitHub key response is cached for 15 minutes. Existing

@@ -680,6 +680,7 @@ type AuthConfig = {
   issuer: string;
   signingPrivateKeyFile: string;
   catalogPath: string;
+  catalogRefreshSeconds: number;
   keySource: "catalog" | "github";
   githubKeysHost?: string;
   challengeTtlSeconds: 60;
@@ -690,6 +691,10 @@ type AuthConfig = {
   maxChallengesPerWindow: 10;
 };
 ```
+
+`D26_AUTH_CATALOG_REFRESH_SECONDS` is a required positive integer, bounded to
+one day. Catalog-backed deployments refresh on this interval; each failed
+refresh retains the last accepted key set and leaves readiness degraded.
 
 Import the Ed25519 private key with `jose.importPKCS8`, generate a unique
 `jti`, and sign with `{ alg: "EdDSA", typ: "JWT" }`. The issuer must be a
