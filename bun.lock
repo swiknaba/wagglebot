@@ -21,6 +21,7 @@
         "@wagglebot/company-config": "workspace:*",
         "@wagglebot/contracts": "workspace:*",
         "@wagglebot/local-brain": "workspace:*",
+        "@wagglebot/mcp-hub": "workspace:*",
         "skills": "1.5.23",
       },
       "devDependencies": {

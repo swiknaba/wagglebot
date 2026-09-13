@@ -13,6 +13,7 @@ import { runBrainStatus } from "./commands/brain-status";
 import { runInit } from "./commands/init";
 import { runInstallAgents } from "./commands/install-agents";
 import { resolveSkillsBin, runInstallSkills } from "./commands/install-skills";
+import { runMcpHubApprove } from "./commands/mcp-hub-approve";
 import { runSyncAgents } from "./commands/sync-agents";
 import { runSyncProject } from "./commands/sync-project";
 import { runSyncShell } from "./commands/sync-shell";
@@ -42,6 +43,7 @@ const KNOWN_COMMANDS = [
   "sync-project",
   "sync-shell",
   "write-mcp",
+  "mcp-hub",
   "brain",
 ];
 
@@ -309,6 +311,26 @@ export async function main(argv: string[], deps: CliDeps = { write: console.log 
       });
       deps.write(reporter.summary());
       return code;
+    }
+
+    if (command === "mcp-hub") {
+      const [subcommand, namespace] = rest;
+      if (subcommand !== "approve" || !namespace) {
+        deps.write("wagglebot mcp-hub: usage: wagglebot mcp-hub approve <namespace>");
+        return 2;
+      }
+      const configPath = process.env.MCP_HUB_CONFIG_PATH;
+      if (!configPath) {
+        deps.write("wagglebot mcp-hub: MCP_HUB_CONFIG_PATH is required for local approval");
+        return 1;
+      }
+      return runMcpHubApprove({
+        namespace,
+        configPath,
+        trustPath: process.env.MCP_HUB_TRUST_PATH ?? join(home, ".wagglebot", "mcp-hub", "registry.trust.json"),
+        confirm: ask,
+        write: deps.write,
+      });
     }
 
     deps.write(`wagglebot: unknown command "${command ?? ""}". Run: wagglebot --help`);

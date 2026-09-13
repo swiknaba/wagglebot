@@ -95,6 +95,12 @@ const SECTIONS: Record<string, Section> = {
     reads: [`registry.yaml in ${LAYERS}  (a team entry with the same namespace wins)`],
     writes: [...mcpFiles(), "~/.wagglebot/managed.json  (every key it wrote)"],
   },
+  "mcp-hub": {
+    title: "mcp-hub approve <namespace>",
+    purpose: "Approves the privileged fields of one validated local MCP hub registry entry.",
+    reads: ["MCP_HUB_CONFIG_PATH  (a validated local registry snapshot)"],
+    writes: ["~/.wagglebot/mcp-hub/registry.trust.json  (mode 0600 trust records)"],
+  },
   init: {
     title: "init [dir]",
     purpose: "Scaffolds a new company repository. Refuses a directory that is not empty.",
@@ -143,6 +149,7 @@ const GENERAL = (): string[] => [
   "  sync-project       Publish the .agents/instructions/ of this repository to every harness.",
   "  sync-shell         Load .env.credentials into new shells.",
   "  write-mcp          Write MCP server configs from the registry.",
+  "  mcp-hub            Approve local MCP hub registry entries.",
   "  brain              Maintain local component memory and repository evidence.",
   "",
   "Options:",
