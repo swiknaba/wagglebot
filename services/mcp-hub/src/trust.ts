@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { type ProxyConfig, type TrustRecord, TrustRecordSchema } from "@wagglebot/contracts";
 
@@ -30,12 +30,24 @@ export class TrustStore {
     };
     this.records.set(proxy.namespace, record);
     await mkdir(dirname(this.path), { recursive: true });
-    await writeFile(this.path, `${JSON.stringify([...this.records.values()], null, 2)}\n`, { mode: 0o600 });
-    await chmod(this.path, 0o600);
+    const temporary = `${this.path}.tmp-${process.pid}`;
+    await writeFile(temporary, `${JSON.stringify([...this.records.values()], null, 2)}\n`, { mode: 0o600 });
+    await chmod(temporary, 0o600);
+    await rename(temporary, this.path);
   }
 }
 function fingerprint(proxy: ProxyConfig): string {
   return createHash("sha256")
-    .update(`wagglebot:hub-trust:v1\0${JSON.stringify(proxy)}`)
+    .update(`wagglebot:hub-trust:v1\0${canonical(proxy)}`)
     .digest("hex");
+}
+
+function canonical(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
+  if (value !== null && typeof value === "object")
+    return `{${Object.entries(value as Record<string, unknown>)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, item]) => `${JSON.stringify(key)}:${canonical(item)}`)
+      .join(",")}}`;
+  return JSON.stringify(value);
 }
