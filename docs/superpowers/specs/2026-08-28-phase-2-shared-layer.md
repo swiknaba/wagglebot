@@ -61,7 +61,8 @@ it as an upstream, so agents reach memory through their own hub.
   secret scrubbing, canonicalization, deduplication by content hash,
   embedding, and storage. The worker runs these on every write,
   whatever the source.
-- **Document ingestion is Phase 4** (D25). See the
+- **Document ingestion is Phase 4** (D25). That phase adds base IDs and source metadata through required Sequel migrations.
+  See the
   [phase 4 spec](2026-08-28-phase-4-document-ingestion.md).
 - **Storage:** Postgres with pgvector via a standard client (D3). Table
   routing, tombstone and supersede conventions, and preflight dedup
@@ -72,7 +73,7 @@ it as an upstream, so agents reach memory through their own hub.
   and `POST /memories/invalidate` (humans and the publication command,
   gated by the catalog per D23), `POST /run-once`, `GET /livez`, and
   `GET /readyz`. An MCP surface adds `memory_search`, `memory_query`,
-  `propose_memory`, `remember`, `forget`, and `ingest_document`. Agents
+  `propose_memory`, `remember`, and `forget`. Agents
   reach memory through the hub.
 - **Queue:** a filesystem state machine (atomic rename claim,
   `queued/running/done/failed`, 3 attempts). Garbage collection removes
@@ -296,22 +297,12 @@ services:
     restart: "no"
     # The runner waits for DATABASE_URL with a bounded timeout.
 
-  extractor-llm:                   # optional, Phase 4 only (D2, D25)
-    image: ghcr.io/ggml-org/llama.cpp:server
-    profiles: [ingest]
-    command: >
-      -hf Qwen/Qwen2.5-1.5B-Instruct-GGUF:q5_k_m
-      --host 0.0.0.0 --port 8080 -c 8192
-    volumes:
-      - ./models:/root/.cache/llama.cpp   # persist downloads
-
   memory-worker:
     build: ./services/memory-worker
     profiles: [shared]
     environment:
       MEMORY_WORKER_PORT: 3011
       MEMORY_WORKER_BEARER_TOKEN: ${MEMORY_WORKER_BEARER_TOKEN}
-      EXTRACTOR_API_BASE: ${EXTRACTOR_API_BASE:-}   # only for batch ingestion
       DATABASE_URL: ${DATABASE_URL:-}
       MEMORY_STORAGE_ROOT: /data
     volumes:
@@ -348,7 +339,8 @@ Start commands:
 * Full local stack: set `DATABASE_URL` to the bundled `postgres` service.
   Set `POSTGRES_PASSWORD` to match the password in `DATABASE_URL`.
   Run `docker compose --profile local --profile local-db --profile shared up --force-recreate`.
-* Batch document ingestion (Phase 4): add `--profile ingest`
+* In Phase 4, add the optional ingestion worker container through `--profile ingest`.
+  See the [worker contract](2026-08-28-phase-4-document-ingestion.md#job-execution).
 * Collaboration, in Phase 3: add `--profile collab`
 
 There are no vendor-specific services. Users add upstreams to
@@ -490,8 +482,7 @@ reviewable. Prefer publication.
 | Memory worker | One instance per storage root. It processes the queue in sequence (P4). No model runs on the write path (D24), so writes stay fast. | Near 50 engineers |
 
 Memory runs asynchronously. A queue backlog delays new facts. A backlog
-never blocks an engineer. The optional batch extractor (D2, D25) serves
-only bulk ingestion, so a slow batch bothers nobody.
+never blocks an engineer. Phase 4 uses a separate ingestion queue and runner for user scripts (D2, D25).
 
 ### When To Split The Shared Layer
 
