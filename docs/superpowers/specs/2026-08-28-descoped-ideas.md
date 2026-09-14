@@ -133,3 +133,10 @@ vector store.
 Component memory is a Markdown file in the repository,
 `.agents/memory.md` (D29). The shared store keeps the three scopes
 that cross a boundary.
+
+## Source Code Graphs for AI Navigation
+
+- Defer source code graphs until a separate design review.
+- Evaluate [Skelly](https://github.com/morozRed/skelly) as a reference.
+- Compare larger open-source tools when this work resumes.
+- Keep graph generation, storage, and agent query tools outside Phase 4.
