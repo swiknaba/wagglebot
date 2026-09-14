@@ -1,22 +1,5 @@
 # Phase 2 — The Shared Layer
 
-> **Historical baseline:** This document preserves the original Phase 2
-> boundaries and security decisions. For implementation, the approved
-> [Phase 2 Memory Roadmap](2026-09-11-phase-2-memory-roadmap.md) and
-> [Shared Memory Foundation Design](2026-09-11-shared-memory-foundation-design.md)
-> replace Chroma with MemPalace 3.9.0 backed by PostgreSQL/pgvector. The
-> [Phase 1 provisioning spec](2026-08-28-phase-1-provisioning.md) replaces the
-> flat registry filenames with `company/registry.yaml` and
-> `teams/<team>/registry.yaml`. The [API reference](../../api-reference.md)
-> replaces the schematic endpoint names. Retain the behavioral requirements in
-> this document unless one of those newer authorities explicitly supersedes it.
-> In particular, the newer design's
-> [Database Migrations and Recovery](2026-09-11-shared-memory-foundation-design.md#database-migrations-and-recovery)
-> section adopts this document's safety controls with a TypeScript/Bun runner,
-> normalized canonical tables, and MemPalace-owned embeddings; those explicit
-> adaptations supersede the earlier Ruby/Sequel and `wagglebot_memories`
-> implementation choices.
-
 > Companion to the [wagglebot design spec](2026-08-28-wagglebot-design.md).
 > Phase 2 deploys one shared server for the team: the memory worker
 > with Postgres (pgvector), the SSH auth (D26), registry serving, and the MCP hub as
@@ -78,7 +61,8 @@ it as an upstream, so agents reach memory through their own hub.
   secret scrubbing, canonicalization, deduplication by content hash,
   embedding, and storage. The worker runs these on every write,
   whatever the source.
-- **Document ingestion is Phase 4** (D25). See the
+- **Document ingestion is Phase 4** (D25). That phase adds base IDs and source metadata through required Sequel migrations.
+  See the
   [phase 4 spec](2026-08-28-phase-4-document-ingestion.md).
 - **Storage:** Postgres with pgvector via a standard client (D3). Table
   routing, tombstone and supersede conventions, and preflight dedup
@@ -89,7 +73,7 @@ it as an upstream, so agents reach memory through their own hub.
   and `POST /memories/invalidate` (humans and the publication command,
   gated by the catalog per D23), `POST /run-once`, `GET /livez`, and
   `GET /readyz`. An MCP surface adds `memory_search`, `memory_query`,
-  `propose_memory`, `remember`, `forget`, and `ingest_document`. Agents
+  `propose_memory`, `remember`, and `forget`. Agents
   reach memory through the hub.
 - **Queue:** a filesystem state machine (atomic rename claim,
   `queued/running/done/failed`, 3 attempts). Garbage collection removes
@@ -112,41 +96,40 @@ it as an upstream, so agents reach memory through their own hub.
 
 | Item | Requirement |
 |---|---|
-| Tool | TypeScript/Bun with `pg` and explicit SQL files |
-| Location | `services/memory-worker/src/db` |
+| Tool | Ruby Sequel with `pg` |
+| Location | `services/database` |
 | Runtime | Separate migration container that exits after execution |
-| Migration files | Ordered `.up.sql` and `.down.sql` pairs |
+| Migration files | Timestamped Ruby files with explicit `up` and `down` blocks |
 | Version table | `wagglebot_schema_migrations` |
-| Connection | `MEMORY_DATABASE_URL`, with TLS and a supplied CA certificate for remote PostgreSQL |
+| Connection | `DATABASE_URL`, with TLS and a supplied CA certificate for remote PostgreSQL |
 | Local database | Optional PostgreSQL container with pgvector and a persistent volume |
 
-- Run database commands through the same pinned TypeScript/Bun toolchain as the
-  memory worker, but in a one-shot migration container.
+- Adapt the commands from the [kirei wrapper](https://github.com/swiknaba/kirei/blob/main/spec/test_app/lib/tasks/db.rake).
+- Keep Ruby out of application containers.
 - Target one configured database per command.
-- If `MEMORY_DATABASE_URL` is empty, stop the migration command before connecting.
+- If `DATABASE_URL` is empty, stop the migration command before connecting.
 - Do not add database create or drop commands.
 - Do not select multiple environments automatically.
-- Store complete ordered history in `wagglebot_schema_migrations`.
-- Take a fixed PostgreSQL advisory transaction lock before checking or changing
-  migration state.
+- Use `table: :wagglebot_schema_migrations` in the Sequel runner.
+- Use `use_advisory_lock: true` to prevent simultaneous migration runs.
 - Keep PostgreSQL credentials out of output and logs.
 - Keep coordination SQLite setup in the coordination service.
 
 | Command | Requirement |
 |---|---|
-| `db:generate` | Create the next ordered `.up.sql`/`.down.sql` pair and update the manifest. |
+| `db:generate` | Create a timestamped migration with `up` and `down` blocks. |
 | `db:migrate` | Apply pending migrations, then run `db:check` before reporting success. |
 | `db:rollback` | Require an explicit target version. |
 | `db:status` | Report applied and pending migrations. |
 | `db:check` | Compare the database migration history with the version file shipped with the application. |
-| `db:schema:dump` | Export application object definitions to `services/memory-worker/schema.sql`. |
+| `db:schema:dump` | Export application object definitions to `services/database/schema.sql`. |
 
 ### Release Version and SQL Schema
 
 | File | Content |
 |---|---|
-| `services/memory-worker/migration-version.json` | Latest migration version, ordered up/down filenames, and explicit application-object list |
-| `services/memory-worker/schema.sql` | SQL definitions for application tables, indexes, and sequences |
+| `services/database/migration-version.json` | Latest migration timestamp and ordered migration filenames |
+| `services/database/schema.sql` | SQL definitions for application tables, indexes, and sequences |
 
 - Generate the version file from local migration filenames.
 - Update it when `db:generate` creates a migration.
@@ -165,8 +148,7 @@ it as an upstream, so agents reach memory through their own hub.
 SQL reference:
 
 - Apply local migrations before running `db:schema:dump`.
-- Use PostgreSQL `pg_dump --schema-only --no-owner --no-privileges` through the
-  TypeScript/Bun command wrapper without invoking a shell.
+- Use PostgreSQL `pg_dump --schema-only --no-owner --no-privileges` through the Sequel task wrapper.
 - Export only the explicit application objects and their required definitions.
 - Include the migration table definition, without its rows.
 - Preserve vector column types and index definitions.
@@ -177,10 +159,12 @@ SQL reference:
 - Check the reference against a fresh database with all migrations applied before release.
 - Keep migrations as the deployment source.
 
+Sequel exports [Ruby migration definitions](https://sequel.jeremyevans.net/rdoc-plugins/classes/Sequel/SchemaDumper.html).
 Use [pg_dump](https://www.postgresql.org/docs/current/app-pgdump.html) for the SQL reference.
 
 ### Table Ownership
 
+- Prefix all application tables, indexes, and sequences with `wagglebot_`.
 - Permit an optional dedicated schema.
 - Maintain an explicit application table list for metrics, backup, and restore.
 - Update the list when a migration adds or removes a table.
@@ -189,13 +173,9 @@ Use [pg_dump](https://www.postgresql.org/docs/current/app-pgdump.html) for the S
 
 | Initial table | Purpose |
 |---|---|
-| `memory_records` | Canonical shared-memory records. |
-| `memory_provenance` | Immutable source evidence. |
-| `memory_sources` | Current reviewed Git source revisions. |
-| `memory_index_jobs` | Transactional MemPalace indexing outbox. |
-| `memory_embedding_profiles` | Active MemPalace embedding profile metadata. |
-| `memory_audit_events` | Content-free operation audit metadata. |
-| `wagglebot_schema_migrations` | Ordered migration history. |
+| `wagglebot_memories` | Memory records and indexes from [contract C3](2026-08-28-service-contracts.md). |
+| `wagglebot_memory_schema_metadata` | Embedding and schema metadata from contract C3. |
+| `wagglebot_schema_migrations` | Sequel migration history. |
 
 ### Initial Migration
 
@@ -209,7 +189,7 @@ Use [pg_dump](https://www.postgresql.org/docs/current/app-pgdump.html) for the S
 - On rollback, remove only the objects this migration created.
 - Leave the shared `vector` extension installed.
 - For the bundled database, install `vector` through the PostgreSQL initialization script before migrations run.
-- Use `CREATE EXTENSION IF NOT EXISTS vector;` in `deploy/init-vector.sql`.
+- Use `CREATE EXTENSION IF NOT EXISTS vector;` in `services/database/init-vector.sql`.
 - For an external database, require the operator to install pgvector before deployment.
 
 ### Deployment and Recovery
@@ -268,7 +248,7 @@ background cycle.
 One compose file carries the local and shared layers. The `local` profile
 runs on each workstation. The `shared` profile runs one time for the team.
 The optional `local-db` profile provides PostgreSQL with pgvector for full
-local tests. Shared services require `MEMORY_DATABASE_URL` in every deployment.
+local tests. Shared services require `DATABASE_URL` in every deployment.
 
 NOTE: The block below is **schematic**. It omits the registry serving
 and bind-address
@@ -304,27 +284,18 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - pgdata:/var/lib/postgresql/data
-      - ./deploy/init-vector.sql:/docker-entrypoint-initdb.d/init-vector.sql:ro
+      - ./services/database/init-vector.sql:/docker-entrypoint-initdb.d/init-vector.sql:ro
     ports: ["5432:5432"]
 
   # ── shared profile: deployed one time for the team ────────────────
   db-migrate:
-    build: ./services/memory-worker
+    build: ./services/database
     profiles: [shared]
-    command: bun run db:migrate
+    command: bundle exec rake db:migrate
     environment:
-      MEMORY_DATABASE_URL: ${MEMORY_DATABASE_URL:-}
+      DATABASE_URL: ${DATABASE_URL:-}
     restart: "no"
-    # The runner waits for MEMORY_DATABASE_URL with a bounded timeout.
-
-  extractor-llm:                   # optional, Phase 4 only (D2, D25)
-    image: ghcr.io/ggml-org/llama.cpp:server
-    profiles: [ingest]
-    command: >
-      -hf Qwen/Qwen2.5-1.5B-Instruct-GGUF:q5_k_m
-      --host 0.0.0.0 --port 8080 -c 8192
-    volumes:
-      - ./models:/root/.cache/llama.cpp   # persist downloads
+    # The runner waits for DATABASE_URL with a bounded timeout.
 
   memory-worker:
     build: ./services/memory-worker
@@ -332,8 +303,7 @@ services:
     environment:
       MEMORY_WORKER_PORT: 3011
       MEMORY_WORKER_BEARER_TOKEN: ${MEMORY_WORKER_BEARER_TOKEN}
-      EXTRACTOR_API_BASE: ${EXTRACTOR_API_BASE:-}   # only for batch ingestion
-      MEMORY_DATABASE_URL: ${MEMORY_DATABASE_URL:-}
+      DATABASE_URL: ${DATABASE_URL:-}
       MEMORY_STORAGE_ROOT: /data
     volumes:
       - memory_data:/data
@@ -365,11 +335,12 @@ Use `verify-full` for remote TLS verification.
 Start commands:
 
 * Each engineer: `docker compose --profile local up`
-* Shared deployment: `MEMORY_DATABASE_URL=... docker compose --profile shared up --force-recreate`
-* Full local stack: set `MEMORY_DATABASE_URL` to the bundled `postgres` service.
-  Set `POSTGRES_PASSWORD` to match the password in `MEMORY_DATABASE_URL`.
+* Shared deployment: `DATABASE_URL=... docker compose --profile shared up --force-recreate`
+* Full local stack: set `DATABASE_URL` to the bundled `postgres` service.
+  Set `POSTGRES_PASSWORD` to match the password in `DATABASE_URL`.
   Run `docker compose --profile local --profile local-db --profile shared up --force-recreate`.
-* Batch document ingestion (Phase 4): add `--profile ingest`
+* In Phase 4, add the optional ingestion worker container through `--profile ingest`.
+  See the [worker contract](2026-08-28-phase-4-document-ingestion.md#job-execution).
 * Collaboration, in Phase 3: add `--profile collab`
 
 There are no vendor-specific services. Users add upstreams to
@@ -511,8 +482,7 @@ reviewable. Prefer publication.
 | Memory worker | One instance per storage root. It processes the queue in sequence (P4). No model runs on the write path (D24), so writes stay fast. | Near 50 engineers |
 
 Memory runs asynchronously. A queue backlog delays new facts. A backlog
-never blocks an engineer. The optional batch extractor (D2, D25) serves
-only bulk ingestion, so a slow batch bothers nobody.
+never blocks an engineer. Phase 4 uses a separate ingestion queue and runner for user scripts (D2, D25).
 
 ### When To Split The Shared Layer
 
@@ -548,7 +518,7 @@ Wagglebot does not build it. Choose the second deployment instead.
 
 6. Start the shared services with external PostgreSQL and no local
    PostgreSQL container. Start the full local stack with `local-db`.
-   Both runs require `MEMORY_DATABASE_URL`, an empty `registry.yaml`, and
+   Both runs require `DATABASE_URL`, an empty `registry.yaml`, and
    generated service bearer tokens (D7). No model download is needed.
 7. Run `db:migrate` twice and verify that the second run changes nothing.
    Run `db:rollback` with a target version. Verify that it preserves the

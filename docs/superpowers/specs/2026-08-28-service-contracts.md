@@ -1,16 +1,5 @@
 # Service Behavior Contracts
 
-> **Phase 2 authority note (2026-09-12):** The security, failure, trust, and
-> lifecycle behaviors in this document remain requirements. The approved
-> [Phase 2 Memory Roadmap](2026-09-11-phase-2-memory-roadmap.md) and
-> [Shared Memory Foundation Design](2026-09-11-shared-memory-foundation-design.md)
-> replace C3's Chroma implementation with MemPalace 3.9.0 and
-> PostgreSQL/pgvector. The [Phase 1 provisioning spec](2026-08-28-phase-1-provisioning.md)
-> defines the current company/team registry paths, and the
-> [API reference](../../api-reference.md) defines the versioned endpoint and
-> tool schemas. Historical storage names, flat registry filenames, and
-> unversioned routes below are explanatory only.
-
 > Companion to the [wagglebot design spec](2026-08-28-wagglebot-design.md).
 > This document gives the behavior contracts for the framework services.
 > It also gives a register of known design traps (P-numbers). The
@@ -256,7 +245,7 @@ Without the key, the service omits fingerprints.
 
 ## C3. Memory worker contract (Phase 2; component memory is a Phase 1 local file, D29)
 
-**Two write paths, and only one of them ever calls a model.**
+**Write paths: session facts, imported documents, and explicit memory writes.**
 
 **Path 1 — session memory (D24).** The agent extracts, so the worker
 receives finished facts:
@@ -278,11 +267,12 @@ single write.
 
 **Path 2 — document ingestion — is Phase 4** (D25). Its pipeline
 lives in the [phase 4 spec](2026-08-28-phase-4-document-ingestion.md).
-It reuses the normalize → reconcile → upsert path above, and every
-rule in this section applies to it.
+It uses user scripts and the common validation, credential scan, embedding, and storage functions.
+Document sections retain source metadata. Fact submissions retain the extraction taxonomy.
 
 **Path 3 — a human commits a memory directly (D30).** You tell the
-agent, and the agent writes it:
+agent, and the agent writes it.
+After Phase 4, these tools resolve `knowledgeBaseId` from explicit workspace configuration before each shared request:
 
 ```
 remember({ text: "We chose Postgres over DynamoDB. The join patterns
@@ -302,8 +292,9 @@ Everything else still applies. The named scope needs authorization
 validates, and a duplicate reconciles instead of adding a record. A
 `component` scope writes the local file rather than the store (D29).
 
-`forget({ id })` invalidates one record the same way. It marks the
-record dead, and never hard-deletes, so the history stays.
+`forget({ id })` invalidates one record in that configured base.
+The service matches both the base ID and record ID.
+It marks the record inactive and preserves it.
 
 Both reach the agent as MCP tools. `wagglebot remember` and
 `wagglebot forget` give the same two operations outside an agent
@@ -324,8 +315,8 @@ lexically, which approximates FIFO. Each job gets 3 attempts. A
 malformed job goes to `failed/` with a synthesized record. Garbage
 collection removes old entries from `done/` and `failed/`.
 
-**Extraction taxonomy.** The same taxonomy governs both paths, so a
-memory looks identical whoever extracted it. Durable kinds are
+**Extraction taxonomy.** Apply this taxonomy to fact submissions from agents and ingestion workers.
+Document sections use `record_type=document` and do not require a fact kind. Durable kinds are
 `fact | decision | person | preference`. The `comm_mirror` preference
 subtype has a qualifier allow-list. Pattern kinds are
 `repeated_question | repeated_blocker | manual_status_work |
@@ -339,14 +330,15 @@ is a client.
 **Where the rules live.** The agent extracts session memory, so the
 rules must reach the agent: `AGENTS.base.md` carries the taxonomy and
 the bans (D24). The server no longer mounts a policy file for the
-session path. The `local_llm` ingestion mode still builds a prompt from
-fixed rules plus the job JSON (clipped to 12 k), with a 120 s timeout.
-A non-JSON completion fails the job into the normal retry path.
+session path. Phase 4 user scripts own optional extraction prompts and model calls.
 
 **Canonicalization:**
 - `canonicalKey = kind:subject:relation:value` (all parts slugged).
   `identityKey = kind:subject:relation` ("same slot, maybe new value").
-- `recordId = sha256(canonicalKey)`.
+- Before Phase 4, use `recordId = sha256(canonicalKey)`.
+- After Phase 4, hash an unambiguous encoding of `[knowledgeBaseId, canonicalKey]` for new shared record IDs.
+- Preserve existing IDs during the Phase 4 migration. Match upserts by base ID and canonical key.
+- Restrict reconciliation, content hash checks, manifests, and replacement references to the selected base.
 - A content banlist rejects candidates that contain `secret, token,
   password, api key, ...`.
 - Reconcile, same key: merge (max confidence, union of tags and scopes,
@@ -360,28 +352,51 @@ A non-JSON completion fails the job into the normal retry path.
   `provenance_count`.
 
 **Postgres and pgvector conventions:**
-- Require the [Phase 2 database tooling](2026-08-28-phase-2-shared-layer.md#shared-database-and-migrations), using the TypeScript/Bun one-shot migration job.
-- Use `wagglebot_schema_migrations` for complete ordered migration history.
-- Use the normalized canonical tables in the
-  [Shared Memory Foundation Design](2026-09-11-shared-memory-foundation-design.md#data-model):
-  `memory_records`, `memory_provenance`, `memory_sources`,
-  `memory_index_jobs`, `memory_embedding_profiles`, and
-  `memory_audit_events`.
-- Filter lexical queries by `scope_kind` and `scope_name` before ranking.
-  PostgreSQL remains canonical and immediately searchable while indexing is
-  delayed.
-- MemPalace owns embeddings, cosine search, and its pgvector structures behind
-  the private provider adapter. The memory worker does not store an embedding
-  column or load an in-process embedding model.
-- The worker records the expected MemPalace provider, model, dimension,
-  distance, and schema version in `memory_embedding_profiles`. A mismatch
-  prevents readiness and requires an explicit reindex.
-- Provider documents use the parseable envelope from the newer shared-memory
-  design; public clients receive only canonical records joined back through
-  their Wagglebot memory IDs.
+- Require the [Phase 2 database tooling](2026-08-28-phase-2-shared-layer.md#shared-database-and-migrations), including Sequel migrations.
+- Use `wagglebot_schema_migrations` for migration history.
+- Use one `wagglebot_memories` table. Columns include:
+  `id text PRIMARY KEY` (`recordId`), `canonical_key text`,
+  `identity_key text`, `kind text`, `title text`, `text text`,
+  `scopes text[]`, `embedding vector(384)`, `confidence real`,
+  `tags text[]`, `provenance jsonb`, `active boolean DEFAULT true`,
+  `superseded_by text`, `invalidated_at timestamptz`,
+  `invalidation_reason text`, `content_hash text`,
+  `created_at timestamptz DEFAULT now()`,
+  `updated_at timestamptz DEFAULT now()`.
+- Phase 4 adds `knowledge_base_id text NOT NULL`, `record_type text NOT NULL`, and `metadata jsonb NOT NULL DEFAULT '{}'::jsonb`.
+- Use `UNIQUE (knowledge_base_id, canonical_key)` and an index on `knowledge_base_id` after that migration.
+- Before Phase 4, retain the unique constraint on `canonical_key`.
+- Require a base ID for shared reads and writes after the Phase 4 migration.
+- Resolve the base from explicit configuration for existing agent tools. Reject missing or unknown IDs.
+- Apply the base filter before vector ranking, limits, pagination, and catalog scope filters.
+- Require the base ID for record lookup and invalidation, including requests with a record ID.
+- Include the base ID in shared job envelopes and provider inputs.
+- Keep metadata, stable source keys, and migration rules in the [Phase 4 spec](2026-08-28-phase-4-document-ingestion.md#record-metadata).
+- For selected catalog scopes, use native PostgreSQL array operations
+  (`scopes && $1`) with a GIN index on `scopes`. This removes
+  metadata array limits and fan-out workarounds (P16).
+- Distance and scoring: cosine distance using the `<=>` operator.
+  Score = `1 / (1 + distance)`. The default `minScore` for search is
+  0.35. An HNSW index on `embedding vector_cosine_ops` accelerates
+  queries.
+- **Embeddings use `all-MiniLM-L6-v2`** (384 dimensions, cosine distance)
+  (D19). The `memory-worker` computes embeddings in-process using
+  `@xenova/transformers` (local ONNX runtime on CPU) before writing to
+  Postgres.
+- The worker records embedding metadata in a `wagglebot_memory_schema_metadata`
+  table:
+  `{provider: "xenova-transformers", model: "all-MiniLM-L6-v2", dimension:
+  384, distance: "cosine", schemaVersion: 1}`.
+- The worker compares that metadata at startup. A mismatch aborts
+  startup with a message that names the required re-embed. A silent
+  dimension change would corrupt every search result.
+- Fact records use the structured plain text payload (`Kind:`, `Title:`, ...).
+- Document records store section text directly and source metadata in `metadata`.
 
 **`MemoryProvider` seam** — the pipeline depends only on this interface.
-Backends are swappable:
+Backends are swappable.
+In Phase 4, each input type below must include `knowledgeBaseId: string` without a default.
+The service resolves that value before it calls the provider.
 
 ```typescript
 type MemoryProvider = {
@@ -398,16 +413,16 @@ type MemoryProvider = {
 ```
 MemoryJob { jobId, reason, sourceKind, sourceId, conversationId,
             scopeIds[], payload, createdAt }
+
+// Phase 4 requires this additional field on every shared job:
+MemoryJob { ...phase2Fields, knowledgeBaseId }
 ```
 
 Phase 2 ships only the `session_run` proposal path. The envelope is
 documented, so runtimes can add richer sources later (P14).
 
-**Policy file contract:** one Markdown file that the operator writes.
-The worker injects it verbatim into the extraction prompt. That is the
-full format. The worker ships a **built-in default policy**. A missing
-file selects the built-in policy and logs a warning. The extraction
-policy is therefore never empty and never undefined (guards F32).
+**Ingestion configuration.** Phase 4 user scripts own source selection, optional extraction, and source credentials.
+Wagglebot supplies the runner and common ingestion functions. See the [Phase 4 contract](2026-08-28-phase-4-document-ingestion.md).
 
 **Mutation principals.** `POST /memory/proposals` is the only mutation
 on the agent surface. `POST /memories/upsert` and
@@ -421,6 +436,7 @@ on the agent surface. `POST /memories/upsert` and
    org-owner flag on the User entity. The service reads both from the
    catalog, never from a request field.
 
+In Phase 4, validate the configured base before any shared mutation, including administrator and session-token requests.
 The service derives the allowed scopes from the caller, and it rejects
 a caller-supplied scope outside that set.
 
@@ -456,16 +472,15 @@ Behavior on a finding:
 invalidates every hit. That command is the only way to fix a miss
 already written. It reports the count, and it names no content.
 
-Document ingestion carries the highest risk, because a real runbook or
-a Confluence page often contains a real credential. The scan runs
-before the extract step, so no credential reaches a model.
-
-The scan also runs before any extractor call. A local extractor keeps
-everything inside the deployment. A remote `EXTRACTOR_API_BASE` outside
-the deployment **additionally** requires the explicit flag
-`EXTRACTOR_ALLOW_EXTERNAL=1` (guards F17, G05).
+For document ingestion, scan text and metadata at the API.
+Provide the scanner to user scripts before optional model calls.
+Operators control external model access in their scripts and deployment.
+The ingestion API cannot inspect content that a script sends directly to another service.
 
 **Scope model — four scopes, one per catalog level (D22, D23).**
+
+Phase 4 applies these scopes within the selected knowledge base.
+An `org` scope does not search other bases. Global admin totals contain counts only.
 
 | Scope | Written by | Read by default |
 |---|---|---|
@@ -475,7 +490,7 @@ the deployment **additionally** requires the explicit flag
 | `org` | Users with the org-owner flag | Everyone |
 
 **Routing of an agent write (D22).** The default target is the
-component of the workspace. The extractor classifies each memory:
+component of the workspace. The agent classifies each memory:
 a fact about this repository stays at `component`, a fact about the
 whole project fits `system`. A system classification is a proposal,
 never a direct write. The interactive agent asks its engineer in
@@ -740,9 +755,7 @@ platform-specific:
   cannot kill a task. Point traffic routing at `/readyz`, which reports
   dependency and startup state and returns 503 when the service cannot
   serve (D8). There is no `/health` endpoint.
-- Model provisioning: `llama-server` downloads by `-hf` ref on the first
-  run into a mounted cache volume. No init-container choreography is
-  needed.
+- User ingestion scripts own optional extraction models and their deployment configuration (D2).
 - Each service documents its full env surface in its README. The compose
   file and `.env.example` are generated views of that. They are never a
   second source of truth.
@@ -757,8 +770,8 @@ is stable. The decisions in the main spec reference these.
 | P2 | Client and server use different env names for the same token | One name per service (D7) |
 | P3 | A service without auth relies on positional safety (localhost sidecar) | Bearer required everywhere (D7) |
 | P4 | Manifest files are read-modify-write under an in-process lock | Single worker instance per storage root, documented |
-| P5 | A worker hard-fails without a local model file, wired through fragile mount choreography | D2 removes in-process model loading entirely |
-| P6 | Conflicting policy-path defaults; a missing file degrades to a silent empty policy | One default path. A missing file selects the built-in default policy and warns. The policy is never empty. |
+| P5 | A worker requires a local extraction model file | No bundled extraction model is required (D2). Embeddings retain the C3 model. |
+| P6 | Conflicting extraction policy defaults | Session rules reside in the base prompt. User scripts own optional document extraction policies (D2). |
 | P7 | Test seams built from module monkeypatching | Explicit dependency injection |
 | P8 | Upstreams registered unconditionally, without config | Zero unconditional proxies |
 | P9 | Remote and stdio startup failures treated the same | Deliberate asymmetry: keep unreachable remotes, abort on missing binaries |
