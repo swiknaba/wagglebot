@@ -96,3 +96,24 @@ test("a failed atomic write leaves the original memory intact", async () => {
   await expect(provider.save({ projectRoot: repo, proposal })).rejects.toMatchObject({ code: "local_brain_internal" });
   expect(readFileSync(join(repo, ".agents", "memory.md"), "utf8")).toBe(before);
 });
+
+test("save validates rebuilt memory before calling the writer", async () => {
+  const repo = fixtureRepo();
+  writeMemory(repo, memory("Use local state."));
+  let writes = 0;
+  const provider = new MarkdownMemoryProvider({
+    today: () => "2026-09-13",
+    write: () => {
+      writes += 1;
+    },
+  });
+  const proposal = await provider.propose(input(repo));
+
+  await expect(
+    provider.save({
+      projectRoot: repo,
+      proposal: { ...proposal, summary: "## Commands" },
+    }),
+  ).rejects.toMatchObject({ code: "proposal_invalid" });
+  expect(writes).toBe(0);
+});

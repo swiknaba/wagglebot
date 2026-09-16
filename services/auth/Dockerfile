@@ -12,4 +12,5 @@ COPY services/auth ./services/auth
 RUN bun install --filter @wagglebot/auth --frozen-lockfile --production
 
 USER wagglebot
+EXPOSE 8080
 CMD ["bun", "services/auth/src/index.ts"]

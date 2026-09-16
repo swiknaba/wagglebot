@@ -76,6 +76,23 @@ test("rejects line breaks that would create Markdown structure", async () => {
   }
 });
 
+test("rejects headings in title and summary before rendering", async () => {
+  const repo = fixtureRepo();
+  writeMemory(repo, memory("Use local state."));
+  const provider = new MarkdownMemoryProvider();
+
+  for (const input of [
+    { title: "### Injected Entry" },
+    { summary: "### Injected Entry" },
+    { summary: "## Purpose" },
+    { summary: "## Commands" },
+  ]) {
+    await expect(provider.propose({ ...proposalInput(repo), ...input })).rejects.toMatchObject({
+      code: "proposal_invalid",
+    } satisfies Partial<LocalBrainError>);
+  }
+});
+
 test("rejects transcript fields and unknown evidence kinds", async () => {
   const repo = fixtureRepo();
   writeMemory(repo, memory("Use local state."));

@@ -85,6 +85,9 @@ export const validateProposalInput = (input: LocalMemoryProposalInput): LocalMem
   }
   const title = normalizeLines(input.title).trim();
   const summary = normalizeLines(input.summary).trim();
+  if (title.startsWith("#") || summary.startsWith("#")) {
+    throw new LocalBrainError("proposal_invalid", "proposal title and summary must not start with a Markdown heading");
+  }
   if (codePoints(title) === 0 || codePoints(title) > 80 || codePoints(summary) === 0 || codePoints(summary) > 1_000) {
     throw new LocalBrainError("proposal_invalid", "proposal title or summary exceeds its bound");
   }
