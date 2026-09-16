@@ -5,7 +5,7 @@ import { assertSafeText } from "@wagglebot/secret-scanner";
 
 import { LocalBrainError } from "../path-policy";
 import type { LocalMemoryProposal, LocalMemoryProposalInput, LocalMemorySection, MemoryEvidence } from "../types";
-import type { LocalMemoryDocument } from "./parse";
+import { type LocalMemoryDocument, parseMemory } from "./parse";
 
 type ProposalAction = LocalMemoryProposal["action"];
 
@@ -28,6 +28,7 @@ const EVIDENCE_KINDS = new Set<MemoryEvidence["kind"]>([
 
 const sha256 = (value: string): string => createHash("sha256").update(value).digest("hex");
 const normalizeLines = (value: string): string => value.replace(/\r\n?/gu, "\n");
+const hasLineBreak = (value: string): boolean => /[\r\n]/u.test(value);
 const normalizeTitle = (value: string): string => normalizeLines(value).trim().toLocaleLowerCase();
 const codePoints = (value: string): number => [...value].length;
 const normalizeBody = (value: string): string => normalizeLines(value).trim().replace(/\s+/gu, " ").toLocaleLowerCase();
@@ -54,6 +55,8 @@ const validateEvidence = (evidence: MemoryEvidence[]): MemoryEvidence[] => {
     ) {
       throw new LocalBrainError("proposal_invalid", "proposal evidence is invalid");
     }
+    if (hasLineBreak(item.ref))
+      throw new LocalBrainError("proposal_invalid", "proposal evidence must not contain line breaks");
     const ref = normalizeLines(item.ref).trim();
     if (codePoints(ref) > 500 || isAbsolute(ref) || /(?:^|[\\/])\.\.(?:[\\/]|$)/u.test(ref)) {
       throw new LocalBrainError("proposal_invalid", "proposal evidence must be repository-relative");
@@ -77,6 +80,9 @@ export const validateProposalInput = (input: LocalMemoryProposalInput): LocalMem
     throw new LocalBrainError("proposal_invalid", "proposal fields are invalid");
   }
 
+  if (hasLineBreak(input.title) || hasLineBreak(input.summary)) {
+    throw new LocalBrainError("proposal_invalid", "proposal title and summary must not contain line breaks");
+  }
   const title = normalizeLines(input.title).trim();
   const summary = normalizeLines(input.summary).trim();
   if (codePoints(title) === 0 || codePoints(title) > 80 || codePoints(summary) === 0 || codePoints(summary) > 1_000) {
@@ -169,7 +175,9 @@ const appendToSection = (document: LocalMemoryDocument, section: LocalMemorySect
 
 const replaceEntry = (document: LocalMemoryDocument, entry: EntryMatch, replacement: string): string => {
   const lines = document.text.split("\n");
-  const headingIndex = entry.startLine - 2;
+  let headingIndex = entry.startLine - 1;
+  while (headingIndex >= 0 && !/^###\s+/u.test(lines[headingIndex] ?? "")) headingIndex -= 1;
+  if (headingIndex < 0) throw new LocalBrainError("proposal_conflict", "replacement entry is unavailable");
   let endIndex = lines.length;
   for (let index = headingIndex + 1; index < lines.length; index += 1) {
     if (/^#{2,3}\s+/u.test(lines[index] ?? "")) {
@@ -228,6 +236,13 @@ export const buildProposal = (
     else nextText = appendToSection(document, input.section, entry);
   }
 
+  if (nextText !== undefined) {
+    try {
+      parseMemory(nextText, document.path);
+    } catch {
+      throw new LocalBrainError("proposal_invalid", "proposal would produce invalid memory");
+    }
+  }
   const patch = nextText === undefined ? "" : unifiedPatch(document.text, nextText);
   const proposalId = sha256(
     JSON.stringify({

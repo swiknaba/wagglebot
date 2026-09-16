@@ -2,20 +2,5 @@
   "name": "@wagglebot/memory-worker",
   "version": "0.0.0",
   "private": true,
-  "type": "module",
-  "scripts": {
-    "start": "bun src/index.ts",
-    "test": "bun test"
-  },
-  "dependencies": {
-    "@modelcontextprotocol/sdk": "1.30.0",
-    "@wagglebot/contracts": "workspace:*",
-    "jose": "6.2.12",
-    "pg": "8.23.0",
-    "yaml": "2.8.3",
-    "zod": "4.6.1"
-  },
-  "devDependencies": {
-    "@types/pg": "8.23.1"
-  }
+  "type": "module"
 }

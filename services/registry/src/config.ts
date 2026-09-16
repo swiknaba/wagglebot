@@ -4,6 +4,7 @@ export type RegistryConfig = {
   bindHost: string;
   port: number;
   issuer: string;
+  d26PublicKeyFile: string;
   companyRoot: string;
   sourceRevision: string;
   refreshSeconds: number;
@@ -15,6 +16,7 @@ const envSchema = z
     REGISTRY_HOST: z.string().min(1).max(253),
     REGISTRY_PORT: z.string().regex(/^\d+$/),
     REGISTRY_ISSUER: z.string().url().startsWith("https://"),
+    REGISTRY_D26_PUBLIC_KEY_FILE: z.string().min(1),
     REGISTRY_COMPANY_ROOT: z.string().min(1),
     REGISTRY_SOURCE_REVISION: z.string().regex(/^[a-f0-9]{40}$/),
     REGISTRY_REFRESH_SECONDS: z.string().regex(/^\d+$/),
@@ -23,7 +25,8 @@ const envSchema = z
   .strict();
 
 export function loadRegistryConfig(env: Record<string, string | undefined>): RegistryConfig {
-  const parsed = envSchema.safeParse(env);
+  const registryEnv = Object.fromEntries(Object.entries(env).filter(([key]) => key.startsWith("REGISTRY_")));
+  const parsed = envSchema.safeParse(registryEnv);
   if (!parsed.success) {
     const issue = parsed.error.issues[0];
     throw new Error(`${String(issue?.path[0] ?? "registry configuration")}: ${issue?.message ?? "invalid value"}`);
@@ -40,6 +43,7 @@ export function loadRegistryConfig(env: Record<string, string | undefined>): Reg
     bindHost: parsed.data.REGISTRY_HOST,
     port,
     issuer: parsed.data.REGISTRY_ISSUER,
+    d26PublicKeyFile: parsed.data.REGISTRY_D26_PUBLIC_KEY_FILE,
     companyRoot: parsed.data.REGISTRY_COMPANY_ROOT,
     sourceRevision: parsed.data.REGISTRY_SOURCE_REVISION,
     refreshSeconds,

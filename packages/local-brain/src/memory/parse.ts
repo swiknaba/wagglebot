@@ -100,9 +100,14 @@ export const parseMemory = (text: string, path: ".agents/memory.md"): LocalMemor
   const headings = headingsOf(lines);
   if (!headings.some((heading) => heading.level === 1)) throw new MemoryParseError("memory requires an H1 heading");
 
+  const sections = new Set<string>();
   for (const heading of headings) {
     if (heading.level === 2 && !TEMPLATE_SECTIONS.has(heading.title)) {
       throw new MemoryParseError("unknown memory section");
+    }
+    if (heading.level === 2) {
+      if (sections.has(heading.title)) throw new MemoryParseError("duplicate memory section");
+      sections.add(heading.title);
     }
   }
 

@@ -30,13 +30,20 @@ const environmentSchema = z
   })
   .superRefine((environment, context) => {
     if (environment.D26_AUTH_KEY_SOURCE === "github" && !environment.D26_AUTH_GITHUB_KEYS_HOST) {
-      context.addIssue({ code: "custom", message: "GitHub key source requires a host" });
+      context.addIssue({
+        code: "custom",
+        path: ["D26_AUTH_GITHUB_KEYS_HOST"],
+        message: "is required for GitHub key source",
+      });
     }
   });
 
 export function loadAuthConfig(env: Record<string, string | undefined> = process.env): AuthConfig {
   const parsed = environmentSchema.safeParse(env);
-  if (!parsed.success) throw new Error("invalid D26 auth configuration");
+  if (!parsed.success) {
+    const issue = parsed.error.issues[0];
+    throw new Error(`${String(issue?.path[0] ?? "D26 auth configuration")}: ${issue?.message ?? "invalid value"}`);
+  }
   return {
     bindHost: parsed.data.D26_AUTH_HOST,
     port: parsed.data.D26_AUTH_PORT,

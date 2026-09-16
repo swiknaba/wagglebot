@@ -60,6 +60,22 @@ test("rejects secret-like content and absolute evidence paths before rendering",
   } satisfies Partial<LocalBrainError>);
 });
 
+test("rejects line breaks that would create Markdown structure", async () => {
+  const repo = fixtureRepo();
+  writeMemory(repo, memory("Use local state."));
+  const provider = new MarkdownMemoryProvider();
+
+  for (const input of [
+    { title: "Safe title\n## Commands" },
+    { summary: "Safe summary\n\n## Commands\n\n### Bootstrap" },
+    { evidence: [{ kind: "file", ref: "src/payments/charge.ts\n## Commands" }] },
+  ]) {
+    await expect(provider.propose({ ...proposalInput(repo), ...input } as never)).rejects.toMatchObject({
+      code: "proposal_invalid",
+    } satisfies Partial<LocalBrainError>);
+  }
+});
+
 test("rejects transcript fields and unknown evidence kinds", async () => {
   const repo = fixtureRepo();
   writeMemory(repo, memory("Use local state."));

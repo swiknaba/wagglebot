@@ -5,12 +5,10 @@
   "type": "module",
   "exports": "./src/index.ts",
   "scripts": {
-    "test": "bun test",
-    "start": "bun src/index.ts"
+    "test": "bun test"
   },
   "dependencies": {
     "@wagglebot/contracts": "workspace:*",
-    "@wagglebot/d26-auth": "workspace:*",
-    "zod": "4.6.1"
+    "@wagglebot/d26-auth": "workspace:*"
   }
 }

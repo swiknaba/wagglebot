@@ -40,24 +40,24 @@ test("rejects missing or invalid required settings", () => {
   ]) {
     const environment = { ...validEnvironment };
     delete environment[name as keyof typeof environment];
-    expect(() => loadAuthConfig(environment)).toThrow("invalid D26 auth configuration");
+    expect(() => loadAuthConfig(environment)).toThrow(name);
   }
 
   expect(() => loadAuthConfig({ ...validEnvironment, D26_AUTH_ISSUER: "http://auth.example.test" })).toThrow(
-    "invalid D26 auth configuration",
+    "D26_AUTH_ISSUER",
   );
-  expect(() => loadAuthConfig({ ...validEnvironment, D26_AUTH_PORT: "0" })).toThrow("invalid D26 auth configuration");
+  expect(() => loadAuthConfig({ ...validEnvironment, D26_AUTH_PORT: "0" })).toThrow("D26_AUTH_PORT");
   expect(() => loadAuthConfig({ ...validEnvironment, D26_AUTH_CATALOG_REFRESH_SECONDS: "0" })).toThrow(
-    "invalid D26 auth configuration",
+    "D26_AUTH_CATALOG_REFRESH_SECONDS",
   );
   expect(() => loadAuthConfig({ ...validEnvironment, D26_AUTH_KEY_SOURCE: "unsupported" })).toThrow(
-    "invalid D26 auth configuration",
+    "D26_AUTH_KEY_SOURCE",
   );
 });
 
 test("requires the pinned GitHub keys host for the GitHub key source", () => {
   expect(() => loadAuthConfig({ ...validEnvironment, D26_AUTH_KEY_SOURCE: "github" })).toThrow(
-    "invalid D26 auth configuration",
+    "D26_AUTH_GITHUB_KEYS_HOST",
   );
   expect(
     loadAuthConfig({

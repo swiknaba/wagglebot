@@ -32,6 +32,9 @@ test("rejects invalid memory before returning partial content", () => {
   expect(() => parseMemory("# Component Memory\n\n## Warnings\n\n\0", ".agents/memory.md")).toThrow(
     "invalid memory text",
   );
+  expect(() =>
+    parseMemory("# Component Memory\n\n## Commands\n\nOne.\n\n## Commands\n\nTwo.\n", ".agents/memory.md"),
+  ).toThrow("duplicate memory section");
 });
 
 test("accepts the documented Purpose section in the initialized template", () => {

@@ -65,6 +65,7 @@ test("save replaces only the exact H3 entry selected by its content hash", async
   const saved = readFileSync(join(repo, ".agents", "memory.md"), "utf8");
   expect(saved).toContain("Do not retry a timed-out charge");
   expect(saved).not.toContain("Old warning text.");
+  expect(saved.match(/^### Retries can duplicate a charge$/gmu)).toHaveLength(1);
 });
 
 test("save rejects tampered proposals", async () => {
