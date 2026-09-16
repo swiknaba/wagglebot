@@ -1,5 +1,6 @@
 require "minitest/autorun"
 require "tmpdir"
+require "sequel"
 require_relative "../lib/database"
 
 class DatabaseTest < Minitest::Test
@@ -84,5 +85,11 @@ class DatabaseTest < Minitest::Test
         JSON.parse(File.read(manifest_path)),
       )
     end
+  end
+
+  def test_migration_runner_loads_sequel_migration_support
+    Database.load_migrator!
+
+    assert defined?(Sequel::Migrator)
   end
 end

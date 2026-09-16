@@ -1,4 +1,5 @@
 require "json"
+require "open3"
 
 module Database
   class ConfigurationError < StandardError; end
@@ -6,6 +7,11 @@ module Database
   ROOT = File.expand_path("..", __dir__)
   MIGRATION_DIRECTORY = File.join(ROOT, "db", "migrations")
   MANIFEST_PATH = File.join(ROOT, "migration-version.json")
+  APPLICATION_TABLES = %w[
+    wagglebot_memories
+    wagglebot_memory_schema_metadata
+    wagglebot_schema_migrations
+  ].freeze
 
   def self.connection!(environment: ENV)
     database_url = environment.fetch("DATABASE_URL", "").strip
@@ -61,7 +67,7 @@ module Database
   end
 
   def self.migrate!(database)
-    require "sequel"
+    load_migrator!
     Sequel::Migrator.run(
       database,
       MIGRATION_DIRECTORY,
@@ -71,7 +77,7 @@ module Database
   end
 
   def self.rollback!(database, version)
-    require "sequel"
+    load_migrator!
     target_version = migration_version!(version)
     Sequel::Migrator.run(
       database,
@@ -96,8 +102,34 @@ module Database
     raise ConfigurationError, "database migrations do not match the shipped manifest"
   end
 
-  def self.dump_schema!(_database)
-    raise ConfigurationError, "schema dump requires the Phase 2 application object list"
+  def self.dump_schema!(database, output_path: File.join(ROOT, "schema.sql"), pg_dump: ENV.fetch("PG_DUMP", "pg_dump"))
+    options = database.opts
+    command = [
+      pg_dump,
+      "--schema-only",
+      "--no-owner",
+      "--no-privileges",
+      "--no-tablespaces",
+      "--restrict-key=wagglebotschema",
+      *APPLICATION_TABLES.map { |table| "--table=#{table}" },
+    ]
+    command << "--host=#{options[:host]}" if options[:host]
+    command << "--port=#{options[:port]}" if options[:port]
+    command << "--username=#{options[:user]}" if options[:user]
+    command << options.fetch(:database)
+
+    environment = {}
+    environment["PGPASSWORD"] = options[:password] if options[:password]
+    environment["PGSSLMODE"] = options[:sslmode].to_s if options[:sslmode]
+    environment["PGSSLROOTCERT"] = options[:sslrootcert] if options[:sslrootcert]
+    schema, _stderr, status = Open3.capture3(environment, *command)
+    raise ConfigurationError, "pg_dump failed" unless status.success?
+
+    File.write(output_path, schema)
+  end
+
+  def self.load_migrator!
+    require "sequel/extensions/migration"
   end
 
   def self.write_manifest!(migration_directory: MIGRATION_DIRECTORY, manifest_path: MANIFEST_PATH)

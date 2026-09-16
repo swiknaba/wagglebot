@@ -72,7 +72,7 @@ deploy/
 - [ ] Run the focused Ruby tests and confirm the schema assertions fail before adding the migration.
 - [ ] Add a reversible Sequel migration which verifies `vector` and cosine operators, creates exactly the specified tables, records embedding metadata `{ provider: "xenova-transformers", model: "all-MiniLM-L6-v2", dimension: 384, distance: "cosine", schemaVersion: 1 }`, and creates GIN (`scopes`) and HNSW (`embedding vector_cosine_ops`) indexes.
 - [ ] Generate and commit the manifest from sorted migration filenames. Implement `db:check` as read-only and make `db:migrate` run it after migration.
-- [ ] Add `init-vector.sql` only for the optional local PostgreSQL image; keep extension installation out of the migration's rollback.
+- [ ] Add `services/database/init-vector.sql` only for the optional local PostgreSQL image; keep extension installation out of the migration's rollback.
 - [ ] Use `pg_dump --schema-only --no-owner --no-privileges` with the explicit object list to generate `schema.sql`; verify a fresh pgvector database can apply migration, pass `db:check`, and match the dump.
 - [ ] Commit as `feat(database): add versioned shared-memory schema`.
 
