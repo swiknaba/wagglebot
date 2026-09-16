@@ -1,5 +1,14 @@
 # Shared Memory Foundation Design
 
+> **Historical design — do not implement.** The authoritative shared-memory
+> architecture is now the current
+> [shared-layer](2026-08-28-phase-2-shared-layer.md),
+> [service contract C3](2026-08-28-service-contracts.md), and
+> [Sequel implementation plan](../plans/2026-09-16-sequel-shared-memory-foundation.md).
+> In particular, MemPalace, normalized memory tables, a TypeScript migration
+> runner, and an indexing outbox have been replaced by one memory table,
+> Ruby/Sequel migrations, and worker-owned CPU embeddings.
+
 **Status:** Approved architecture
 
 > **Parent:** [Phase 2 Memory Roadmap](2026-09-11-phase-2-memory-roadmap.md)  

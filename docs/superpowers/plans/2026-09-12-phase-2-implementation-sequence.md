@@ -1,5 +1,12 @@
 # Phase 2 Implementation Sequence
 
+> **Partially historical.** For the shared-memory milestone, follow
+> [the 2026-09-16 Sequel plan](2026-09-16-sequel-shared-memory-foundation.md)
+> and the current 2026-08-28 shared-layer, service-contract, and Phase 4
+> specifications. The MemPalace/TypeScript-migration/normalized-table wording
+> below is superseded. The local-first boundary and milestone dependencies stay
+> in force.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Deliver Wagglebot Phase 2 as a local-first repository brain plus authenticated, governed shared services and bounded context transfer, while preserving the Phase 1 provisioning contract and keeping source code, component memory, and workstation credentials local.
@@ -54,22 +61,28 @@ Phase 2 deliberately separates authorities:
 | Current code relationships | Current checkout | Ignored CodeGraph SQLite database |
 | Historical rationale | Git commits, blame, and diffs | Bounded Git evidence |
 | Company and team tool configuration | Company configuration repository | Authenticated principal-specific registry snapshot and local discovery cache |
-| System facts explicitly confirmed by a user | PostgreSQL memory records | MemPalace/pgvector semantic index plus PostgreSQL lexical search |
-| Reviewed company/team knowledge | Markdown in the company configuration repository | Replaceable PostgreSQL records and MemPalace index |
+| System facts explicitly confirmed by a user | PostgreSQL memory records | Worker-created pgvector embedding and scoped PostgreSQL search |
+| Reviewed company/team knowledge | Markdown in the company configuration repository | Derived records in the same PostgreSQL memory table |
 | Cross-chat working context | Explicit local Context Bridge packet | Expiring protected workstation vault |
 
 ## Documentation Authority
 
 When two documents differ, resolve them in this order:
 
-1. `docs/api-reference.md` for public and persisted Phase 2 contracts.
-2. `docs/superpowers/specs/2026-09-11-phase-2-memory-roadmap.md` for scope and delivery order.
-3. The approved subsystem design dated 2026-09-11 or 2026-09-12.
-4. The matching subsystem implementation plan.
+1. `docs/api-reference.md` for public Phase 2 wire contracts.
+2. The current 2026-08-28 shared-layer, C3 service-contract, and Phase 4
+   ingestion specifications for shared-memory storage and migrations.
+3. `docs/superpowers/plans/2026-09-16-sequel-shared-memory-foundation.md` for
+   shared-memory implementation sequence.
+4. The non-historical subsystem plans and designs for their own areas.
 5. Numbered decisions D1-D37 in the original design.
-6. Older 2026-08-28 schematic examples.
 
-The Ludwig commit `d6d3f3161bf885e9d2409b9f497a6bc0f497da0a` changed the historical baseline from Chroma to PostgreSQL with pgvector. Commits `d4e90afd60e89c04cf6b469ac03573287472c70b` and `39dfadd` subsequently added database-management requirements and an admin-dashboard design. The approved Phase 2 documents refine those decisions: PostgreSQL remains canonical, MemPalace 3.9.0 privately manages the semantic index on pgvector, and the migration safety controls are implemented by a TypeScript/Bun job against the normalized Phase 2 schema. The dashboard depends on Phase 3 collaboration data and is not part of the Phase 2 release. These changes affect storage and deployment work in Milestone 4, but do not change the milestone order or the local-first boundary.
+Ludwig's `a99148e` update is the storage architecture decision: a separate
+Ruby/Sequel migration container owns one `wagglebot_memories` table, while the
+Bun worker creates `all-MiniLM-L6-v2` CPU embeddings in-process. It supersedes
+the earlier MemPalace, indexing-outbox, normalized-table, and TypeScript
+migration approach. The dashboard still depends on Phase 3 collaboration data
+and remains outside the Phase 2 release.
 
 ## Current Implementation Baseline
 
@@ -79,14 +92,14 @@ Status captured on 2026-09-13 from branch `DEV-001`:
 |---|---|---|
 | Phase 1 CLI and provisioning | `packages/cli`, six-harness support, project instruction sync, release tag `v0.2.1` | Built and released |
 | Shared contract/scanner groundwork | Commit `c37c31f` adds contract and scanner fixtures | Committed groundwork |
-| Phase 2 subsystem designs and detailed plans | Seven subsystem plans under `docs/superpowers/plans/` | Approved and ready to execute |
+| Phase 2 subsystem designs and detailed plans | Current plans plus historical plans marked superseded | Active work follows the current plan for each subsystem |
 | Shared Memory Foundation Task 1 | Memory/principal schemas, workspace registration, memory-worker package metadata, tests, and lockfile updates | Implemented contract checkpoint |
 | Local Repository Brain runtime | Commits `4cc72e3` through `0a5f4c6` implement `packages/local-brain`, CLI commands, and seven low-level local MCP tools | Complete |
-| D26 authentication | Commit `c449a75` implements strict contracts, canonical SSH signing, audience-specific caching, and the local verifier; the issuer service remains unbuilt | Client foundation complete; service pending |
-| Shared database/admin design updates | Cherry-picked commits `4c65706` and `3ff31b7` add migration governance and the later admin-dashboard design | Integrated into the newer Phase 2 plan; dashboard deferred until after Phase 3 |
-| Authenticated registry | No `services/registry` implementation | Not built |
-| Local MCP hub | No `services/mcp-hub` implementation | Not built |
-| Shared memory runtime | Only package metadata/contracts are present; no database, repository, index adapter, worker, HTTP, MCP, or deployment implementation | Not built |
+| D26 authentication | `services/auth` and `packages/d26-auth` verify D26 SSH signatures and issue/verify sessions | Implemented; full-stack verification remains part of the release gate |
+| Shared database/admin design updates | Ludwig commit `a81a37f` on this branch | Database foundation active; dashboard deferred until after Phase 3 |
+| Authenticated registry | `services/registry` serves validated authenticated registry snapshots | Implemented |
+| Local MCP hub | Contracts, configuration, credential isolation, trust approval, and registry refresh exist in `services/mcp-hub` | Foundation implemented; transports/discovery/CodeMode remain |
+| Shared memory runtime | Contracts exist; the Sequel migration service and worker runtime begin with the 2026-09-16 plan | In progress |
 | Unified Context Engine | Only the seven low-level local MCP adapters required by Milestone 1 exist; context assembly is not built | Not built |
 | Context Bridge | No vault, facade, or MCP implementation | Not built |
 
@@ -252,35 +265,26 @@ The execution order is therefore:
 
 ### Task 5: Deliver Milestone 4 — Shared Memory Foundation
 
-**Detailed plan:** `docs/superpowers/plans/2026-09-11-shared-memory-foundation.md`
+**Detailed plan:** `docs/superpowers/plans/2026-09-16-sequel-shared-memory-foundation.md`
 
-**Design:** `docs/superpowers/specs/2026-09-11-shared-memory-foundation-design.md`
+**Design:** current shared-layer, C3 service contract, and Phase 4 ingestion specification.
 
-**Prerequisites:** Task 0 contract checkpoint, Milestone 2 D26, catalog fixtures, PostgreSQL with `vector`, MemPalace 3.9.0, and gitleaks 8.30.1.
+**Prerequisites:** Task 0 contract checkpoint, Milestone 2 D26, catalog fixtures, PostgreSQL with `vector`, Ruby 3/Sequel migration image, and the CPU embedding model.
 
 **Interfaces:**
 
 - Consumes: D26 `wagglebot-memory` principal, catalog scopes/owners, scanned explicit writes, and complete reviewed Git publications.
-- Produces: canonical PostgreSQL records/provenance/sources/outbox/audit, private MemPalace indexing, hybrid search, reviewed-source replacement, invalidation, HTTP/MCP routes, admin CLI, compose deployment, and recovery proof.
+- Produces: canonical PostgreSQL records, in-process CPU embeddings, migration manifest/schema checks, fact search and invalidation, HTTP/MCP routes, compose deployment, and recovery proof.
 
-- [ ] Re-open the detailed plan at Task 2; do not redo the committed Task 1 contract checkpoint unless review finds a contract defect.
-- [ ] Execute Task 2: validate runtime configuration, verified principals, and catalog-derived system/domain/org scope rules.
-- [ ] Execute Task 3: add advisory-locked up/down migrations, ordered manifest
-  and schema-reference checks, plus a repository that enforces canonical
-  records, immutable provenance, source revisions, operation-key idempotency,
-  outbox jobs, and content-free audits.
-- [ ] Execute Task 4: run gitleaks plus built-in entropy scanning before every persistence path and reconcile writes by canonical and identity keys.
-- [ ] Execute Task 5: implement the narrow private MemPalace adapter, pin its embedding profile, and prove add/search/delete semantics without exposing drawer IDs publicly.
-- [ ] Execute Task 6: commit canonical writes and outbox jobs transactionally, drain retries safely, and fuse lexical and semantic ranks while degrading to lexical search.
-- [ ] Execute Task 7: parse and deterministically chunk reviewed Git knowledge, replace complete source revisions atomically, and invalidate removed chunks.
-- [ ] Execute Task 8: expose authenticated HTTP and MCP through one service layer; keep publication/reindex/rescan/run-once admin-only.
-- [ ] Execute Task 9: add explicit publishing and memory administration CLI commands with bounded, safe output.
-- [ ] Execute Task 10: add company scaffolding, optional local PostgreSQL/pgvector,
-  a one-shot migration job, MemPalace compose services, migration/readiness
-  checks, scoped backup/restore, reconciliation, and end-to-end proof.
-- [ ] Run integration tests against a real PostgreSQL `vector` extension and the pinned MemPalace service; do not substitute an in-memory database for the milestone gate.
 
-**Gate:** Confirmed system facts are visible across repositories in the same system; component memory never enters shared storage; domain/org writes enforce D23 owners; reviewed Git revisions replace atomically; secret fixtures never reach PostgreSQL or MemPalace; lexical search remains available during semantic-index failure; rebuild and recovery preserve canonical truth.
+- [ ] Execute Tasks 1–4 of the Sequel plan for the Phase 2 migration, CPU
+  embeddings, fact storage, and authenticated service surface.
+- [ ] Execute Task 5 only when the Phase 4 ingestion scope is scheduled; it
+  extends the same table and adds the isolated ingestion runner.
+- [ ] Run integration tests against a real PostgreSQL `vector` extension; do
+  not substitute an in-memory database for the milestone gate.
+
+**Gate:** Confirmed system facts are visible across repositories in the same system; component memory never enters shared storage; domain/org writes enforce D23 owners; secret fixtures never reach PostgreSQL; migration and embedding metadata checks prevent incompatible startup; and rebuild/recovery preserve canonical truth.
 
 ---
 

@@ -22,8 +22,10 @@ The Phase 1 company repository layout is also authoritative for Phase 2:
 `company/registry.yaml` is the company layer and
 `teams/<group>/registry.yaml` is a group layer. The removed
 `registry.base.yaml` and `registry.team.<group>.yaml` files are rejected, not
-treated as aliases. For shared memory, MemPalace 3.9.0 with
-PostgreSQL/pgvector replaces every historical Chroma example.
+treated as aliases. Shared-memory persistence uses the current Phase 2
+Ruby/Sequel migration service, one `wagglebot_memories` table, PostgreSQL
+pgvector, and in-process CPU `all-MiniLM-L6-v2` embeddings; the Phase 4
+knowledge-base migration extends that same table.
 
 ## Common conventions
 
@@ -634,8 +636,10 @@ Query `scopes`, when present, contain only `SharedScope` values; the worker
 validates every named scope against the catalog. Search is read-only and has no
 idempotency key or application rate limit. Errors are `400 memory_invalid`,
 `400 unknown_scope`, `401 auth_required`, `401 auth_invalid`, `413
-request_too_large`, and `503 memory_unavailable`. MemPalace failure alone is a
-successful degraded response using PostgreSQL lexical results.
+request_too_large`, and `503 memory_unavailable`. The worker reports
+`memory_unavailable` when its required database, migration, or embedding
+metadata check is not ready; it does not delegate retrieval to a separate
+indexing service.
 
 ### `GET /v1/memories/:id`
 
@@ -1020,12 +1024,9 @@ prose, absolute path, or evidence content.
 | D26 session-token cache | workstation D26 client | process memory | one `{ token, expiresAt }` per audience; refreshed within 60 seconds of expiry; never written to disk |
 | company configuration repository | company/operator | Git | authoritative catalog fragments, `company/registry.yaml`, `teams/<group>/registry.yaml`, root `tool_catalog.yaml`, and reviewed knowledge; no secrets |
 | effective registry snapshot | registry service | process memory | validated principal-specific company/team composition keyed by source revision and username; last-known-good only |
-| `memory_records` | memory worker | PostgreSQL | canonical shared fact, status, scope, hashes, wake/review fields |
-| `memory_provenance` | memory worker | PostgreSQL | immutable source references |
-| `memory_sources` | memory worker | PostgreSQL | complete Git publication revision |
-| `memory_index_jobs` | memory worker | PostgreSQL | idempotent add/delete outbox work |
-| `memory_embedding_profiles` | memory worker | PostgreSQL | provider/model/dimension/distance/schema |
-| `memory_audit_events` | memory worker | PostgreSQL | content-free outcome and actor audit |
+| `wagglebot_memories` | memory worker | PostgreSQL | canonical fact/document record, provenance, scope, hash, lifecycle fields, and `vector(384)` embedding |
+| `wagglebot_memory_schema_metadata` | memory worker | PostgreSQL | required embedding provider/model/dimension/distance/schema metadata |
+| `wagglebot_schema_migrations` | database migration service | PostgreSQL | Sequel migration history |
 | `registry.trust.json` | local hub | workstation file, `0600` | approved privileged registry fingerprints |
 | discovery cache | local hub | process memory | downstream schemas; rebuildable, never canonical |
 | `.agents/memory.md` | repository/local brain | Git working tree | authoritative component memory; human-readable and reviewed like source |
@@ -1033,8 +1034,9 @@ prose, absolute path, or evidence content.
 | context cursor | context engine | process memory | IDs/hashes only; four-hour sliding expiry |
 | Context Bridge vault packets | context engine | workstation files, `0700`/`0600` | bounded expiring explicit packets, never transcripts |
 
-MemPalace is derived and replaceable. It is never a public API or canonical
-record store. The hub never persists resolved upstream credentials.
+The memory worker is the only public memory boundary. It embeds accepted text
+in-process before a single transactional write; no separate index or provider
+store is exposed. The hub never persists resolved upstream credentials.
 
 `registry.trust.json` has schema version 1, the pinned registry origin, and a
 list of `{ namespace, fingerprint, approvedAt }` records. A fingerprint covers
@@ -1042,14 +1044,14 @@ the complete privileged portion of the entry: transport, command/package,
 arguments, endpoint origin/private-target classification, auth scheme, and
 credential-source name. It never contains a credential value.
 
-PostgreSQL enforces that `memory_records.scope_kind` is only `system`,
-`domain`, or `org`; at most one pending/active/index-failed row exists for one
-`(scope, canonical_key)`; provenance rows are immutable; source revisions and
-operation keys are unique within their owning source/principal; outbox jobs
-record operation, attempts, next attempt, and terminal state; audit rows carry
-actor, operation, scope, target ID, outcome, rule IDs, and timestamps but no
-memory prose. MemPalace drawer IDs are derived index metadata, never public
-record identity.
+The worker validates catalog-valid shared scopes before persistence; PostgreSQL
+enforces unique `canonical_key` values before Phase 4 and preserves the explicit
+record lifecycle fields for supersession and invalidation. Its embedding metadata
+must exactly identify `xenova-transformers`, `all-MiniLM-L6-v2`, dimension `384`,
+cosine distance, and schema version `1`; a mismatch blocks the worker rather
+than silently corrupting retrieval. Phase 4 replaces the single-key constraint
+with `(knowledge_base_id, canonical_key)` and requires a base ID on every
+operation.
 
 ## Publication and revision semantics
 

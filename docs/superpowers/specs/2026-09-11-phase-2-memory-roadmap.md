@@ -1,5 +1,13 @@
 # Phase 2 Memory Roadmap
 
+> **Historical memory architecture.** This document retains the Phase 2 scope,
+> local-first privacy boundary, and delivery order, but its MemPalace and
+> normalized-record storage design is superseded by the current
+> [shared-layer](2026-08-28-phase-2-shared-layer.md),
+> [service contract C3](2026-08-28-service-contracts.md), and
+> [Sequel implementation plan](../plans/2026-09-16-sequel-shared-memory-foundation.md).
+> Do not use this document to implement database, embedding, or ingestion work.
+
 **Status:** Approved direction; the memory core is split into three
 independently testable specifications and plans, sequenced with the approved
 D26, registry, MCP hub, and Context Bridge work below.

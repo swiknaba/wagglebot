@@ -1,5 +1,12 @@
 # Shared Memory Foundation Implementation Plan
 
+> **Historical plan — do not execute.** Superseded on 2026-09-16 by
+> [the Sequel shared-memory foundation plan](2026-09-16-sequel-shared-memory-foundation.md).
+> Ludwig's shared-layer and service-contract changes make a separate Ruby/Sequel
+> migration container, one `wagglebot_memories` table, and in-process CPU
+> `all-MiniLM-L6-v2` embeddings authoritative. This plan's MemPalace,
+> TypeScript-migration, normalized-table, and outbox requirements are obsolete.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Build the catalog-scoped shared memory worker, canonical PostgreSQL records, MemPalace pgvector indexing, and reviewed Git knowledge publication.
