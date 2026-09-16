@@ -24,6 +24,8 @@ Dependencies:
 | Task fields and claim rules | [Contract C4](2026-08-28-service-contracts.md#c4-task-envelope-and-delegated-job-vocabulary-phase-3) |
 
 The dashboard adds new interfaces. Phase 4 ingestion is not required.
+Before Phase 4, use existing catalog scopes for knowledge counts.
+After Phase 4, apply the [knowledge base rules](2026-08-28-phase-4-document-ingestion.md#knowledge-bases) first.
 
 ## Components
 
@@ -73,11 +75,15 @@ The dashboard adds new interfaces. Phase 4 ingestion is not required.
 - Reject unknown team or scope values.
 - Preserve existing service scope fields.
 - Do not add a new stored `team` memory scope.
+- With Phase 4, add a knowledge base selector for team, organization, and source bases.
+- Apply `knowledge_base_id` before knowledge scope filters and counts.
+- Keep knowledge base configuration in the deployment, outside this UI.
 
 | Data | Scope rule |
 |---|---|
-| Team knowledge statistics | Counts for the selected team's systems and domains, with org-wide counts shown separately |
-| Organization knowledge statistics | Counts for records with the `org` scope |
+| Team knowledge statistics | Counts for the configured team base and selected catalog scopes, with organization counts shown separately |
+| Organization knowledge statistics | Counts for the configured organization base and `org` scope |
+| Source knowledge statistics | Counts for the selected source base, such as `confluence` |
 | Team collaboration | Agents, tasks, and channels selected through catalog ownership and service scope fields |
 | Organization collaboration | Collaboration data across the organization |
 | Global overview | Totals across all Wagglebot server data, including all teams and knowledge scopes |
@@ -90,7 +96,7 @@ The dashboard adds new interfaces. Phase 4 ingestion is not required.
 
 Global overview:
 
-- Include all teams, systems, domains, branches, and stored knowledge scopes in the totals.
+- Include all teams, systems, domains, branches, knowledge bases, and stored knowledge scopes in the totals.
 - Show active agents, tasks by state, active and inactive knowledge counts, recent message counts, and application storage.
 - Count each knowledge record once, even when it has multiple scopes.
 - Refresh totals every 30 seconds.
@@ -103,7 +109,7 @@ Global overview:
 
 - Show active agents and last activity by engineer and team.
 - Show task counts by state and message counts by engineer and team.
-- Show knowledge counts by scope and status.
+- Show knowledge counts by base, scope, and status when Phase 4 is available.
 - Show active, inactive, and superseded knowledge counts without record details.
 - Label the period covered by each activity count.
 - Use stored metadata or service counters for these totals.
@@ -116,7 +122,7 @@ Global overview:
 
 - Select only the fields required for status, task controls, and statistics.
 - Do not return complete stored records through admin endpoints.
-- Exclude knowledge titles, text, tags, provenance details, and embedding values.
+- Exclude knowledge titles, text, source URLs, metadata objects, tags, provenance details, and embedding values.
 - Exclude message bodies and task payloads, results, and attachments.
 - Return fixed error codes and operational descriptions.
 - Do not forward raw service errors or logs.
@@ -274,6 +280,8 @@ Database setup and migrations are required by
 - Add test content to knowledge records, messages, task payloads, results, and service errors.
 - Verify that this content never appears in admin HTTP responses, SSE notices, or rendered views.
 - Verify that the admin API has no knowledge or message content endpoint.
-- Verify Global totals across multiple teams and knowledge scopes.
+- Verify Global totals across multiple teams, knowledge bases, and knowledge scopes.
+- Verify that source base counts exclude records from other bases.
+- Verify that metadata objects and source URLs never appear in admin responses.
 - Verify that a record with multiple scopes contributes only once to the Global total.
 - Verify that Global totals exclude unrelated database objects.

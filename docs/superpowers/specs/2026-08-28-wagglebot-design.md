@@ -50,7 +50,7 @@ and deploy. No team must fork the internals of a different company.
 6. **Deployment-Agnostic** — Wagglebot ships Docker images and a
    compose file, nothing else. The stack runs the same on a laptop, a
    self-hosted box, or any container platform. Development needs no
-   cloud accounts. The optional batch extractor runs on a CPU (D2, D25).
+   cloud accounts. User ingestion scripts run in an optional worker container (D2, D25).
 
 ## Non-Goals
 
@@ -76,7 +76,7 @@ and deploy. No team must fork the internals of a different company.
 | # | Decision |
 |---|---|
 | D1 | Application services use **TypeScript (Bun)**. Database migrations use **Ruby Sequel** in a separate container. The hub uses `@modelcontextprotocol/sdk`. |
-| D2 | **An extractor serves document ingestion only, never the session path (D24).** When a deployment enables the batch mode, the extractor uses **OpenAI-compatible HTTP only**. It does not load models in-process. The optional compose profile ships a `llama.cpp` server container with a small Qwen GGUF (~1.1 GB, CPU-friendly). A remote endpoint needs only a different `EXTRACTOR_API_BASE` value, no code change. |
+| D2 | **User scripts own optional document extraction.** Wagglebot supplies a background runner and the common scan, embedding, and storage path. No bundled extraction model or model server is required. Session agents continue to submit finished facts (D24). |
 | D3 | The memory worker uses PostgreSQL with pgvector through a standard client. Require the [Phase 2 database tooling](2026-08-28-phase-2-shared-layer.md#shared-database-and-migrations), including Sequel migrations. Register the worker MCP interface with the hub. Do not add an MCP wrapper around PostgreSQL (P17). |
 | D4 | Coordination runs as a **standalone container**. The hub registers it via `registry.yaml` like any other upstream. It never embeds in the hub. |
 | D5 | Phase 3: order tasks by `priority DESC, created_at ASC`, with `priority` default 0. Omit deadlines and a scheduler. Use a lease and heartbeat for each claim. Increase the claim version (`fence`) with each new claim. Reject heartbeats and completion from an expired or older claim. Return expired tasks to the queue within the attempt limit. Use `idempotencyKey` to prevent duplicate external actions. |
@@ -96,7 +96,7 @@ and deploy. No team must fork the internals of a different company.
 | D22 | **Agent writes default to `component`, with confirmed promotion to `system`.** The agent classifies each memory. A system classification is a proposal: the interactive agent asks its engineer in session. A background process never asks. A timeout or an uncertain classification falls back to `component`. A fact can land too low, never too high. |
 | D23 | **Writes to `domain` and `org` are gated by the catalog.** A `domain` write requires membership in the owner group of that Domain. An `org` write requires the org-owner annotation on the User entity. Several users may carry the flag. Group membership lives only in the catalog. The gate restricts publication, never collaboration (D15). |
 | D24 | **The agent extracts its own session memory.** It sends finished facts, never a transcript. The agent already holds the session context, and it is a stronger model than any bundled extractor. No model runs on the session write path, so the extractor stops being a bottleneck. The server still owns what a client must not: secret scrubbing, canonicalization, deduplication by content hash, embedding, and storage. A client is never a security boundary. |
-| D25 | **(Phase 4) Document ingestion is a separate pipeline with a pluggable extract step.** A human names a source, for example a Confluence page. The pipeline fetches the content through an MCP tool, extracts facts, and writes them to a named scope. Two extract modes exist: `agent` (the default, and no extra container) and `local_llm` (an opt-in batch mode for bulk volume, D2). Ingestion inherits the authorization of its caller, so a write to `domain` still requires the owner group (D23). |
+| D25 | **Phase 4 provides ingestion workers.** Users add scripts under `workers/` to fetch, select, format, and update source content. Each worker targets one configured knowledge base. Shared records carry `knowledge_base_id`, a record type, and JSON metadata. Base filters apply to reads, writes, deduplication, and invalidation. Catalog scopes remain within each base. Source connectors and optional summaries belong to user scripts. See the Phase 4 spec. |
 | D26 | **(From Phase 2) Authentication uses an SSH public key challenge, not a distributed token.** Phase 1 has no shared service, so it needs no authentication at all. The agent signs a server nonce with the existing SSH key of the engineer, and receives a short-lived session token. The default key source is the `wagglebot.dev/ssh-key` annotation on the User entity in the catalog, added by pull request. That works with every Git host, including Bitbucket Server. An optional `github` source fetches `<host>/<username>.keys` instead. No token needs delivery or rotation, and `users.yaml` therefore does not exist: identity lives in the catalog. |
 | D27 | **The validation command rejects every duplicate.** Two entities of one kind sharing a name, a component naming an unknown system, and two channel routes matching one event are all hard errors. The message names the file and the value. Wagglebot never picks a winner silently (P35). |
 | D28 | **Every memory write passes a credential scan.** Two layers run server-side: a **gitleaks** rule scan for known provider formats, and the entropy check for the formats no rule set knows. A match is redacted, and a mostly-matching write is rejected. The error names the rule, never the content. `wagglebot rescan` re-applies current rules to stored memory, because new rules arrive after old writes. Memory outlives logs, so a credential stored here would surface for years. |
@@ -134,7 +134,7 @@ layer.
 D9 limits the damage of a shared layer compromise. D9 does **not** make
 the registry harmless: a registry selects commands and credential names,
 so the hub applies a local trust policy to every remote registry
-([contracts §C2](2026-08-28-service-contracts.md#c2-mcp-hub-contract),
+([contracts §C2](2026-08-28-service-contracts.md#c2-mcp-hub-contract-phase-2),
 P29).
 
 ---
@@ -212,7 +212,7 @@ talks to three things, and always by MCP. Credentials touch one box.
 | `memory_search` | MCP tool | The agent (Phase 2) |
 | `propose_memory` | MCP tool | The agent, from its own judgment (D24, Phase 2) |
 | `remember`, `forget` | MCP tool | **You**, by telling the agent (D30, Phase 2) |
-| `ingest_document` | MCP tool | You, to pull a page into memory (D25, Phase 4) |
+| Ingestion worker runner | CLI and configured intervals | User scripts import source records into one knowledge base (D25, Phase 4) |
 | `coordination_*` (six tools) | MCP tool | The agent (Phase 3) |
 | `GET /registry` | HTTP | The hub only, never the agent (Phase 2) |
 | `POST /memory/proposals` | HTTP | The memory MCP surface, internally |
@@ -231,7 +231,7 @@ talks to three things, and always by MCP. Credentials touch one box.
  │  mcp-hub :9000 (Ph. 2)       │      ┌────────────────────────────┐
  │  + engineer credentials      │─────▶│  memory-worker :3011       │
  │      │                       │ MCP  │    │ postgres :5432        │
- │      ├──────────────┐        │      │    └ extractor (optional)  │
+ │      ├──────────────┐        │      │    └ user workers (opt.)   │
  │      ▼              ▼        │      └────────────────────────────┘
  │  stdio MCP     remote MCP    │      ┌────────────────────────────┐
  │  subprocesses  upstreams     │─────▶│  coordination :3020 (Ph. 3)│
