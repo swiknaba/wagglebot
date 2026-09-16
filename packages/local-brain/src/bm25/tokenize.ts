@@ -1,4 +1,6 @@
-const TOKEN_PATTERN = /(?:[\p{L}\p{N}_-]+\/)+[\p{L}\p{N}_.-]+|[\p{L}\p{N}][\p{L}\p{N}_-]*/gu;
+const wordCharacter = /^[\p{L}\p{N}]$/u;
+const identifierCharacter = /^[\p{L}\p{N}_-]$/u;
+const pathCharacter = /^[\p{L}\p{N}_.-]$/u;
 
 const camelSegments = (value: string): string[] =>
   value
@@ -20,9 +22,29 @@ const appendIdentifier = (tokens: string[], value: string): void => {
 
 export const tokenize = (text: string): string[] => {
   const tokens: string[] = [];
+  const characters = Array.from(text);
 
-  for (const match of text.matchAll(TOKEN_PATTERN)) {
-    const token = match[0];
+  for (let index = 0; index < characters.length; ) {
+    if (!wordCharacter.test(characters[index] ?? "")) {
+      index += 1;
+      continue;
+    }
+    const parts: string[] = [];
+    while (identifierCharacter.test(characters[index] ?? "")) {
+      parts.push(characters[index] ?? "");
+      index += 1;
+    }
+    let token = parts.join("");
+    let path = false;
+    while (characters[index] === "/" && wordCharacter.test(characters[index + 1] ?? "")) {
+      path = true;
+      token += "/";
+      index += 1;
+      while (pathCharacter.test(characters[index] ?? "")) {
+        token += characters[index] ?? "";
+        index += 1;
+      }
+    }
     if (token.includes("/")) {
       tokens.push(token.toLocaleLowerCase());
       for (const pathSegment of token.split(/[/.]/u)) {
@@ -31,6 +53,7 @@ export const tokenize = (text: string): string[] => {
     } else {
       appendIdentifier(tokens, token);
     }
+    if (path) continue;
   }
 
   return tokens;

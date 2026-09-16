@@ -25,3 +25,7 @@ test("keeps commit hashes and paths searchable as exact terms", () => {
   expect(tokens).toContain("src/auth/token-service.ts");
   expect(tokens).toContain("token-service");
 });
+
+test("handles long punctuation runs without regex backtracking", () => {
+  expect(tokenize(`${"-".repeat(100_000)}token`)).toEqual(["token"]);
+});
