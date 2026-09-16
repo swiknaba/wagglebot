@@ -1,0 +1,4 @@
+{
+  "latest": "20260916130000",
+  "migrations": ["20260916130000_create_memory_schema.rb"]
+}

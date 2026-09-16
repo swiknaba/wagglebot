@@ -1,0 +1,15 @@
+{
+  "name": "@wagglebot/context-engine",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "bun src/index.ts",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.30.0",
+    "@wagglebot/local-brain": "workspace:*",
+    "zod": "4.6.1"
+  }
+}

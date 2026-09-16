@@ -1,0 +1,11 @@
+{
+  "name": "@wagglebot/d26-auth",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": "./src/index.ts",
+  "dependencies": {
+    "@wagglebot/contracts": "workspace:*",
+    "jose": "6.2.12"
+  }
+}

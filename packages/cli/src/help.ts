@@ -95,11 +95,32 @@ const SECTIONS: Record<string, Section> = {
     reads: [`registry.yaml in ${LAYERS}  (a team entry with the same namespace wins)`],
     writes: [...mcpFiles(), "~/.wagglebot/managed.json  (every key it wrote)"],
   },
+  "mcp-hub": {
+    title: "mcp-hub approve <namespace>",
+    purpose: "Approves the privileged fields of one validated local MCP hub registry entry.",
+    reads: ["MCP_HUB_CONFIG_PATH  (a validated local registry snapshot)"],
+    writes: ["~/.wagglebot/mcp-hub/registry.trust.json  (mode 0600 trust records)"],
+  },
   init: {
     title: "init [dir]",
     purpose: "Scaffolds a new company repository. Refuses a directory that is not empty.",
     reads: [],
     writes: ["package.json, README.md, company/, teams/team-payments/, and the example files"],
+  },
+  brain: {
+    title: "brain <init|remember|status>",
+    purpose: "Maintains local component memory, CodeGraph, and Git evidence. It does not contact shared services.",
+    reads: ["the current Git repository", ".agents/memory.md when it exists"],
+    writes: [
+      ".agents/memory.md only with brain remember --save",
+      ".gitignore with the owned .codegraph/ block",
+      ".codegraph/ (generated and ignored)",
+    ],
+    flags: [
+      "init [path]       Create local memory and initialize CodeGraph.",
+      "remember [path]   Preview a proposal, or save it with --save.",
+      "status [path]     Report local providers. Use --json for typed output.",
+    ],
   },
 };
 
@@ -128,6 +149,8 @@ const GENERAL = (): string[] => [
   "  sync-project       Publish the .agents/instructions/ of this repository to every harness.",
   "  sync-shell         Load .env.credentials into new shells.",
   "  write-mcp          Write MCP server configs from the registry.",
+  "  mcp-hub            Approve local MCP hub registry entries.",
+  "  brain              Maintain local component memory and repository evidence.",
   "",
   "Options:",
   "  --version          Print the wagglebot version.",

@@ -28,6 +28,10 @@
     "test": "bun test"
   },
   "dependencies": {
+    "@wagglebot/company-config": "workspace:*",
+    "@wagglebot/contracts": "workspace:*",
+    "@wagglebot/mcp-hub": "workspace:*",
+    "@wagglebot/local-brain": "workspace:*",
     "skills": "1.5.23"
   },
   "devDependencies": {

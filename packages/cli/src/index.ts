@@ -4,11 +4,16 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { createInterface } from "node:readline/promises";
 import { parseArgs } from "node:util";
+import { createLocalBrain, type LocalBrain } from "@wagglebot/local-brain";
 import type { Catalog } from "./catalog";
 import { loadCatalog, teamsOf } from "./catalog";
+import { runBrainInit } from "./commands/brain-init";
+import { runBrainRemember } from "./commands/brain-remember";
+import { runBrainStatus } from "./commands/brain-status";
 import { runInit } from "./commands/init";
 import { runInstallAgents } from "./commands/install-agents";
 import { resolveSkillsBin, runInstallSkills } from "./commands/install-skills";
+import { runMcpHubApprove } from "./commands/mcp-hub-approve";
 import { runSyncAgents } from "./commands/sync-agents";
 import { runSyncProject } from "./commands/sync-project";
 import { runSyncShell } from "./commands/sync-shell";
@@ -27,7 +32,7 @@ import { loadRegistry, mergeRegistries } from "./registry";
 import { createReporter } from "./report";
 import { resolveSkillLockFile } from "./skill-lock";
 
-export type CliDeps = { write: (line: string) => void; cwd?: string };
+export type CliDeps = { write: (line: string) => void; cwd?: string; brain?: LocalBrain };
 
 const KNOWN_COMMANDS = [
   "update",
@@ -38,6 +43,8 @@ const KNOWN_COMMANDS = [
   "sync-project",
   "sync-shell",
   "write-mcp",
+  "mcp-hub",
+  "brain",
 ];
 
 const version = (): string => {
@@ -95,6 +102,7 @@ export async function main(argv: string[], deps: CliDeps = { write: console.log 
   };
   const reporter = createReporter(deps.write);
   const cwd = deps.cwd ?? process.cwd();
+  const brain = deps.brain ?? createLocalBrain();
 
   try {
     if (command === "update") {
@@ -116,6 +124,81 @@ export async function main(argv: string[], deps: CliDeps = { write: console.log 
       const { positionals } = parseArgs({ args: rest, allowPositionals: true });
       const targetDir = positionals[0] ?? ".";
       return await runInit({ targetDir, version: version(), reporter });
+    }
+
+    if (command === "brain") {
+      const [subcommand, ...brainArgs] = rest;
+      if (subcommand === undefined || subcommand === "--help" || subcommand === "-h") {
+        deps.write(helpText(subcommand === undefined ? "brain" : "brain"));
+        return 0;
+      }
+      if (subcommand === "init") {
+        const { positionals } = parseArgs({ args: brainArgs, allowPositionals: true });
+        return await runBrainInit({
+          projectPath: positionals[0] ?? cwd,
+          brain: brain as unknown as Parameters<typeof runBrainInit>[0]["brain"],
+          write: deps.write,
+        });
+      }
+      if (subcommand === "status") {
+        const { values, positionals } = parseArgs({
+          args: brainArgs,
+          allowPositionals: true,
+          options: { json: { type: "boolean" } },
+        });
+        try {
+          return await runBrainStatus({
+            projectPath: positionals[0] ?? cwd,
+            brain,
+            json: values.json === true,
+            write: deps.write,
+          });
+        } finally {
+          await brain.close();
+        }
+      }
+      if (subcommand === "remember") {
+        const { values, positionals } = parseArgs({
+          args: brainArgs,
+          allowPositionals: true,
+          options: {
+            section: { type: "string" },
+            title: { type: "string" },
+            summary: { type: "string" },
+            evidence: { type: "string", multiple: true },
+            save: { type: "boolean" },
+          },
+        });
+        const evidence = (values.evidence ?? []).map((item) => {
+          const separator = item.indexOf(":");
+          if (separator < 1) throw new Error("--evidence must use kind:reference");
+          return { kind: item.slice(0, separator) as "file", ref: item.slice(separator + 1) };
+        });
+        if (
+          typeof values.section !== "string" ||
+          typeof values.title !== "string" ||
+          typeof values.summary !== "string" ||
+          evidence.length === 0
+        ) {
+          throw new Error("brain remember requires --section, --title, --summary, and --evidence");
+        }
+        try {
+          return await runBrainRemember({
+            projectPath: positionals[0] ?? cwd,
+            section: values.section as Parameters<typeof runBrainRemember>[0]["section"],
+            title: values.title,
+            summary: values.summary,
+            evidence,
+            save: values.save === true,
+            brain: brain as unknown as Parameters<typeof runBrainRemember>[0]["brain"],
+            write: deps.write,
+          });
+        } finally {
+          await brain.close();
+        }
+      }
+      deps.write(`wagglebot brain: unknown subcommand "${subcommand}"`);
+      return 2;
     }
 
     if (command === "install-skills") {
@@ -228,6 +311,26 @@ export async function main(argv: string[], deps: CliDeps = { write: console.log 
       });
       deps.write(reporter.summary());
       return code;
+    }
+
+    if (command === "mcp-hub") {
+      const [subcommand, namespace] = rest;
+      if (subcommand !== "approve" || !namespace) {
+        deps.write("wagglebot mcp-hub: usage: wagglebot mcp-hub approve <namespace>");
+        return 2;
+      }
+      const configPath = process.env.MCP_HUB_CONFIG_PATH;
+      if (!configPath) {
+        deps.write("wagglebot mcp-hub: MCP_HUB_CONFIG_PATH is required for local approval");
+        return 1;
+      }
+      return runMcpHubApprove({
+        namespace,
+        configPath,
+        trustPath: process.env.MCP_HUB_TRUST_PATH ?? join(home, ".wagglebot", "mcp-hub", "registry.trust.json"),
+        confirm: ask,
+        write: deps.write,
+      });
     }
 
     deps.write(`wagglebot: unknown command "${command ?? ""}". Run: wagglebot --help`);

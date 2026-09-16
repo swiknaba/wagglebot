@@ -43,3 +43,10 @@ test("general help lists sync-project and its help names the project files", () 
 test("unknown command help falls back to the general text", () => {
   expect(helpText("nope")).toBe(helpText());
 });
+
+test("brain help describes local memory and status", () => {
+  const text = helpText("brain");
+  expect(text).toContain(".agents/memory.md");
+  expect(text).toContain("brain remember");
+  expect(text).toContain("--json");
+});

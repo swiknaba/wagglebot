@@ -189,3 +189,15 @@ Write it to `.agents/memory.md`.
 
 * Do not judge the importance. They asked, so write it.
 * When they tell you a fact is wrong, remove it.
+
+## Local Repository Brain
+
+The component memory file is `.agents/memory.md`. Keep it in Markdown and
+write only durable facts with repository-relative evidence. CodeGraph data is
+generated in `.codegraph/` and stays local and ignored. Use `git_why` as
+evidence for history questions, not as a replacement for source review.
+
+An explicit developer request to remember or save a fact may propose and save
+it in one flow. An agent suggestion at task end or before compaction may call
+only `brain_memory_propose` until the developer promotes it. Never save
+transcript excerpts, secrets, speculation, or current task state.

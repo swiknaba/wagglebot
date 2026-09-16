@@ -1,0 +1,41 @@
+{
+  "synthetic": true,
+  "records": [
+    {
+      "id": "018f5f5e-69a7-7f86-8f40-f8f31f8cfa61",
+      "schemaVersion": 1,
+      "scope": { "kind": "system", "name": "synthetic-platform" },
+      "title": "Synthetic system convention",
+      "content": "This record is synthetic development fixture data.",
+      "provenance": {
+        "sourceType": "human",
+        "actor": "fixture-author",
+        "capturedAt": "2026-09-12T12:00:00.000Z"
+      }
+    },
+    {
+      "id": "018f5f5e-69a7-7f86-8f40-f8f31f8cfa62",
+      "schemaVersion": 1,
+      "scope": { "kind": "domain", "name": "synthetic-engineering" },
+      "title": "Synthetic domain convention",
+      "content": "This record is synthetic development fixture data.",
+      "provenance": {
+        "sourceType": "human",
+        "actor": "fixture-author",
+        "capturedAt": "2026-09-12T12:00:00.000Z"
+      }
+    },
+    {
+      "id": "018f5f5e-69a7-7f86-8f40-f8f31f8cfa63",
+      "schemaVersion": 1,
+      "scope": { "kind": "org" },
+      "title": "Synthetic organization interface",
+      "content": "This record is synthetic development fixture data.",
+      "provenance": {
+        "sourceType": "human",
+        "actor": "fixture-author",
+        "capturedAt": "2026-09-12T12:00:00.000Z"
+      }
+    }
+  ]
+}

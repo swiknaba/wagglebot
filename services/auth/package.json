@@ -1,0 +1,17 @@
+{
+  "name": "@wagglebot/auth",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "bun src/index.ts",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@wagglebot/contracts": "workspace:*",
+    "@wagglebot/d26-auth": "workspace:*",
+    "jose": "6.2.12",
+    "yaml": "2.8.3",
+    "zod": "4.6.1"
+  }
+}

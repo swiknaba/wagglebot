@@ -2,12 +2,13 @@
 
 One AI agent setup for a whole engineering team.
 
-> **Status.** Phase 1 is complete in [`packages/cli`](packages/cli/):
-> workstation provisioning, repository instruction sync
-> (`wagglebot sync-project`), MCP configs for six harnesses, and the
-> three first-party skills under [`skills/`](skills/). Phases 2–4 stay
-> at the specification stage. The [design specs](docs/superpowers/specs/)
-> define the system.
+> **Status.** Phase 1 is complete. Phase 2 is in progress: the local Repository
+> Brain, D26 authentication, authenticated registry, and Sequel migration
+> service are implemented. The MCP hub has its configuration, credential,
+> trust, and registry-refresh foundations, but no runnable server yet. The
+> shared-memory worker, unified context engine, and Context Bridge are not
+> built. See the [implementation sequence](docs/superpowers/plans/2026-09-12-phase-2-implementation-sequence.md)
+> for the current boundary.
 
 ## Why
 
@@ -51,7 +52,7 @@ listens on a port, and git access is the whole permission system. A
 wagglebot upgrade is a one-line version bump in the company
 `package.json`, reviewed like any pull request.
 
-**Phase 2 — shared, deployed one time for the team:**
+**Phase 2 — shared, deployed one time for the team (in progress):**
 
 * Durable memory for the whole team.
 * The registry served per team, and the MCP hub as an upgrade.
@@ -60,9 +61,10 @@ wagglebot upgrade is a one-line version bump in the company
 other, exchange findings, and hand off tasks, scoped by system and
 branch.
 
-The shared layer holds no engineer credentials and no tool-server
-credentials. It never calls a tool server. It holds only its own
-service bearer tokens.
+The shared services hold no engineer credentials or tool-server credentials
+and never call a tool server. D26 session tokens authorize calls to those
+services. Upstream credentials remain on the engineer workstation, where the
+local MCP hub will use them.
 
 ## What You Get
 
@@ -78,10 +80,10 @@ service bearer tokens.
 * **Vendor-neutral.** No SaaS integration is hardcoded. Each upstream
   comes from your catalog.
 * **Runtime-agnostic.** Any agent runtime connects over HTTP and MCP.
-* **Deployment-agnostic.** The project ships containers and a compose
-  file. Run them anywhere.
-* **Local-first.** One command starts a working stack. Embeddings run
-  on a CPU. Development needs no cloud account.
+* **Deployment-agnostic.** Implemented services ship individual Dockerfiles.
+  A complete composed Phase 2 stack is planned but not available yet.
+* **Local-first.** Phase 1 and the Repository Brain require no shared stack.
+  The planned shared-memory worker runs CPU embeddings without a cloud model.
 * **Credentials stay local.** Engineer credentials and tool-server
   credentials stay on each workstation. Shared channel secrets stay in
   the shared deployment.
@@ -118,6 +120,7 @@ Three points apply:
 | [Admin dashboard](docs/superpowers/specs/2026-09-13-admin-dashboard.md) | Developer UI, task controls, and database metrics. |
 | [Service contracts](docs/superpowers/specs/2026-08-28-service-contracts.md) | Behavior contracts for each service, and the pitfall register. |
 | [Harness reference](docs/harnesses.md) | Every file wagglebot writes per harness, and the MCP config format of each. |
+| [Deployment configuration](deploy/README.md) | Implemented service containers and their environment blocks. |
 
 ## Releasing
 
