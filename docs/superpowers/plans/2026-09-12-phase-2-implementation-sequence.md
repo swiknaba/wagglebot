@@ -86,7 +86,7 @@ and remains outside the Phase 2 release.
 
 ## Current Implementation Baseline
 
-Status captured on 2026-09-13 from branch `DEV-001`:
+Status updated on 2026-09-16 from branch `DEV-001`:
 
 | Area | Evidence | Status |
 |---|---|---|
@@ -207,10 +207,10 @@ The execution order is therefore:
 - [x] Execute Task 1 of the detailed plan: define strict versioned D26 request, response, token, and principal contracts.
 - [x] Execute Task 2: implement canonical newline-delimited challenge bytes and local SSH signing without exporting a private key.
 - [x] Execute Task 3: implement the per-audience in-memory token client/cache and exact-audience verifier.
-- [ ] Execute Task 4: resolve public keys from the catalog and the optional pinned GitHub host with last-known-good refresh behavior.
-- [ ] Execute Task 5: add a 60-second, three-attempt, one-use challenge store and generic-failure SSHSIG verification.
-- [ ] Execute Task 6: issue 900-second EdDSA JWTs and verify issuer, audience, algorithm, expiry, and 30-second clock tolerance.
-- [ ] Execute Task 7: expose auth health, challenge, and session HTTP routes with safe errors and unauthenticated rate limits.
+- [x] Execute Task 4: resolve public keys from the catalog and the optional pinned GitHub host with last-known-good refresh behavior.
+- [x] Execute Task 5: add a 60-second, three-attempt, one-use challenge store and generic-failure SSHSIG verification.
+- [x] Execute Task 6: issue 900-second EdDSA JWTs and verify issuer, audience, algorithm, expiry, and 30-second clock tolerance.
+- [x] Execute Task 7: expose auth health, challenge, and session HTTP routes with safe errors and unauthenticated rate limits.
 - [ ] Execute Task 8: integrate fixture consumers and prove replay rejection, audience isolation, refresh, and catalog failure behavior end to end.
 - [ ] Verify logs and persisted state contain no nonce, signature, token, key material, request body, catalog contents, or absolute path.
 
@@ -229,10 +229,10 @@ The execution order is therefore:
 - Consumes: D26 `wagglebot-registry` principal, `company/registry.yaml`, matching `teams/<group>/registry.yaml`, all catalog fragments, and the root `tool_catalog.yaml`.
 - Produces: a validated, principal-specific registry snapshot with deterministic shallow replacement, revision/ETag behavior, atomic last-known-good refresh, and no credential values.
 
-- [ ] Execute Task 1 of the detailed plan: make the registry, tool-catalog, and company-layout schemas canonical and reject removed aliases.
-- [ ] Execute Task 2: load and validate complete catalog/registry candidates before publication.
-- [ ] Execute Task 3: derive groups from the authenticated principal and compose company then lexicographically ordered team layers.
-- [ ] Execute Task 4: expose authenticated `GET /registry`, health endpoints, 256 KiB response bounds, ETag, and safe failure envelopes.
+- [x] Execute Task 1 of the detailed plan: make the registry, tool-catalog, and company-layout schemas canonical and reject removed aliases.
+- [x] Execute Task 2: load and validate complete catalog/registry candidates before publication.
+- [x] Execute Task 3: derive groups from the authenticated principal and compose company then lexicographically ordered team layers.
+- [x] Execute Task 4: expose authenticated `GET /registry`, health endpoints, 256 KiB response bounds, ETag, and safe failure envelopes.
 - [ ] Execute Task 5: prove principal isolation, atomic refresh, last-known-good behavior, and absence of credentials or trust metadata.
 
 **Gate:** Two fixture principals receive only their deterministic effective registries; callers cannot choose identity or group; an invalid refresh never partially replaces the accepted snapshot.
@@ -250,8 +250,8 @@ The execution order is therefore:
 - Consumes: local hub bearer token, D26 registry client, principal-specific registry, local credential sources, and explicit trust approvals.
 - Produces: `services/mcp-hub`, four upstream transports, atomic registry refresh, bounded discovery cache, CodeMode `search/get_schema/execute`, four introspection tools, and degraded namespace status.
 
-- [ ] Execute Task 1 of the detailed plan: define strict hub-facing contracts and configuration.
-- [ ] Execute Task 2: resolve credentials only on the workstation and require a `0600` trust approval for new or changed privileged registry entries.
+- [x] Execute Task 1 of the detailed plan: define strict hub-facing contracts and configuration.
+- [x] Execute Task 2: resolve credentials only on the workstation and require a `0600` trust approval for new or changed privileged registry entries.
 - [ ] Execute Task 3: fetch, validate, and atomically swap complete registry revisions; drain removed namespaces and invalidate their schemas.
 - [ ] Execute Task 4: implement exactly `remote_http`, `remote_sse`, `stdio_npx`, and `stdio_cmd`; strip local hub and D26 credentials before every upstream call.
 - [ ] Execute Task 5: add bounded, concurrent discovery with five-second discovery timeouts and adaptive refresh.
@@ -277,8 +277,10 @@ The execution order is therefore:
 - Produces: canonical PostgreSQL records, in-process CPU embeddings, migration manifest/schema checks, fact search and invalidation, HTTP/MCP routes, compose deployment, and recovery proof.
 
 
-- [ ] Execute Tasks 1–4 of the Sequel plan for the Phase 2 migration, CPU
-  embeddings, fact storage, and authenticated service surface.
+- [x] Land the isolated migration service and versioned Phase 2 schema
+  artifacts from Tasks 1–2; real pgvector verification remains open below.
+- [ ] Execute Tasks 3–4 of the Sequel plan for CPU embeddings, fact storage,
+  and the authenticated service surface.
 - [ ] Execute Task 5 only when the Phase 4 ingestion scope is scheduled; it
   extends the same table and adds the isolated ingestion runner.
 - [ ] Run integration tests against a real PostgreSQL `vector` extension; do

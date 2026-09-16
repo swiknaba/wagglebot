@@ -7,7 +7,7 @@ import { RegistrySource } from "./source";
 
 export async function createServer(env: Record<string, string | undefined> = process.env) {
   const config = loadRegistryConfig(env);
-  const publicKey = await importSPKI(await readFile(config.d26PublicKeyFile, "utf8"), "EdDSA");
+  const publicKey = await importSPKI(await readFile(config.authPublicKeyFile, "utf8"), "EdDSA");
   const source = new RegistrySource({ companyRoot: config.companyRoot, sourceRevision: config.sourceRevision });
   await source.refresh();
   const app = createApp({

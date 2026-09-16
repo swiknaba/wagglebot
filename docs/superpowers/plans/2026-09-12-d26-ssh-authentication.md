@@ -1,4 +1,4 @@
-. the# D26 SSH Authentication Implementation Plan
+# D26 SSH Authentication Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:executing-plans` (or `superpowers:subagent-driven-development` when the work is split into independent tasks) to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -692,7 +692,7 @@ type AuthConfig = {
 };
 ```
 
-`D26_AUTH_CATALOG_REFRESH_SECONDS` is a required positive integer, bounded to
+`AUTH_CATALOG_REFRESH_SECONDS` is a required positive integer, bounded to
 one day. Catalog-backed deployments refresh on this interval; each failed
 refresh retains the last accepted key set and leaves readiness degraded.
 
@@ -848,11 +848,11 @@ Run: `bun test services/memory-worker/src/principal.test.ts services/context-eng
 
 Add an `auth` service to the shared compose profile with:
 
-- `D26_AUTH_HOST`, `D26_AUTH_PORT`;
-- `D26_AUTH_ISSUER`;
-- `D26_AUTH_SIGNING_PRIVATE_KEY_FILE`;
-- `D26_AUTH_CATALOG_PATH`;
-- `D26_AUTH_KEY_SOURCE` and optional pinned GitHub key host;
+- `AUTH_HOST`, `AUTH_PORT`;
+- `AUTH_ISSUER`;
+- `AUTH_SIGNING_PRIVATE_KEY_FILE`;
+- `AUTH_CATALOG_PATH`;
+- `AUTH_KEY_SOURCE` and optional pinned GitHub key host;
 - read-only mounts for the catalog and signing key;
 - `/livez` and `/readyz` health checks;
 - no engineer private-key mount and no upstream credentials.
