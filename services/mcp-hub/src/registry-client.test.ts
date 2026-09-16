@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { chmodSync, mkdtempSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import type { ProxyConfig } from "@wagglebot/contracts";
 import { RegistryManager } from "./registry-client";
 
 const snapshot = JSON.stringify({
@@ -54,4 +55,23 @@ test("sends D26 authorization only to the configured remote registry", async () 
   });
   expect((await manager.refresh()).ok).toBe(true);
   expect(new Headers(seen[0]?.headers).get("authorization")).toBe("Bearer d26");
+});
+
+test("keeps approved namespaces when another namespace requires approval", async () => {
+  const registry = JSON.stringify({
+    ...JSON.parse(snapshot),
+    proxies: [
+      { namespace: "approved", mode: "remote_http", endpoint: "https://approved.example/mcp" },
+      { namespace: "unapproved", mode: "remote_http", endpoint: "https://unapproved.example/mcp" },
+    ],
+  });
+  const manager = new RegistryManager({
+    config: config({ configPath: undefined, configUrl: "https://registry.example/registry" }),
+    trust: { requireApproval: (proxy: ProxyConfig) => proxy.namespace === "approved" } as never,
+    tokens: { get: async () => ({ token: "d26", expiresAt: "" }), invalidate: () => undefined },
+    fetch: async () => new Response(registry),
+  });
+
+  expect((await manager.refresh()).ok).toBe(true);
+  expect(manager.current()?.proxies.map((proxy) => proxy.namespace)).toEqual(["approved"]);
 });

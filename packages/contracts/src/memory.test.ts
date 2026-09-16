@@ -169,34 +169,51 @@ test("publications cap chunks at 256 and validate wake metadata", () => {
   ).toBe(true);
 });
 
-test("write results and stable memory errors reject unversioned or unknown shapes", () => {
+test("memory writes are final after synchronous embedding", () => {
+  expect(
+    WriteResultSchema.safeParse({
+      schemaVersion: 1,
+      operationKey: "op_123",
+      outcomes: [{ recordId: uuid, outcome: "created" }],
+    }).success,
+  ).toBe(true);
   expect(
     WriteResultSchema.safeParse({
       schemaVersion: 1,
       operationKey: "op_123",
       outcomes: [{ recordId: uuid, outcome: "created", indexState: "pending" }],
     }).success,
-  ).toBe(true);
+  ).toBe(false);
   expect(MemoryErrorCodeSchema.safeParse("operation_key_conflict").success).toBe(true);
   expect(MemoryErrorCodeSchema.safeParse("internal_stack").success).toBe(false);
   expect(WriteResultSchema.safeParse({ operationKey: "op_123", outcomes: [] }).success).toBe(false);
 });
 
-test("search results preserve fractional fused scores from reciprocal-rank fusion", () => {
+test("memory searches return one cosine score without provider state", () => {
   expect(
     MemorySearchResultSchema.safeParse({
       schemaVersion: 1,
       records: [
         {
           record: record(),
-          fusedRank: 0.032_786_885,
-          channelRanks: { lexical: 1, semantic: 2 },
+          score: 0.87,
         },
       ],
+    }).success,
+  ).toBe(true);
+  expect(
+    MemorySearchResultSchema.safeParse({
+      schemaVersion: 1,
+      records: [{ record: record(), fusedRank: 0.032_786_885, channelRanks: { lexical: 1, semantic: 2 } }],
       provider: { lexical: "ready", semantic: "ready" },
       degraded: false,
     }).success,
-  ).toBe(true);
+  ).toBe(false);
+});
+
+test("memory records exclude asynchronous indexing statuses", () => {
+  expect(MemoryRecordSchema.safeParse(record({ status: "active" })).success).toBe(true);
+  expect(MemoryRecordSchema.safeParse(record({ status: "pending_index" })).success).toBe(false);
 });
 
 test("memory MCP inputs omit only the HTTP schema version and retain route identifiers", () => {

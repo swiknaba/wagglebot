@@ -433,7 +433,7 @@ server-side.
 
 ```typescript
 type MemoryKind = "fact" | "decision" | "warning" | "convention" | "interface" | "runbook";
-type MemoryStatus = "pending_index" | "active" | "superseded" | "invalidated" | "index_failed";
+type MemoryStatus = "active" | "superseded" | "invalidated";
 type Confidence = "low" | "medium" | "high";
 
 type MemoryRecord = {
@@ -463,7 +463,6 @@ type WriteResult = {
   outcomes: Array<{
     recordId: string;
     outcome: "created" | "merged" | "superseded" | "unchanged" | "rejected";
-    indexState: "pending" | "active" | "failed";
     code?: string;
   }>;
 };
@@ -472,11 +471,8 @@ type MemorySearchResult = {
   schemaVersion: 1;
   records: Array<{
     record: MemoryRecord;
-    fusedRank: number;
-    channelRanks: { lexical?: number; semantic?: number };
+    score: number; // cosine similarity score, 0..1
   }>;
-  provider: { lexical: "ready"; semantic: "ready" | "unavailable" };
-  degraded: boolean;
   additionalEligible?: number;
 };
 

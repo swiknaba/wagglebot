@@ -44,11 +44,12 @@ export class RegistryManager {
   private async doRefresh(signal?: AbortSignal): Promise<RefreshResult> {
     try {
       const candidate = this.input.config.configUrl ? await this.loadRemote(signal) : await this.loadLocal();
-      for (const proxy of candidate.proxies) {
-        if (!this.input.trust.requireApproval(proxy)) throw new Error(`namespace ${proxy.namespace} requires approval`);
-      }
-      this.snapshot = candidate;
-      return { ok: true, snapshot: candidate };
+      const snapshot = {
+        ...candidate,
+        proxies: candidate.proxies.filter((proxy) => this.input.trust.requireApproval(proxy)),
+      };
+      this.snapshot = snapshot;
+      return { ok: true, snapshot };
     } catch (cause) {
       return { ok: false, error: cause instanceof Error ? cause : new Error("registry refresh failed") };
     }

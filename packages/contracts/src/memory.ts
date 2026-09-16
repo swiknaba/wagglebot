@@ -41,7 +41,7 @@ const uuid = z.uuid();
 const reviewAfter = z.iso.date();
 const memoryKind = z.enum(["fact", "decision", "warning", "convention", "interface", "runbook"]);
 const confidence = z.enum(["low", "medium", "high"]);
-const memoryStatus = z.enum(["pending_index", "active", "superseded", "invalidated", "index_failed"]);
+const memoryStatus = z.enum(["active", "superseded", "invalidated"]);
 const provenance = z.array(ProvenanceSchema).min(1);
 
 const withWakeReview = <T extends { wake?: boolean; reviewAfter?: string }>(
@@ -121,13 +121,7 @@ const memoryWakeInput = z
 
 export const MemorySearchInputSchema = z.discriminatedUnion("purpose", [memoryQueryInput, memoryWakeInput]);
 
-const channelRanks = z
-  .object({
-    lexical: z.number().int().positive().optional(),
-    semantic: z.number().int().positive().optional(),
-  })
-  .strict();
-const fusedRank = z.number().finite().nonnegative();
+const score = z.number().finite().min(0).max(1);
 
 export const MemorySearchResultSchema = z
   .object({
@@ -137,19 +131,11 @@ export const MemorySearchResultSchema = z
         z
           .object({
             record: memoryRecord,
-            fusedRank,
-            channelRanks,
+            score,
           })
           .strict(),
       )
       .max(20),
-    provider: z
-      .object({
-        lexical: z.literal("ready"),
-        semantic: z.enum(["ready", "unavailable"]),
-      })
-      .strict(),
-    degraded: z.boolean(),
     additionalEligible: z.number().int().nonnegative().optional(),
   })
   .strict();
@@ -158,7 +144,6 @@ const writeOutcome = z
   .object({
     recordId: uuid,
     outcome: z.enum(["created", "merged", "superseded", "unchanged", "rejected"]),
-    indexState: z.enum(["pending", "active", "failed"]),
     code: z.string().min(1).optional(),
   })
   .strict();
