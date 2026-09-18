@@ -10,6 +10,7 @@ import { AuthIssuer } from "../src/issuer";
 import { OpenSshSignatureVerifier } from "../src/ssh-verifier";
 
 const directories: string[] = [];
+let signatureSequence = 0;
 
 async function run(args: string[]): Promise<void> {
   const process = Bun.spawn(args, { stdout: "ignore", stderr: "ignore" });
@@ -49,7 +50,7 @@ async function stopAgent(agentSocket: string, processId: string): Promise<void> 
 }
 
 async function sign(privateKeyPath: string, payload: Uint8Array, namespace = "wagglebot-auth@wagglebot.dev") {
-  const payloadPath = `${privateKeyPath}.challenge`;
+  const payloadPath = `${privateKeyPath}.challenge-${signatureSequence++}`;
   await writeFile(payloadPath, payload, { mode: 0o600 });
   await run(["ssh-keygen", "-Y", "sign", "-f", privateKeyPath, "-n", namespace, payloadPath]);
   return readFile(`${payloadPath}.sig`, "utf8");
@@ -93,6 +94,7 @@ async function fixture() {
     issuer,
     issuerPublicKey,
     fetch,
+    clock: () => now,
     advance(minutes: number) {
       now = new Date(now.getTime() + minutes * 60_000);
     },
@@ -212,6 +214,34 @@ test("a catalog key rotation rejects new old-key exchanges without revoking issu
   await expect(staleKeyClient.get("wagglebot-registry", new AbortController().signal)).rejects.toThrow(
     "D26 auth request failed",
   );
+});
+
+test("the real client refreshes near expiry once for concurrent callers", async () => {
+  const environment = await fixture();
+  let signatures = 0;
+  const client = new D26Client({
+    baseUrl: "https://auth.example.test",
+    username: "alice",
+    signer: {
+      sign: async (payload) => {
+        signatures += 1;
+        return sign(environment.privateKeyPath, payload);
+      },
+    },
+    fetch: environment.fetch,
+    clock: environment.clock,
+  });
+
+  const first = await client.get("wagglebot-memory", new AbortController().signal);
+  environment.advance(14);
+  const [second, third] = await Promise.all([
+    client.get("wagglebot-memory", new AbortController().signal),
+    client.get("wagglebot-memory", new AbortController().signal),
+  ]);
+
+  expect(second).toEqual(third);
+  expect(second.token).not.toBe(first.token);
+  expect(signatures).toBe(2);
 });
 
 test("an isolated ssh-agent signs an SSHSIG without exposing its private key", async () => {
