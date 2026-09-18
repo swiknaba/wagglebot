@@ -75,3 +75,71 @@ test("keeps approved namespaces when another namespace requires approval", async
   expect((await manager.refresh()).ok).toBe(true);
   expect(manager.current()?.proxies.map((proxy) => proxy.namespace)).toEqual(["approved"]);
 });
+
+test("retains the accepted snapshot after unchanged, oversized, and unauthorized remote responses", async () => {
+  const responses = [
+    new Response(snapshot, { headers: { etag: `reg_${"a".repeat(64)}` } }),
+    new Response(null, { status: 304 }),
+    new Response("x".repeat(262_145)),
+    new Response(null, { status: 401 }),
+  ];
+  const manager = new RegistryManager({
+    config: config({ configPath: undefined, configUrl: "https://registry.example/registry" }),
+    trust,
+    tokens: { get: async () => ({ token: "d26", expiresAt: "" }), invalidate: () => undefined },
+    fetch: async () => responses.shift() ?? new Response(null, { status: 500 }),
+  });
+
+  const first = await manager.refresh();
+  const accepted = manager.current();
+  if (!accepted) throw new Error("expected an accepted registry snapshot");
+  const unchanged = await manager.refresh();
+  const oversized = await manager.refresh();
+  const unauthorized = await manager.refresh();
+
+  expect(first.ok).toBe(true);
+  expect(unchanged).toEqual(first);
+  expect(oversized.ok).toBe(false);
+  expect(unauthorized.ok).toBe(false);
+  expect(manager.current()).toBe(accepted);
+});
+
+test("rejects redirects without sending the registry token to another origin", async () => {
+  const requests: Array<{ url: string; authorization: string | null }> = [];
+  const manager = new RegistryManager({
+    config: config({ configPath: undefined, configUrl: "https://registry.example/registry" }),
+    trust,
+    tokens: { get: async () => ({ token: "d26", expiresAt: "" }), invalidate: () => undefined },
+    fetch: async (input, init) => {
+      requests.push({ url: input.toString(), authorization: new Headers(init?.headers).get("authorization") });
+      return new Response(null, { status: 302, headers: { location: "https://other.example/registry" } });
+    },
+  });
+
+  expect((await manager.refresh()).ok).toBe(false);
+  expect(requests).toEqual([{ url: "https://registry.example/registry", authorization: "Bearer d26" }]);
+});
+
+test("coalesces concurrent refresh requests", async () => {
+  let calls = 0;
+  let release: ((response: Response) => void) | undefined;
+  const manager = new RegistryManager({
+    config: config({ configPath: undefined, configUrl: "https://registry.example/registry" }),
+    trust,
+    tokens: { get: async () => ({ token: "d26", expiresAt: "" }), invalidate: () => undefined },
+    fetch: async () => {
+      calls += 1;
+      return new Promise<Response>((resolve) => {
+        release = resolve;
+      });
+    },
+  });
+
+  const first = manager.refresh();
+  const second = manager.refresh();
+  await Promise.resolve();
+  release?.(new Response(snapshot));
+
+  expect(await first).toEqual(await second);
+  expect(calls).toBe(1);
+});

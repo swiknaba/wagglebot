@@ -44,6 +44,7 @@ export class RegistryManager {
   private async doRefresh(signal?: AbortSignal): Promise<RefreshResult> {
     try {
       const candidate = this.input.config.configUrl ? await this.loadRemote(signal) : await this.loadLocal();
+      if (candidate === this.snapshot) return { ok: true, snapshot: candidate };
       const snapshot = {
         ...candidate,
         proxies: candidate.proxies.filter((proxy) => this.input.trust.requireApproval(proxy)),
