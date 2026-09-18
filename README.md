@@ -138,6 +138,10 @@ sandboxed home directory. The flow covers the base prompt sync, the
 hooks, and the shell block. `test-app/` serves as the drift gate for
 the scaffold output.
 
+The CodeGraph SDK integration tests require the platform-specific optional
+CodeGraph bundle. They are excluded from the portable test suite; run
+`bun run test:codegraph-integration` on a machine with that bundle installed.
+
 Regenerate `test-app/` after any change to the scaffold templates or
 the package version:
 

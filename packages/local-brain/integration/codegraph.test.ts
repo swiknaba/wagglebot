@@ -5,7 +5,9 @@ import { join } from "node:path";
 import { CodeGraphProvider } from "../src/codegraph/provider";
 import { fixtureRepo } from "../src/memory/test-fixture";
 
-test("the pinned SDK persists and reopens a local CodeGraph index", async () => {
+const integrationTest = process.env.CODEGRAPH_INTEGRATION === "1" ? test : test.skip;
+
+integrationTest("the pinned SDK persists and reopens a local CodeGraph index", async () => {
   const repo = fixtureRepo();
   mkdirSync(join(repo, "src"));
   writeFileSync(
@@ -28,32 +30,36 @@ test("the pinned SDK persists and reopens a local CodeGraph index", async () => 
   expect(result.nodes.length).toBeGreaterThan(0);
 });
 
-test("the watcher incrementally indexes a changed local source file", async () => {
-  const repo = fixtureRepo();
-  mkdirSync(join(repo, "src"));
-  const source = join(repo, "src", "service.ts");
-  writeFileSync(source, "export const original = () => 'ready';\n");
-  const provider = new CodeGraphProvider();
-  await provider.initialize(repo);
-  const database = join(repo, ".codegraph", "codegraph.db");
+integrationTest(
+  "the watcher incrementally indexes a changed local source file",
+  async () => {
+    const repo = fixtureRepo();
+    mkdirSync(join(repo, "src"));
+    const source = join(repo, "src", "service.ts");
+    writeFileSync(source, "export const original = () => 'ready';\n");
+    const provider = new CodeGraphProvider();
+    await provider.initialize(repo);
+    const database = join(repo, ".codegraph", "codegraph.db");
 
-  writeFileSync(source, "export const replacement = () => 'updated';\n");
-  let updated = false;
-  for (let attempt = 0; attempt < 20; attempt += 1) {
-    await Bun.sleep(250);
-    const result = await provider.explore({
-      projectRoot: repo,
-      query: "replacement",
-      maxNodes: 20,
-      includeCode: false,
-    });
-    if (result.nodes.some((node) => node.name === "replacement")) {
-      updated = true;
-      break;
+    writeFileSync(source, "export const replacement = () => 'updated';\n");
+    let updated = false;
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      await Bun.sleep(250);
+      const result = await provider.explore({
+        projectRoot: repo,
+        query: "replacement",
+        maxNodes: 20,
+        includeCode: false,
+      });
+      if (result.nodes.some((node) => node.name === "replacement")) {
+        updated = true;
+        break;
+      }
     }
-  }
-  await provider.close();
+    await provider.close();
 
-  expect(updated).toBe(true);
-  expect(existsSync(database)).toBe(true);
-}, 10_000);
+    expect(updated).toBe(true);
+    expect(existsSync(database)).toBe(true);
+  },
+  10_000,
+);
