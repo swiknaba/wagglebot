@@ -143,3 +143,110 @@ test("coalesces concurrent refresh requests", async () => {
   expect(await first).toEqual(await second);
   expect(calls).toBe(1);
 });
+
+test("starts an immediate remote refresh", async () => {
+  let calls = 0;
+  let fetchStarted: (() => void) | undefined;
+  const started = new Promise<void>((resolve) => {
+    fetchStarted = resolve;
+  });
+
+  const manager = new RegistryManager({
+    config: config({
+      configPath: undefined,
+      configUrl: "https://registry.example/registry",
+      configRefreshSeconds: 900,
+    }),
+    trust,
+    tokens: { get: async () => ({ token: "d26", expiresAt: "" }), invalidate: () => undefined },
+    fetch: async () => {
+      calls += 1;
+      fetchStarted?.();
+      return new Response(snapshot);
+    },
+  });
+
+  try {
+    manager.start();
+    await started;
+    expect(calls).toBe(1);
+  } finally {
+    await manager.stop();
+  }
+});
+
+test("stop aborts an active refresh before it resolves", async () => {
+  let aborted = false;
+  let fetchStarted: (() => void) | undefined;
+  const started = new Promise<void>((resolve) => {
+    fetchStarted = resolve;
+  });
+  const manager = new RegistryManager({
+    config: config({
+      configPath: undefined,
+      configUrl: "https://registry.example/registry",
+      configRefreshSeconds: 900,
+    }),
+    trust,
+    tokens: { get: async () => ({ token: "d26", expiresAt: "" }), invalidate: () => undefined },
+    fetch: async (_input, init) => {
+      fetchStarted?.();
+      return new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => {
+          aborted = true;
+          reject(new DOMException("aborted", "AbortError"));
+        });
+      });
+    },
+  });
+
+  manager.start();
+  await started;
+  await manager.stop();
+
+  expect(aborted).toBe(true);
+});
+
+test("stop detaches an abort-ignoring refresh before a later start", async () => {
+  let calls = 0;
+  let firstStarted: (() => void) | undefined;
+  let releaseFirst: ((response: Response) => void) | undefined;
+  const started = new Promise<void>((resolve) => {
+    firstStarted = resolve;
+  });
+  const laterSnapshot = snapshot.replace(`reg_${"a".repeat(64)}`, `reg_${"b".repeat(64)}`);
+  const manager = new RegistryManager({
+    config: config({
+      configPath: undefined,
+      configUrl: "https://registry.example/registry",
+      configRefreshSeconds: 900,
+    }),
+    trust,
+    tokens: { get: async () => ({ token: "d26", expiresAt: "" }), invalidate: () => undefined },
+    fetch: async () => {
+      calls += 1;
+      if (calls === 1) {
+        firstStarted?.();
+        return new Promise<Response>((resolve) => {
+          releaseFirst = resolve;
+        });
+      }
+      return new Response(laterSnapshot);
+    },
+  });
+
+  manager.start();
+  await started;
+  await manager.stop();
+
+  manager.start();
+  const second = manager.refresh();
+  expect((await second).ok).toBe(true);
+  expect(manager.current()?.revision).toBe(`reg_${"b".repeat(64)}`);
+
+  releaseFirst?.(new Response(snapshot));
+  await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  expect(manager.current()?.revision).toBe(`reg_${"b".repeat(64)}`);
+
+  await manager.stop();
+});

@@ -12,6 +12,7 @@ export class RegistryManager {
   private etag?: string;
   private timer?: ReturnType<typeof setInterval>;
   private refreshing?: Promise<RefreshResult>;
+  private refreshController?: AbortController;
   public constructor(
     private readonly input: {
       config: HubConfig;
@@ -28,22 +29,36 @@ export class RegistryManager {
   }
   public start(): void {
     if (this.input.config.configUrl === undefined || this.input.config.configRefreshSeconds === 0 || this.timer) return;
+    void this.refresh();
     this.timer = setInterval(() => void this.refresh(), this.input.config.configRefreshSeconds * 1000);
   }
   public async stop(): Promise<void> {
     if (this.timer) clearInterval(this.timer);
     this.timer = undefined;
+    const controller = this.refreshController;
+    controller?.abort();
+    if (this.refreshController === controller) {
+      this.refreshController = undefined;
+      this.refreshing = undefined;
+    }
   }
   public refresh(signal?: AbortSignal): Promise<RefreshResult> {
     if (this.refreshing) return this.refreshing;
-    this.refreshing = this.doRefresh(signal).finally(() => {
-      this.refreshing = undefined;
+    const controller = new AbortController();
+    this.refreshController = controller;
+    const refreshSignal = signal ? AbortSignal.any([signal, controller.signal]) : controller.signal;
+    this.refreshing = this.doRefresh(refreshSignal).finally(() => {
+      if (this.refreshController === controller) {
+        this.refreshing = undefined;
+        this.refreshController = undefined;
+      }
     });
     return this.refreshing;
   }
   private async doRefresh(signal?: AbortSignal): Promise<RefreshResult> {
     try {
       const candidate = this.input.config.configUrl ? await this.loadRemote(signal) : await this.loadLocal();
+      if (signal?.aborted) throw new DOMException("registry refresh aborted", "AbortError");
       if (candidate === this.snapshot) return { ok: true, snapshot: candidate };
       const snapshot = {
         ...candidate,
@@ -82,6 +97,7 @@ export class RegistryManager {
       if (!response.ok) throw new Error("remote registry request failed");
       const text = await readLimited(response, MAX_RESPONSE_BYTES);
       const snapshot = parseSnapshot(text);
+      if (signal?.aborted) throw new DOMException("registry refresh aborted", "AbortError");
       this.etag = response.headers.get("etag") ?? snapshot.revision;
       return snapshot;
     } finally {
