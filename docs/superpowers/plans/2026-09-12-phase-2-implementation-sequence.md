@@ -193,7 +193,7 @@ The execution order is therefore:
 
 ### Task 2: Deliver Milestone 2 — SSH Authentication
 
-**Detailed plan:** `docs/superpowers/plans/2026-09-12-d26-ssh-authentication.md`
+**Detailed plan:** `docs/superpowers/plans/2026-09-12-ssh-authentication.md`
 
 **Contract:** `docs/api-reference.md` section “SSH authentication”.
 
