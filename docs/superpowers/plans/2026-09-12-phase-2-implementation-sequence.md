@@ -233,7 +233,7 @@ The execution order is therefore:
 - [x] Execute Task 2: load and validate complete catalog/registry candidates before publication.
 - [x] Execute Task 3: derive groups from the authenticated principal and compose company then lexicographically ordered team layers.
 - [x] Execute Task 4: expose authenticated `GET /registry`, health endpoints, 256 KiB response bounds, ETag, and safe failure envelopes.
-- [ ] Execute Task 5: prove principal isolation, atomic refresh, last-known-good behavior, and absence of credentials or trust metadata.
+- [x] Execute Task 5: prove principal isolation, atomic refresh, last-known-good behavior, and absence of credentials or trust metadata.
 
 **Gate:** Two fixture principals receive only their deterministic effective registries; callers cannot choose identity or group; an invalid refresh never partially replaces the accepted snapshot.
 
