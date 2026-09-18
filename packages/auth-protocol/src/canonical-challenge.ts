@@ -1,6 +1,6 @@
 import type { AuthChallengeResponse } from "@wagglebot/contracts";
 
-export const D26_SIGNATURE_NAMESPACE = "wagglebot-auth@wagglebot.dev" as const;
+export const AUTH_SIGNATURE_NAMESPACE = "wagglebot-auth@wagglebot.dev" as const;
 
 const hasControlCharacter = (value: string) =>
   Array.from(value).some((character) => {
@@ -9,13 +9,13 @@ const hasControlCharacter = (value: string) =>
   });
 
 export function canonicalChallengeBytes(challenge: AuthChallengeResponse): Uint8Array {
-  if (challenge.signatureNamespace !== D26_SIGNATURE_NAMESPACE) {
-    throw new Error("invalid D26 signature namespace");
+  if (challenge.signatureNamespace !== AUTH_SIGNATURE_NAMESPACE) {
+    throw new Error("invalid authentication signature namespace");
   }
 
   const values = [challenge.challengeId, challenge.nonce, challenge.username, challenge.audience, challenge.expiresAt];
   if (values.some(hasControlCharacter)) {
-    throw new Error("invalid D26 challenge value");
+    throw new Error("invalid authentication challenge value");
   }
 
   return new TextEncoder().encode(`${["wagglebot-auth-v1", ...values].join("\n")}\n`);

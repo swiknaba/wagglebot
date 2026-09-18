@@ -7,7 +7,7 @@ RUN apk add --no-cache openssh-client \
 WORKDIR /app
 COPY package.json bun.lock tsconfig.json ./
 COPY packages/contracts ./packages/contracts
-COPY packages/d26-auth ./packages/d26-auth
+COPY packages/auth-protocol ./packages/auth-protocol
 COPY services/auth ./services/auth
 RUN bun install --filter @wagglebot/auth --frozen-lockfile --production
 

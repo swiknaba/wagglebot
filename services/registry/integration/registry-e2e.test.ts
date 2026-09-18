@@ -2,8 +2,8 @@ import { afterEach, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { D26Audience } from "@wagglebot/contracts";
-import { verifyD26SessionToken } from "@wagglebot/d26-auth";
+import { verifyAuthSessionToken } from "@wagglebot/auth-protocol";
+import type { AuthAudience } from "@wagglebot/contracts";
 import { generateKeyPair, SignJWT } from "jose";
 import { createApp } from "../src/http";
 import { RegistrySource } from "../src/source";
@@ -79,7 +79,7 @@ spec: { memberOf: [beta] }
   await source.load();
   const { privateKey, publicKey } = await generateKeyPair("EdDSA", { crv: "Ed25519" });
   const issuer = "https://auth.example.test";
-  const token = async (username: "alice" | "bob", audience: D26Audience = "wagglebot-registry") =>
+  const token = async (username: "alice" | "bob", audience: AuthAudience = "wagglebot-registry") =>
     new SignJWT({ sub: username, aud: audience, jti: `jti_${"x".repeat(28)}` })
       .setProtectedHeader({ alg: "EdDSA", typ: "JWT" })
       .setIssuer(issuer)
@@ -88,7 +88,7 @@ spec: { memberOf: [beta] }
       .sign(privateKey);
   const app = createApp({
     source,
-    verify: (value) => verifyD26SessionToken(value, { issuer, audience: "wagglebot-registry", publicKey }),
+    verify: (value) => verifyAuthSessionToken(value, { issuer, audience: "wagglebot-registry", publicKey }),
   });
   return { app, root, source, token };
 }

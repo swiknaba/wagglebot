@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { generateKeyPair, SignJWT } from "jose";
-import { verifyD26SessionToken } from "./session-token";
+import { verifyAuthSessionToken } from "./session-token";
 
-describe("D26 session token verification", () => {
+describe("authentication session token verification", () => {
   test("requires the configured issuer, audience, and EdDSA claims", async () => {
     const { privateKey, publicKey } = await generateKeyPair("EdDSA", { crv: "Ed25519" });
     const token = await new SignJWT({ sub: "alice", aud: "wagglebot-memory", jti: "jti_1234567890123456789012345678" })
@@ -11,7 +11,7 @@ describe("D26 session token verification", () => {
       .setIssuedAt(1000)
       .setExpirationTime(1900)
       .sign(privateKey);
-    const principal = await verifyD26SessionToken(token, {
+    const principal = await verifyAuthSessionToken(token, {
       issuer: "https://auth.example.test",
       audience: "wagglebot-memory",
       publicKey,
@@ -20,7 +20,7 @@ describe("D26 session token verification", () => {
     expect(principal.username).toBe("alice");
     expect(principal.tokenId).toMatch(/^jti_/);
     await expect(
-      verifyD26SessionToken(token, { issuer: "https://auth.example.test", audience: "wagglebot-registry", publicKey }),
+      verifyAuthSessionToken(token, { issuer: "https://auth.example.test", audience: "wagglebot-registry", publicKey }),
     ).rejects.toThrow("invalid session token");
   });
 
@@ -33,7 +33,7 @@ describe("D26 session token verification", () => {
       .setExpirationTime(10)
       .sign(privateKey);
     await expect(
-      verifyD26SessionToken(token, {
+      verifyAuthSessionToken(token, {
         issuer: "https://auth.example.test",
         audience: "wagglebot-memory",
         publicKey,
@@ -41,7 +41,7 @@ describe("D26 session token verification", () => {
       }),
     ).rejects.toThrow("invalid session token");
     await expect(
-      verifyD26SessionToken("not-a-token", {
+      verifyAuthSessionToken("not-a-token", {
         issuer: "https://auth.example.test",
         audience: "wagglebot-memory",
         publicKey,

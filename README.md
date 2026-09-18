@@ -3,7 +3,7 @@
 One AI agent setup for a whole engineering team.
 
 > **Status.** Phase 1 is complete. Phase 2 is in progress: the local Repository
-> Brain, D26 authentication, authenticated registry, and Sequel migration
+> Brain, SSH authentication, authenticated registry, and Sequel migration
 > service are implemented. The MCP hub has its configuration, credential,
 > trust, and registry-refresh foundations, but no runnable server yet. The
 > shared-memory worker, unified context engine, and Context Bridge are not
@@ -62,7 +62,7 @@ other, exchange findings, and hand off tasks, scoped by system and
 branch.
 
 The shared services hold no engineer credentials or tool-server credentials
-and never call a tool server. D26 session tokens authorize calls to those
+and never call a tool server. Authentication session tokens authorize calls to those
 services. Upstream credentials remain on the engineer workstation, where the
 local MCP hub will use them.
 

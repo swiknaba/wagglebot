@@ -4,7 +4,7 @@
 
 **API version:** `1`
 
-**Scope:** D26 authentication, authenticated registry serving, local MCP hub,
+**Scope:** SSH authentication, authenticated registry serving, local MCP hub,
 shared memory, local repository brain, unified context, and Context Bridge.
 Phase 3 coordination and Phase 4 ingestion are listed as reserved surfaces but
 are not enabled by the Phase 2 release.
@@ -14,7 +14,7 @@ are not enabled by the Phase 2 release.
 This document resolves the older 2026-08-28 schematic endpoint names and
 records the complete Phase 2 public contract. The versioned contracts in the
 2026-09-11 shared-memory and unified-context specifications, and the 2026-09-12
-D26, registry, hub, and Context Bridge documents, are the authoritative
+authentication, registry, hub, and Context Bridge documents, are the authoritative
 replacements. Implementations must not silently support both unversioned and
 versioned mutation paths.
 
@@ -61,18 +61,18 @@ knowledge-base migration extends that same table.
   Repeating the same operation key with the same canonical request returns the
   original result; reusing it with a different request returns `409
   operation_key_conflict`.
-- D26 credential exchange is intentionally excluded from `operationKey`:
+- Authentication credential exchange is intentionally excluded from `operationKey`:
   challenges are unique and session exchange consumes a challenge once. MCP
   transport envelopes are also excluded; mutation tools carry an
   `operationKey` in their tool arguments when their underlying operation is
   durable. Local proposal/save and Context Bridge operations use their
   proposal/handle plus content hash as the idempotency boundary documented in
   their sections.
-- Application-level request-rate limiting applies only to unauthenticated D26
+- Application-level request-rate limiting applies only to unauthenticated authentication
   exchange in Phase 2. Authenticated shared endpoints and local tools have no
   requests-per-minute limit; their documented body, result, timeout, and
   concurrency bounds still apply. Operators may add ingress limits without
-  changing response schemas. `429` is reserved for D26 and operator ingress
+  changing response schemas. `429` is reserved for authentication and operator ingress
   limits.
 - Services log identifiers, counts, timings, stable outcome codes, and bounded
   status metadata only.
@@ -149,7 +149,7 @@ body, application rate limit, or idempotency key.
   as `ready`, `unavailable`, `stale`, or `not_configured`; they never contain
   paths, URLs, credentials, catalog values, or raw errors.
 
-## D26 authentication
+## SSH authentication
 
 The engineer signs a one-time challenge with the existing SSH key through
 `ssh-agent`. The private key never leaves the workstation. The catalog's
@@ -262,7 +262,7 @@ service or any Wagglebot persisted record.
 
 ### `GET /registry`
 
-Requires a D26 Bearer token with audience `wagglebot-registry`. The service
+Requires an authentication Bearer token with audience `wagglebot-registry`. The service
 derives the user and group membership from the verified principal and catalog;
 query fields cannot select a different user or team. The response composes
 `company/registry.yaml` followed by the caller's matching
@@ -285,7 +285,7 @@ Response:
 ```
 
 The response contains proxy definitions and first-party routing guidance only.
-It never contains resolved credentials, D26 tokens, trust approvals, catalog
+It never contains resolved credentials, authentication tokens, trust approvals, catalog
 paths, or upstream responses. `ETag` equals `revision`; `If-None-Match` may
 return `304` only after authentication. Response limit: 256 KiB. Source refresh
 is atomic; a failed refresh keeps the last accepted revision.
@@ -300,7 +300,7 @@ The registry service is configured with `REGISTRY_HOST`, `REGISTRY_PORT`,
 `REGISTRY_ISSUER`, `REGISTRY_AUTH_PUBLIC_KEY_FILE`, `REGISTRY_COMPANY_ROOT`,
 `REGISTRY_SOURCE_REVISION`, `REGISTRY_REFRESH_SECONDS`, and
 `REGISTRY_MAX_RESPONSE_BYTES`. The company repository is mounted read-only;
-the public key file is the only D26 credential mounted into the service.
+the public key file is the only authentication credential mounted into the service.
 `/readyz` reports a degraded `source` dependency until the first complete
 catalog-backed snapshot is accepted. Refresh failures retain the last accepted
 snapshot.
@@ -308,7 +308,7 @@ snapshot.
 ## Local MCP hub
 
 The hub runs on the engineer workstation. It requires its local
-`MCP_HUB_BEARER_TOKEN` on `/mcp`; it never forwards that token or the D26
+`MCP_HUB_BEARER_TOKEN` on `/mcp`; it never forwards that token or the authentication
 registry token to an upstream. It supports exactly four upstream modes:
 `remote_http`, `remote_sse`, `stdio_npx`, and `stdio_cmd`.
 
@@ -424,7 +424,7 @@ upstream response content.
 
 ## Shared memory worker
 
-Agent and engineer endpoints require a D26 token with audience
+Agent and engineer endpoints require an authentication token with audience
 `wagglebot-memory`, except health endpoints. Administrator endpoints require
 the configured administrator bearer token; there is no undocumented
 catalog-authorized bypass. The worker derives the principal from `sub`,
@@ -733,7 +733,7 @@ and structured content never duplicate memory prose.
 
 ## Local repository brain MCP
 
-The local brain is stdio/loopback-only and has no D26/network dependency. Its
+The local brain is stdio/loopback-only and has no authentication/network dependency. Its
 low-level tool schemas are v1 and strict. Every input requires an absolute
 `projectPath`; returned paths are repository-relative.
 
@@ -964,7 +964,7 @@ the wire contract.
 
 ## Context Bridge MCP
 
-Context Bridge is local-only and explicit; it is not Wake and never uses D26.
+Context Bridge is local-only and explicit; it is not Wake and never uses authentication.
 
 ```typescript
 type ContextBridgePacket = {
@@ -1016,8 +1016,8 @@ prose, absolute path, or evidence content.
 
 | Record/state | Owner | Persistence | Contract |
 |---|---|---|---|
-| D26 challenge store | auth service | process memory | `{ challengeId, nonceHash, username, audience, expiresAtMs, attempts }`; 60-second TTL, deleted on success, no raw nonce |
-| D26 session-token cache | workstation D26 client | process memory | one `{ token, expiresAt }` per audience; refreshed within 60 seconds of expiry; never written to disk |
+| Authentication challenge store | auth service | process memory | `{ challengeId, nonceHash, username, audience, expiresAtMs, attempts }`; 60-second TTL, deleted on success, no raw nonce |
+| Authentication session-token cache | workstation authentication client | process memory | one `{ token, expiresAt }` per audience; refreshed within 60 seconds of expiry; never written to disk |
 | company configuration repository | company/operator | Git | authoritative catalog fragments, `company/registry.yaml`, `teams/<group>/registry.yaml`, root `tool_catalog.yaml`, and reviewed knowledge; no secrets |
 | effective registry snapshot | registry service | process memory | validated principal-specific company/team composition keyed by source revision and username; last-known-good only |
 | `wagglebot_memories` | memory worker | PostgreSQL | canonical fact/document record, provenance, scope, hash, lifecycle fields, and `vector(384)` embedding |
@@ -1071,7 +1071,7 @@ operation.
 ## Reserved later-phase surfaces
 
 Phase 3 will add coordination MCP tools (`list_agents`, `send_message`,
-`read_channel`, task-board operations) behind D26 `wagglebot-coordination`
+`read_channel`, task-board operations) behind authentication `wagglebot-coordination`
 tokens. Phase 4 will add `ingest_document` and its separate document pipeline.
 Those surfaces are intentionally not enabled by the Phase 2 release, but their
 future audience and separation are reserved here so they do not redefine the

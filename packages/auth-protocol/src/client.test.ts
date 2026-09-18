@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { AuthChallengeResponse } from "@wagglebot/contracts";
-import { D26Client } from "./client";
+import { AuthClient } from "./client";
 
 const challenge: AuthChallengeResponse = {
   schemaVersion: 1,
@@ -12,7 +12,7 @@ const challenge: AuthChallengeResponse = {
   expiresAt: "2026-09-13T12:00:00.000Z",
 };
 
-describe("D26 client", () => {
+describe("authentication client", () => {
   test("exchanges one challenge and caches by audience", async () => {
     const requests: Request[] = [];
     const fetcher = async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -30,7 +30,7 @@ describe("D26 client", () => {
       return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
     };
     const signer = { sign: async () => "x".repeat(80) };
-    const client = new D26Client({
+    const client = new AuthClient({
       baseUrl: "http://127.0.0.1:8787",
       username: "alice",
       signer,
@@ -69,7 +69,7 @@ describe("D26 client", () => {
         { status: 200 },
       );
     };
-    const client = new D26Client({
+    const client = new AuthClient({
       baseUrl: "http://127.0.0.1:8787",
       username: "alice",
       signer: { sign: async () => "x".repeat(80) },

@@ -69,7 +69,7 @@ local hub launches it as a pinned `stdio_cmd` upstream and exposes it through
 the hub's existing CodeMode transform. One process serves all local harnesses
 and owns the embedded CodeGraph handles.
 
-The engine uses the D26 local authentication client when it calls the shared
+The engine uses the local authentication client when it calls the shared
 worker. It does not accept or forward an agent's inbound authorization header.
 Upstream credentials remain on the workstation under D9/D10.
 
@@ -515,7 +515,7 @@ type SharedMemoryClient = {
 };
 ```
 
-It obtains a D26 session token through the shared authentication client, caches
+It obtains an authentication session token through the shared authentication client, caches
 it until one minute before expiry, and retries once after an authentication
 failure. It validates response schema before candidates enter ranking.
 

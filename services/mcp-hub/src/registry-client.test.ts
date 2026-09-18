@@ -42,7 +42,7 @@ test("loads a mode-0600 local registry snapshot", async () => {
   expect(manager.current()?.revision).toMatch(/^reg_/);
 });
 
-test("sends D26 authorization only to the configured remote registry", async () => {
+test("sends authentication authorization only to the configured remote registry", async () => {
   const seen: RequestInit[] = [];
   const manager = new RegistryManager({
     config: config({ configPath: undefined, configUrl: "https://registry.example/registry" }),

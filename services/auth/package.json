@@ -9,7 +9,7 @@
   },
   "dependencies": {
     "@wagglebot/contracts": "workspace:*",
-    "@wagglebot/d26-auth": "workspace:*",
+    "@wagglebot/auth-protocol": "workspace:*",
     "jose": "6.2.12",
     "yaml": "2.8.3",
     "zod": "4.6.1"

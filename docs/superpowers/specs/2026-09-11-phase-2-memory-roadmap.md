@@ -10,7 +10,7 @@
 
 **Status:** Approved direction; the memory core is split into three
 independently testable specifications and plans, sequenced with the approved
-D26, registry, MCP hub, and Context Bridge work below.
+SSH authentication, registry, MCP hub, and Context Bridge work below.
 
 > This roadmap refines the memory portion of
 > [Phase 2 — The Shared Layer](2026-08-28-phase-2-shared-layer.md). It does not
@@ -248,7 +248,7 @@ The local brain is deliberately delivered before any shared service.
 | Milestone | Result | Dependency |
 |---|---|---|
 | 1. Local Repository Brain | `.agents/memory.md` retrieval, persistent CodeGraph index, Git evidence, and local MCP operations | CodeGraph 1.6.0 and Phase 1 component/catalog files |
-| 2. D26 Authentication | SSH challenge signing and audience-bound workstation session tokens | Backstage User entities and registered public keys |
+| 2. SSH Authentication | SSH challenge signing and audience-bound workstation session tokens | Backstage User entities and registered public keys |
 | 3. Authenticated Registry and Local MCP Hub | Principal-specific company/team registry serving, local credentials, trust approvals, four transports, discovery, and CodeMode | Milestones 1 and 2 plus the Phase 1 company repository layout |
 | 4. Shared Memory Foundation | Catalog-scoped records, reviewed Git publication, MemPalace pgvector indexing, search, invalidation, and operations | Milestone 2 and PostgreSQL with `vector` |
 | 5. Unified Context Engine | Wake/search/explain packets that fuse local memory, code, Git, and shared memory | Milestones 1, 3, and 4 |
@@ -259,7 +259,7 @@ order:
 
 - [Local Repository Brain design](2026-09-11-local-repository-brain-design.md)
 - [Local Repository Brain plan](../plans/2026-09-11-local-repository-brain.md)
-- [D26 SSH Authentication plan](../plans/2026-09-12-d26-ssh-authentication.md)
+- [SSH Authentication plan](../plans/2026-09-12-ssh-authentication.md)
 - [Authenticated Registry Serving plan](../plans/2026-09-12-authenticated-registry-serving.md)
 - [Local MCP Hub plan](../plans/2026-09-12-local-mcp-hub.md)
 - [Shared Memory Foundation design](2026-09-11-shared-memory-foundation-design.md)

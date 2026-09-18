@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { verifyD26SessionToken } from "@wagglebot/d26-auth";
+import { verifyAuthSessionToken } from "@wagglebot/auth-protocol";
 import { importSPKI } from "jose";
 import { loadRegistryConfig } from "./config";
 import { createApp } from "./http";
@@ -14,7 +14,7 @@ export async function createServer(env: Record<string, string | undefined> = pro
     source,
     maxResponseBytes: config.maxResponseBytes,
     verify: (token) =>
-      verifyD26SessionToken(token, { issuer: config.issuer, audience: "wagglebot-registry", publicKey }),
+      verifyAuthSessionToken(token, { issuer: config.issuer, audience: "wagglebot-registry", publicKey }),
   });
   setInterval(() => void source.refresh(), config.refreshSeconds * 1_000);
   return Bun.serve({ hostname: config.bindHost, port: config.port, fetch: app.fetch });

@@ -1,7 +1,7 @@
 import { chmod, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { join, resolve, sep } from "node:path";
-import { D26_SIGNATURE_NAMESPACE } from "./canonical-challenge";
+import { AUTH_SIGNATURE_NAMESPACE } from "./canonical-challenge";
 import type { SshSigner } from "./types";
 
 const DEFAULT_TIMEOUT_MS = 5_000;
@@ -32,7 +32,7 @@ export class SshAgentSigner implements SshSigner {
       await writeFile(payloadPath, payload, { mode: 0o600 });
       await chmod(payloadPath, 0o600);
       processHandle = Bun.spawn(
-        [this.sshKeygenPath, "-Y", "sign", "-f", keyPath, "-n", D26_SIGNATURE_NAMESPACE, payloadPath],
+        [this.sshKeygenPath, "-Y", "sign", "-f", keyPath, "-n", AUTH_SIGNATURE_NAMESPACE, payloadPath],
         { stdin: "ignore", stdout: "ignore", stderr: "ignore" },
       );
 

@@ -1,15 +1,15 @@
-import type { D26Audience, D26Principal } from "@wagglebot/contracts";
-import { D26SessionClaimsSchema } from "@wagglebot/contracts";
+import type { AuthAudience, AuthPrincipal } from "@wagglebot/contracts";
+import { AuthSessionClaimsSchema } from "@wagglebot/contracts";
 import { jwtVerify } from "jose";
 
 type VerificationKey = Parameters<typeof jwtVerify>[1];
 
-export type VerifiedD26Principal = D26Principal;
+export type VerifiedAuthPrincipal = AuthPrincipal;
 
-export async function verifyD26SessionToken(
+export async function verifyAuthSessionToken(
   token: string,
-  options: { issuer: string; audience: D26Audience; publicKey: VerificationKey; clock?: () => Date },
-): Promise<VerifiedD26Principal> {
+  options: { issuer: string; audience: AuthAudience; publicKey: VerificationKey; clock?: () => Date },
+): Promise<VerifiedAuthPrincipal> {
   try {
     const { payload } = await jwtVerify(token, options.publicKey, {
       algorithms: ["EdDSA"],
@@ -18,7 +18,7 @@ export async function verifyD26SessionToken(
       clockTolerance: 30,
       ...(options.clock ? { currentDate: options.clock() } : {}),
     });
-    const claims = D26SessionClaimsSchema.parse(payload);
+    const claims = AuthSessionClaimsSchema.parse(payload);
     return {
       username: claims.sub,
       audience: claims.aud,

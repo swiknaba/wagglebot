@@ -1,10 +1,10 @@
-# D26 SSH Authentication Implementation Plan
+# SSH Authentication Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:executing-plans` (or `superpowers:subagent-driven-development` when the work is split into independent tasks) to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Implement D26 so a registered engineer proves possession of an existing SSH key, receives a short-lived audience-bound session token, and can use that token with the shared registry, memory worker, and later coordination services.
+**Goal:** Implement SSH authentication so a registered engineer proves possession of an existing SSH key, receives a short-lived audience-bound session token, and can use that token with the shared registry, memory worker, and later coordination services.
 
-**Architecture:** A shared `services/auth` issuer creates one-time challenges, verifies OpenSSH signatures in the `wagglebot-auth@wagglebot.dev` namespace against the Backstage catalog (or the explicitly configured GitHub key source), and signs a short-lived EdDSA JWT. A workstation-side `@wagglebot/d26-auth` client signs through `ssh-agent`, exchanges the signature, caches tokens per audience, and refreshes them before expiry. Shared services verify the JWT locally with the issuer public key and derive the principal from `sub`; request fields never select identity or scopes.
+**Architecture:** A shared `services/auth` issuer creates one-time challenges, verifies OpenSSH signatures in the `wagglebot-auth@wagglebot.dev` namespace against the Backstage catalog (or the explicitly configured GitHub key source), and signs a short-lived EdDSA JWT. A workstation-side `@wagglebot/auth-protocol` client signs through `ssh-agent`, exchanges the signature, caches tokens per audience, and refreshes them before expiry. Shared services verify the JWT locally with the issuer public key and derive the principal from `sub`; request fields never select identity or scopes.
 
 **Tech Stack:** TypeScript, Bun, Zod 4, `jose` 6.2.12, existing `@wagglebot/contracts`, `yaml` 2.8.3, OpenSSH `ssh-keygen`/`ssh-agent`, Bun `fetch`, Bun tests, Biome, and the existing `createServer`/`createApp` service pattern. No private key is uploaded and no new credential-delivery system is introduced.
 
@@ -12,8 +12,8 @@
 
 ## Global Constraints
 
-- Phase 1 remains unauthenticated. Git access is the Phase 1 access mechanism; do not add D26 to local memory, Wake, or Context Bridge.
-- D26 is for shared network services only. The local MCP hub uses it when calling the shared registry or shared memory; it does not forward the D26 token to an upstream MCP server.
+- Phase 1 remains unauthenticated. Git access is the Phase 1 access mechanism; do not add authentication to local memory, Wake, or Context Bridge.
+- SSH authentication is for shared network services only. The local MCP hub uses it when calling the shared registry or shared memory; it does not forward an authentication token to an upstream MCP server.
 - The private SSH key stays on the workstation. Production signing uses `ssh-agent` and `ssh-keygen -Y sign`; the auth service receives only the OpenSSH signature and public-key identity lookup data.
 - Use the fixed OpenSSH signature namespace `wagglebot-auth@wagglebot.dev` and sign a canonical, versioned challenge payload. Never verify an un-namespaced or caller-supplied payload.
 - The server creates a cryptographically random 32-byte nonce, stores only a hash of it with the challenge record, accepts a challenge once, expires it after 60 seconds, and permits at most three signature attempts.
@@ -26,7 +26,7 @@
 - `/livez` is shallow and auth-exempt. `/readyz` is auth-exempt and reports catalog/key/signing readiness without secrets. All shared data endpoints remain fail-closed.
 - Log only request correlation ID, audience, stable outcome/error code, and bounded timing/counts. Never log signatures, nonces, JWTs, public-key text, private-key paths, authorization headers, catalog content, or usernames in failed-auth messages.
 - The issuer is one instance per signing-key/challenge store in this release. Do not claim multi-instance replay protection. A future HA deployment must move the challenge store to a shared transactional store before adding replicas.
-- Add the D26 endpoint and MCP/client contracts to the complete `docs/api-reference.md` gate before Phase 2 release. This plan defines the auth section; it does not make incomplete API documentation authoritative for unrelated services.
+- Add the authentication endpoint and MCP/client contracts to the complete `docs/api-reference.md` gate before Phase 2 release. This plan defines the auth section; it does not make incomplete API documentation authoritative for unrelated services.
 - Treat the completed v1 request/result schemas, health/error envelopes,
   limits, replay semantics, and rate limits in `docs/api-reference.md` as the
   authoritative wire contract.
@@ -34,7 +34,7 @@
 
 ## Wire Decisions Made Explicit
 
-The source documents define the D26 behavior but intentionally do not define
+The source documents define the authentication behavior but intentionally do not define
 the wire-level endpoint names, token format, or numeric lifetimes. This plan
 makes those details concrete so implementation and tests are deterministic:
 
@@ -59,16 +59,16 @@ packages/contracts/src/auth.ts
 packages/contracts/src/auth.test.ts
 packages/contracts/src/index.ts
 
-packages/d26-auth/package.json
-packages/d26-auth/src/canonical-challenge.ts
-packages/d26-auth/src/canonical-challenge.test.ts
-packages/d26-auth/src/ssh-signer.ts
-packages/d26-auth/src/ssh-signer.test.ts
-packages/d26-auth/src/session-token.ts
-packages/d26-auth/src/session-token.test.ts
-packages/d26-auth/src/client.ts
-packages/d26-auth/src/client.test.ts
-packages/d26-auth/src/index.ts
+packages/auth-protocol/package.json
+packages/auth-protocol/src/canonical-challenge.ts
+packages/auth-protocol/src/canonical-challenge.test.ts
+packages/auth-protocol/src/ssh-signer.ts
+packages/auth-protocol/src/ssh-signer.test.ts
+packages/auth-protocol/src/session-token.ts
+packages/auth-protocol/src/session-token.test.ts
+packages/auth-protocol/src/client.ts
+packages/auth-protocol/src/client.test.ts
+packages/auth-protocol/src/index.ts
 
 services/auth/package.json
 services/auth/Dockerfile
@@ -97,14 +97,14 @@ deploy/README.md
 docs/api-reference.md
 ```
 
-`packages/contracts` owns wire schemas. `packages/d26-auth` is the reusable
+`packages/contracts` owns wire schemas. `packages/auth-protocol` is the reusable
 workstation client and token verifier/cache seam. `services/auth` owns catalog
 lookup, challenge state, SSHSIG verification, and JWT issuance. Memory and
-context-engine consume the package; they do not reimplement D26.
+context-engine consume the package; they do not reimplement authentication.
 
 ---
 
-## Task 1: Define versioned D26 contracts
+## Task 1: Define versioned authentication contracts
 
 **Files:**
 
@@ -125,7 +125,7 @@ import { expect, test } from "bun:test";
 import {
   AuthChallengeRequestSchema,
   AuthSessionRequestSchema,
-  D26SessionClaimsSchema,
+  AuthSessionClaimsSchema,
 } from "./auth";
 
 test("challenge requests accept only known audiences and usernames", () => {
@@ -155,7 +155,7 @@ test("session requests bound to the challenge reject oversized signatures", () =
 });
 
 test("claims require issuer, audience, principal, and bounded lifetime", () => {
-  const result = D26SessionClaimsSchema.safeParse({
+  const result = AuthSessionClaimsSchema.safeParse({
     iss: "https://auth.example.test",
     sub: "alice",
     aud: "wagglebot-memory",
@@ -181,7 +181,7 @@ exist.
 Use these exact public shapes:
 
 ```typescript
-export const D26AudienceSchema = z.enum([
+export const AuthAudienceSchema = z.enum([
   "wagglebot-registry",
   "wagglebot-memory",
   "wagglebot-coordination",
@@ -190,7 +190,7 @@ export const D26AudienceSchema = z.enum([
 export const AuthChallengeRequestSchema = z.object({
   schemaVersion: z.literal(1),
   username: z.string().regex(/^[a-z0-9][a-z0-9._-]{0,63}$/),
-  audience: D26AudienceSchema,
+  audience: AuthAudienceSchema,
 }).strict();
 
 export const AuthChallengeResponseSchema = z.object({
@@ -198,7 +198,7 @@ export const AuthChallengeResponseSchema = z.object({
   challengeId: z.string().regex(/^ch_[A-Za-z0-9_-]{28}$/),
   nonce: z.string().regex(/^[A-Za-z0-9_-]{43}$/),
   username: z.string().regex(/^[a-z0-9][a-z0-9._-]{0,63}$/),
-  audience: D26AudienceSchema,
+  audience: AuthAudienceSchema,
   signatureNamespace: z.literal("wagglebot-auth@wagglebot.dev"),
   expiresAt: z.string().datetime({ offset: true }),
 }).strict();
@@ -219,10 +219,10 @@ export const AuthSessionResponseSchema = z.object({
   principal: z.object({ username: z.string(), keyFingerprint: z.string() }).strict(),
 }).strict();
 
-export const D26SessionClaimsSchema = z.object({
+export const AuthSessionClaimsSchema = z.object({
   iss: z.string().url(),
   sub: z.string().regex(/^[a-z0-9][a-z0-9._-]{0,63}$/),
-  aud: D26AudienceSchema,
+  aud: AuthAudienceSchema,
   iat: z.number().int(),
   exp: z.number().int(),
   jti: z.string().regex(/^jti_[A-Za-z0-9_-]{28}$/),
@@ -238,8 +238,8 @@ export const AuthErrorCodeSchema = z.enum([
 ]);
 ```
 
-Add `AuthChallengeRecord`, `D26SessionClaims`, `D26Principal`, and
-`D26SessionToken` types. Export every schema/type from the package index.
+Add `AuthChallengeRecord`, `AuthSessionClaims`, `AuthPrincipal`, and
+`AuthSessionToken` types. Export every schema/type from the package index.
 
 Run: `bun test packages/contracts/src/auth.test.ts && bun run typecheck`
 
@@ -247,7 +247,7 @@ Run: `bun test packages/contracts/src/auth.test.ts && bun run typecheck`
 
 ```bash
 git add packages/contracts/src/auth.ts packages/contracts/src/auth.test.ts packages/contracts/src/index.ts
-git commit -m "feat(auth): define D26 challenge and session contracts"
+git commit -m "feat(auth): define authentication challenge and session contracts"
 ```
 
 ---
@@ -256,12 +256,12 @@ git commit -m "feat(auth): define D26 challenge and session contracts"
 
 **Files:**
 
-- Create: `packages/d26-auth/package.json`
-- Create: `packages/d26-auth/src/canonical-challenge.ts`
-- Create: `packages/d26-auth/src/canonical-challenge.test.ts`
-- Create: `packages/d26-auth/src/ssh-signer.ts`
-- Create: `packages/d26-auth/src/ssh-signer.test.ts`
-- Create: `packages/d26-auth/src/index.ts`
+- Create: `packages/auth-protocol/package.json`
+- Create: `packages/auth-protocol/src/canonical-challenge.ts`
+- Create: `packages/auth-protocol/src/canonical-challenge.test.ts`
+- Create: `packages/auth-protocol/src/ssh-signer.ts`
+- Create: `packages/auth-protocol/src/ssh-signer.test.ts`
+- Create: `packages/auth-protocol/src/index.ts`
 
 **Interfaces:**
 
@@ -299,10 +299,10 @@ control characters. Test that the namespace constant is exactly
 The design documents call this value a “nonce.” The nonce remains the random
 challenge that proves freshness; the versioned envelope signs it together with
 the challenge id, catalog username, intended audience, and expiry so a valid
-signature cannot be replayed against another shared service. Every D26 client
+signature cannot be replayed against another shared service. Every authentication client
 and issuer must use this one canonical byte format.
 
-Run: `bun test packages/d26-auth/src/canonical-challenge.test.ts`
+Run: `bun test packages/auth-protocol/src/canonical-challenge.test.ts`
 
 - [ ] **Step 2: Implement the signer with explicit process arguments**
 
@@ -330,18 +330,18 @@ reads the generated `.sig` file, deletes both files, and returns the ASCII
 OpenSSH signature. Set a 5-second timeout and terminate the child on abort.
 Never include the payload, key path, or stderr in an error message. The
 production client requires `SSH_AUTH_SOCK`; an explicit private-key fallback
-is not part of D26 v1, because silently reading a private key would weaken the
+is not part of authentication v1, because silently reading a private key would weaken the
 workstation boundary.
 
 Use `Bun.spawn` with an argument array and `stdin: "ignore"`; never construct a
 shell command. Reject symlinked public-key paths outside the configured home
 or workspace, and reject a missing agent before spawning.
 
-Create `packages/d26-auth/package.json` with exact workspace dependencies:
+Create `packages/auth-protocol/package.json` with exact workspace dependencies:
 
 ```json
 {
-  "name": "@wagglebot/d26-auth",
+  "name": "@wagglebot/auth-protocol",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -353,13 +353,13 @@ Create `packages/d26-auth/package.json` with exact workspace dependencies:
 }
 ```
 
-Run: `bun test packages/d26-auth/src/canonical-challenge.test.ts packages/d26-auth/src/ssh-signer.test.ts && bun run typecheck`
+Run: `bun test packages/auth-protocol/src/canonical-challenge.test.ts packages/auth-protocol/src/ssh-signer.test.ts && bun run typecheck`
 
 - [ ] **Step 3: Commit the signer seam**
 
 ```bash
-git add packages/d26-auth
-git commit -m "feat(auth): sign D26 challenges through ssh-agent"
+git add packages/auth-protocol
+git commit -m "feat(auth): sign authentication challenges through ssh-agent"
 ```
 
 ---
@@ -368,19 +368,19 @@ git commit -m "feat(auth): sign D26 challenges through ssh-agent"
 
 **Files:**
 
-- Create: `packages/d26-auth/src/session-token.ts`
-- Create: `packages/d26-auth/src/session-token.test.ts`
-- Create: `packages/d26-auth/src/client.ts`
-- Create: `packages/d26-auth/src/client.test.ts`
-- Modify: `packages/d26-auth/src/index.ts`
+- Create: `packages/auth-protocol/src/session-token.ts`
+- Create: `packages/auth-protocol/src/session-token.test.ts`
+- Create: `packages/auth-protocol/src/client.ts`
+- Create: `packages/auth-protocol/src/client.test.ts`
+- Modify: `packages/auth-protocol/src/index.ts`
 
 **Interfaces:**
 
 - Consumes: auth HTTP endpoints, `SshSigner`, `Auth*Schema`, and issuer public
   key configuration.
-- Produces: `D26Client.get(audience, signal)`,
+- Produces: `AuthClient.get(audience, signal)`,
   `CachedSessionTokenProvider.get(audience, signal)`,
-  `.invalidate(audience)`, and `verifyD26SessionToken(token, options)`.
+  `.invalidate(audience)`, and `verifyAuthSessionToken(token, options)`.
 
 - [ ] **Step 1: Write token-cache and verifier tests**
 
@@ -396,7 +396,7 @@ Test:
 - expired and not-yet-valid tokens fail closed;
 - no bearer token appears in errors, logs, or thrown provider messages.
 
-Run: `bun test packages/d26-auth/src/session-token.test.ts packages/d26-auth/src/client.test.ts`
+Run: `bun test packages/auth-protocol/src/session-token.test.ts packages/auth-protocol/src/client.test.ts`
 
 - [ ] **Step 2: Implement the client and cache**
 
@@ -404,11 +404,11 @@ Define:
 
 ```typescript
 export interface SessionTokenProvider {
-  get(audience: D26Audience, signal: AbortSignal): Promise<{ token: string; expiresAt: string }>;
-  invalidate(audience: D26Audience): void;
+  get(audience: AuthAudience, signal: AbortSignal): Promise<{ token: string; expiresAt: string }>;
+  invalidate(audience: AuthAudience): void;
 }
 
-export class D26Client implements SessionTokenProvider {
+export class AuthClient implements SessionTokenProvider {
   constructor(options: {
     baseUrl: string;
     username: string;
@@ -416,8 +416,8 @@ export class D26Client implements SessionTokenProvider {
     fetch?: typeof fetch;
     clock?: () => Date;
   }) {}
-  get(audience: D26Audience, signal: AbortSignal): Promise<{ token: string; expiresAt: string }>;
-  invalidate(audience: D26Audience): void;
+  get(audience: AuthAudience, signal: AbortSignal): Promise<{ token: string; expiresAt: string }>;
+  invalidate(audience: AuthAudience): void;
 }
 ```
 
@@ -440,27 +440,27 @@ the context engine. Refresh when `expiresAt - now <= 60_000` and use one
 single-flight promise per audience so concurrent callers do not create
 parallel challenges.
 
-`verifyD26SessionToken` uses `jose.jwtVerify` with `algorithms: ["EdDSA"]`,
+`verifyAuthSessionToken` uses `jose.jwtVerify` with `algorithms: ["EdDSA"]`,
 the configured issuer, exact audience, a 30-second clock tolerance, and the
-issuer public key. Parse the claims with `D26SessionClaimsSchema` and return:
+issuer public key. Parse the claims with `AuthSessionClaimsSchema` and return:
 
 ```typescript
-export type VerifiedD26Principal = {
+export type VerifiedAuthPrincipal = {
   username: string;
-  audience: D26Audience;
+  audience: AuthAudience;
   issuedAt: Date;
   expiresAt: Date;
   tokenId: string;
 };
 ```
 
-Run: `bun test packages/d26-auth/src/session-token.test.ts packages/d26-auth/src/client.test.ts && bun run check && bun run typecheck`
+Run: `bun test packages/auth-protocol/src/session-token.test.ts packages/auth-protocol/src/client.test.ts && bun run check && bun run typecheck`
 
 - [ ] **Step 3: Commit the client and verifier**
 
 ```bash
-git add packages/d26-auth
-git commit -m "feat(auth): add D26 workstation client and token verifier"
+git add packages/auth-protocol
+git commit -m "feat(auth): add authentication workstation client and token verifier"
 ```
 
 ---
@@ -579,7 +579,7 @@ type StoredChallenge = {
   challengeId: string;
   nonceHash: string;
   username: string;
-  audience: D26Audience;
+  audience: AuthAudience;
   expiresAtMs: number;
   attempts: number;
 };
@@ -708,7 +708,7 @@ the limit triggers.
 
 ```bash
 git add services/auth/src/config* services/auth/src/issuer*
-git commit -m "feat(auth): issue audience-bound D26 session tokens"
+git commit -m "feat(auth): issue audience-bound authentication session tokens"
 ```
 
 ---
@@ -757,7 +757,7 @@ versioned error envelope with a correlation ID, stable error code, safe
 message, and `retryable`; return no server details. Set `Cache-Control:
 no-store` on auth responses. Do not add a bearer
 requirement to the two challenge endpoints; they are the credential exchange.
-All future protected routes must use `verifyD26SessionToken` and exact audience
+All future protected routes must use `verifyAuthSessionToken` and exact audience
 checks.
 
 Create `services/auth/package.json` with exact dependencies:
@@ -771,7 +771,7 @@ Create `services/auth/package.json` with exact dependencies:
   "scripts": { "start": "bun src/index.ts", "test": "bun test" },
   "dependencies": {
     "@wagglebot/contracts": "workspace:*",
-    "@wagglebot/d26-auth": "workspace:*",
+    "@wagglebot/auth-protocol": "workspace:*",
     "jose": "6.2.12",
     "yaml": "2.8.3",
     "zod": "4.6.1"
@@ -789,7 +789,7 @@ Run: `bun test services/auth/src/http.test.ts && bun run check && bun run typech
 
 ```bash
 git add services/auth
-git commit -m "feat(auth): expose the D26 authentication service"
+git commit -m "feat(auth): expose the SSH authentication service"
 ```
 
 ---
@@ -833,13 +833,13 @@ Run: `bun test services/auth/integration/auth-e2e.test.ts`
 - [ ] **Step 2: Integrate the memory worker and context engine**
 
 Replace the memory worker's planned placeholder JWT verification with
-`verifyD26SessionToken` from `@wagglebot/d26-auth`. Keep its existing
+`verifyAuthSessionToken` from `@wagglebot/auth-protocol`. Keep its existing
 `sessionPublicKeyFile`, issuer, audience, and algorithm allow-list config, but
 validate the claims through the shared package. The worker must still map
 `sub` to the current catalog User and reject caller-supplied principal fields.
 
 Replace the unified context plan's local placeholder `SessionTokenProvider`
-implementation with the package's `D26Client`/cache. The context engine sends
+implementation with the package's `AuthClient`/cache. The context engine sends
 only the configured audience-specific bearer token to the shared memory client.
 
 Run: `bun test services/memory-worker/src/principal.test.ts services/context-engine/src/shared/session-token.test.ts && bun run typecheck`
@@ -876,14 +876,14 @@ Run: `bun run check && bun run typecheck && bun test && bun run build && git dif
 
 ```bash
 git add services/auth/integration services/memory-worker/src/principal* services/context-engine/src/shared/session-token* deploy/docker-compose.memory.yml deploy/README.md docs/api-reference.md
-git commit -m "feat(auth): integrate D26 with shared services"
+git commit -m "feat(auth): integrate authentication with shared services"
 ```
 
 ---
 
 ## Completion Checklist
 
-- [ ] Phase 1 and local-only Context Bridge remain free of D26 dependencies.
+- [ ] Phase 1 and local-only Context Bridge remain free of authentication dependencies.
 - [ ] Contract schemas are strict, versioned, and exported from
       `@wagglebot/contracts`.
 - [ ] The client signs only canonical bytes with the fixed SSHSIG namespace.
@@ -902,6 +902,6 @@ git commit -m "feat(auth): integrate D26 with shared services"
       and never trust request principal/group/scope fields.
 - [ ] End-to-end tests prove valid sign-in, audience isolation, replay/expiry,
       key rotation, token refresh, and no secret logging.
-- [ ] Deployment and `docs/api-reference.md` document the exact D26 contract.
+- [ ] Deployment and `docs/api-reference.md` document the exact authentication contract.
 - [ ] `bun run check`, `bun run typecheck`, `bun test`, `bun run build`, and
       `git diff --check` pass.

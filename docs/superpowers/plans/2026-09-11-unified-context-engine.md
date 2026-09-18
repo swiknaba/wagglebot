@@ -6,7 +6,7 @@
 
 **Architecture:** The existing local context-engine service becomes a deterministic orchestrator. New chats receive a local-only L0 envelope; continuation and task requests retrieve bounded evidence through independent providers, weighted reciprocal-rank fusion, and fixed item/token caps. A content-free cursor suppresses unchanged evidence already delivered, MCP returns prose in one representation, and shared automatic context is limited to reviewed `wake: true` facts.
 
-**Tech Stack:** TypeScript 5.9.2, Bun, `@modelcontextprotocol/sdk` 1.30.0, `zod` 4.6.1, `@wagglebot/contracts`, `@wagglebot/local-brain`, `@wagglebot/d26-auth`, Bun tests, Biome.
+**Tech Stack:** TypeScript 5.9.2, Bun, `@modelcontextprotocol/sdk` 1.30.0, `zod` 4.6.1, `@wagglebot/contracts`, `@wagglebot/local-brain`, `@wagglebot/auth-protocol`, Bun tests, Biome.
 
 **Spec:** `docs/superpowers/specs/2026-09-11-unified-context-engine-design.md`
 
@@ -190,7 +190,7 @@ git commit -m "feat(context): define evidence-bearing context packets"
 
 ---
 
-### Task 2: Add a private shared-memory client with D26 token reuse
+### Task 2: Add a private shared-memory client with authentication token reuse
 
 **Files:**
 - Create: `services/context-engine/src/shared/session-token.ts`
@@ -199,14 +199,14 @@ git commit -m "feat(context): define evidence-bearing context packets"
 - Create: `services/context-engine/src/shared/client.test.ts`
 
 **Interfaces:**
-- Consumes: the shared worker's `POST /v1/memory/search`; `D26Client`/`SessionTokenProvider` from `@wagglebot/d26-auth`, configured for the `wagglebot-memory` audience.
+- Consumes: the shared worker's `POST /v1/memory/search`; `AuthClient`/`SessionTokenProvider` from `@wagglebot/auth-protocol`, configured for the `wagglebot-memory` audience.
 - Produces: `SharedMemoryClient.search(input, signal)`, `.wake(input, signal)`,
   and `.status(signal)`.
 
 - [ ] **Step 1: Write failing token-cache and privacy tests**
 
 ```typescript
-test("uses the D26 client cache until one minute before expiry", async () => {
+test("uses the authentication client cache until one minute before expiry", async () => {
   const client = fakeD26Client(expiresInMinutes(10));
   await client.get("wagglebot-memory", AbortSignal.timeout(100));
   await client.get("wagglebot-memory", AbortSignal.timeout(100));
@@ -252,13 +252,13 @@ Run: `bun test services/context-engine/src/shared`
 
 Expected: FAIL.
 
-- [ ] **Step 3: Wire the D26 client without duplicating authentication**
+- [ ] **Step 3: Wire the authentication client without duplicating authentication**
 
-Import `D26Client` and `SessionTokenProvider` from `@wagglebot/d26-auth` and
+Import `AuthClient` and `SessionTokenProvider` from `@wagglebot/auth-protocol` and
 inject the client into `HttpSharedMemoryClient`. Keep
 `services/context-engine/src/shared/session-token.ts` as a narrow adapter or
 re-export only; it must not contain a second challenge, SSH signature, JWT
-verification, or token-cache implementation. The D26 plan owns those behaviors
+verification, or token-cache implementation. The authentication plan owns those behaviors
 and its tests are the source of truth.
 
 - [ ] **Step 4: Implement guarded search**
@@ -828,7 +828,7 @@ Keep low-level provider tools registered in the service's complete capability se
 
 - [ ] **Step 4: Wire runtime and shutdown**
 
-Construct local brain, D26 token provider, shared client, and engine from validated non-secret config. Start the stdio server. On EOF, SIGTERM, or SIGINT, abort active requests and call `localBrain.close()` once.
+Construct local brain, authentication token provider, shared client, and engine from validated non-secret config. Start the stdio server. On EOF, SIGTERM, or SIGINT, abort active requests and call `localBrain.close()` once.
 
 - [ ] **Step 5: Test and commit**
 
@@ -896,7 +896,7 @@ context cursor to later calls; and follows evidence handles for detail instead
 of requesting a larger packet. It distinguishes an explicit developer remember
 request, which may propose and save in one flow, from an agent-originated
 suggestion, which must remain a proposal until the developer promotes it. The
-registry entry names a version-pinned installed executable and D26/shared-memory
+registry entry names a version-pinned installed executable and authentication/shared-memory
 endpoint environment references without literal secrets. Preserve all Phase 1
 instructions and registry entries.
 
@@ -956,7 +956,7 @@ The integration test must:
     representation only.
 ```
 
-Use signed fixture D26 tokens and the pinned MemPalace/PostgreSQL test stack. Expected: PASS.
+Use signed fixture authentication tokens and the pinned MemPalace/PostgreSQL test stack. Expected: PASS.
 
 - [ ] **Step 6: Document use and operations**
 

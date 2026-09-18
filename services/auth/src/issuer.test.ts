@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
-import type { D26Audience } from "@wagglebot/contracts";
-import { canonicalChallengeBytes, verifyD26SessionToken } from "@wagglebot/d26-auth";
+import { canonicalChallengeBytes, verifyAuthSessionToken } from "@wagglebot/auth-protocol";
+import type { AuthAudience } from "@wagglebot/contracts";
 import { generateKeyPair, generateSecret, jwtVerify, SignJWT } from "jose";
 import type { ResolvedPublicKey } from "./catalog-keys";
 import { InMemoryChallengeStore } from "./challenge-store";
@@ -53,7 +53,7 @@ async function fixture(options: { validSignature?: boolean } = {}) {
   };
 }
 
-async function createChallenge(issuer: AuthIssuer, audience: D26Audience = "wagglebot-memory") {
+async function createChallenge(issuer: AuthIssuer, audience: AuthAudience = "wagglebot-memory") {
   return issuer.issueChallenge({ username: "alice", audience, signal: new AbortController().signal });
 }
 
@@ -62,7 +62,7 @@ test("rejects an unknown audience before creating challenge state", async () => 
   await expect(
     issuer.issueChallenge({
       username: "alice",
-      audience: "unknown" as D26Audience,
+      audience: "unknown" as AuthAudience,
       signal: new AbortController().signal,
     }),
   ).rejects.toThrow("authentication failed");
@@ -119,7 +119,7 @@ test("issues a 15-minute audience-bound EdDSA session token after SSH verificati
       clock: () => new Date("2026-09-13T12:16:00.000Z"),
     },
   ]) {
-    await expect(verifyD26SessionToken(result.accessToken, { ...options, publicKey })).rejects.toThrow(
+    await expect(verifyAuthSessionToken(result.accessToken, { ...options, publicKey })).rejects.toThrow(
       "invalid session token",
     );
   }
@@ -136,7 +136,7 @@ test("issues a 15-minute audience-bound EdDSA session token after SSH verificati
     .setExpirationTime(Math.floor(now.getTime() / 1000) + 900)
     .sign(hmacKey);
   await expect(
-    verifyD26SessionToken(wrongAlgorithm, {
+    verifyAuthSessionToken(wrongAlgorithm, {
       issuer: "https://auth.example.test",
       audience: "wagglebot-memory",
       publicKey,

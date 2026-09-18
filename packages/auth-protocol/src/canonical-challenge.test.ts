@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { canonicalChallengeBytes, D26_SIGNATURE_NAMESPACE } from "./canonical-challenge";
+import { AUTH_SIGNATURE_NAMESPACE, canonicalChallengeBytes } from "./canonical-challenge";
 
 const challenge = (audience: "wagglebot-memory" | "wagglebot-registry") => ({
   schemaVersion: 1 as const,
@@ -7,11 +7,11 @@ const challenge = (audience: "wagglebot-memory" | "wagglebot-registry") => ({
   nonce: "A".repeat(43),
   username: "alice",
   audience,
-  signatureNamespace: D26_SIGNATURE_NAMESPACE,
+  signatureNamespace: AUTH_SIGNATURE_NAMESPACE,
   expiresAt: "2026-09-12T12:01:00.000Z",
 });
 
-describe("D26 canonical challenge", () => {
+describe("authentication canonical challenge", () => {
   test("is deterministic and newline-delimited", () => {
     const bytes = canonicalChallengeBytes(challenge("wagglebot-memory"));
     expect(new TextDecoder().decode(bytes)).toBe(
@@ -28,7 +28,7 @@ describe("D26 canonical challenge", () => {
   });
 
   test("uses a fixed namespace and rejects control characters", () => {
-    expect(D26_SIGNATURE_NAMESPACE).toBe("wagglebot-auth@wagglebot.dev");
+    expect(AUTH_SIGNATURE_NAMESPACE).toBe("wagglebot-auth@wagglebot.dev");
     expect(() => canonicalChallengeBytes({ ...challenge("wagglebot-memory"), username: "alice\n" })).toThrow();
     expect(() =>
       canonicalChallengeBytes({ ...challenge("wagglebot-memory"), signatureNamespace: "other" as never }),

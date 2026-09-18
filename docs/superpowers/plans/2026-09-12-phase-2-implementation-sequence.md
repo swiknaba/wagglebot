@@ -11,7 +11,7 @@
 
 **Goal:** Deliver Wagglebot Phase 2 as a local-first repository brain plus authenticated, governed shared services and bounded context transfer, while preserving the Phase 1 provisioning contract and keeping source code, component memory, and workstation credentials local.
 
-**Architecture:** Phase 2 is six testable milestones connected by explicit dependency gates. Local repository intelligence is built first; D26 then supplies shared-service identity; the authenticated registry and local MCP hub provide governed tool access; shared memory stores only system/domain/organization knowledge; the unified context engine fuses bounded local and shared evidence; Context Bridge adds explicit, expiring local chat-to-chat transfer. This document orchestrates the approved subsystem plans and does not replace their file-level TDD steps.
+**Architecture:** Phase 2 is six testable milestones connected by explicit dependency gates. Local repository intelligence is built first; SSH authentication then supplies shared-service identity; the authenticated registry and local MCP hub provide governed tool access; shared memory stores only system/domain/organization knowledge; the unified context engine fuses bounded local and shared evidence; Context Bridge adds explicit, expiring local chat-to-chat transfer. This document orchestrates the approved subsystem plans and does not replace their file-level TDD steps.
 
 **Tech Stack:** TypeScript 5.9.2, Bun, Zod 4.6.1, Biome 2.2.0, CodeGraph 1.6.0, native Git, OpenSSH SSHSIG, `jose` 6.2.12, PostgreSQL with pgvector, `pg` 8.23.0, a TypeScript/Bun one-shot migration job, MemPalace 3.9.0, `@modelcontextprotocol/sdk` 1.30.0, and gitleaks 8.30.1.
 
@@ -28,12 +28,12 @@
   a committed schema-only reference, and scoped backup/restore. Keep the runner
   in TypeScript/Bun, retain the normalized `memory_*` record/outbox tables, and
   keep embeddings behind MemPalace.
-- Keep code, Git history, CodeGraph data, `.agents/memory.md`, Context Bridge packets, tool credentials, D26 session tokens, and MCP trust approvals on the workstation.
+- Keep code, Git history, CodeGraph data, `.agents/memory.md`, Context Bridge packets, tool credentials, authentication session tokens, and MCP trust approvals on the workstation.
 - Keep component memory only in the committed `.agents/memory.md` file. Shared storage accepts only system, domain, and organization scopes.
 - Never persist, upload, infer from, or mine chat transcripts. Retrieval never becomes durable memory without an explicit proposal and save or remember operation.
 - Every shared-memory write and local durable-memory save must pass the two-layer secret scan before persistence.
 - Scopes control relevance, routing, and write authorization; they are not a new read-access model between trusted coworkers.
-- Derive identity and group membership from the verified D26 principal and catalog. Request fields must never let callers select another identity or team.
+- Derive identity and group membership from the verified authentication principal and catalog. Request fields must never let callers select another identity or team.
 - Use strict version-1 schemas, stable error codes, bounded inputs and outputs, explicit idempotency rules, safe logging, and the single-representation MCP content rule.
 - Pin every runtime dependency exactly. Do not add a dependency when the standard library or an existing project dependency already provides the capability.
 - Implement each subsystem through its approved detailed plan using test-driven development and reviewable commits. Do not combine milestones in one commit.
@@ -50,7 +50,7 @@ Wagglebot is a vendor-neutral engineering-agent platform with progressively broa
 |---|---|---|
 | Phase 1: Provisioning | One company repository provisions skills, subagents, base instructions, project instructions, and MCP configuration into six supported harnesses without running a service. | Complete and released through `v0.2.1`. |
 | Phase 2: Memory and context | Local repository intelligence, authenticated shared registry/tool access, governed cross-repository memory, bounded context assembly, and explicit local context transfer. | Approved designs and detailed plans exist; implementation has started. |
-| Phase 3: Collaboration | Presence, persistent messages, channels, handoffs, and lease/fencing-safe task coordination under D26. | Design only; excluded from the Phase 2 release. |
+| Phase 3: Collaboration | Presence, persistent messages, channels, handoffs, and lease/fencing-safe task coordination under SSH authentication. | Design only; excluded from the Phase 2 release. |
 | Phase 4: Document ingestion | Reviewed documents enter shared memory through a separate scanned pipeline with optional batch extraction. | Design only; excluded from the Phase 2 release. |
 
 Phase 2 deliberately separates authorities:
@@ -95,7 +95,7 @@ Status updated on 2026-09-16 from branch `DEV-001`:
 | Phase 2 subsystem designs and detailed plans | Current plans plus historical plans marked superseded | Active work follows the current plan for each subsystem |
 | Shared Memory Foundation Task 1 | Memory/principal schemas, workspace registration, memory-worker package metadata, tests, and lockfile updates | Implemented contract checkpoint |
 | Local Repository Brain runtime | Commits `4cc72e3` through `0a5f4c6` implement `packages/local-brain`, CLI commands, and seven low-level local MCP tools | Complete |
-| D26 authentication | `services/auth` and `packages/d26-auth` verify D26 SSH signatures and issue/verify sessions | Implemented; full-stack verification remains part of the release gate |
+| SSH authentication | `services/auth` and `packages/auth-protocol` verify SSH signatures and issue/verify sessions | Implemented; full-stack verification remains part of the release gate |
 | Shared database/admin design updates | Ludwig commit `a81a37f` on this branch | Database foundation active; dashboard deferred until after Phase 3 |
 | Authenticated registry | `services/registry` serves validated authenticated registry snapshots | Implemented |
 | Local MCP hub | Contracts, configuration, credential isolation, trust approval, and registry refresh exist in `services/mcp-hub` | Foundation implemented; transports/discovery/CodeMode remain |
@@ -103,7 +103,7 @@ Status updated on 2026-09-16 from branch `DEV-001`:
 | Unified Context Engine | Only the seven low-level local MCP adapters required by Milestone 1 exist; context assembly is not built | Not built |
 | Context Bridge | No vault, facade, or MCP implementation | Not built |
 
-The current Shared Memory Task 1 work has passed its focused contract tests and the repository-wide test, check, typecheck, and build commands. It is an isolated contract foundation and may be retained. It does not authorize starting Shared Memory Task 2 before the D26 dependency exists.
+The current Shared Memory Task 1 work has passed its focused contract tests and the repository-wide test, check, typecheck, and build commands. It is an isolated contract foundation and may be retained. It does not authorize starting Shared Memory Task 2 before the authentication dependency exists.
 
 ## Dependency Graph
 
@@ -112,7 +112,7 @@ Phase 1 (complete)
   |
   +--> Milestone 1: Local Repository Brain -----------+
   |                                                    |
-  +--> Milestone 2: D26 Authentication --+             |
+  +--> Milestone 2: SSH Authentication --+             |
                                          |             |
                                          +--> Registry +--> Local MCP Hub --+
                                          |                                  |
@@ -125,7 +125,7 @@ The execution order is therefore:
 
 1. Stabilize the already-started Shared Memory Task 1 contract checkpoint.
 2. Build the Local Repository Brain.
-3. Build D26 authentication.
+3. Build SSH authentication.
 4. Build the authenticated registry, then the local MCP hub.
 5. Resume the Shared Memory Foundation at Task 2.
 6. Build the Unified Context Engine.
@@ -153,7 +153,7 @@ The execution order is therefore:
 - Produces: `SharedScopeSchema`, `MemoryRecordSchema`, `MemorySearchInputSchema`, `MemorySearchResultSchema`, `PrincipalSchema`, all Phase 2 shared-memory request/result schemas, inferred TypeScript types, and a registered `@wagglebot/memory-worker` workspace.
 
 - [x] Compare every exported memory/principal schema with `docs/api-reference.md`, including Unicode bounds, strict unknown-field rejection, `operationKey`, wake/review validation, 20-fact and 256-chunk limits, and HTTP-versus-MCP envelope differences.
-- [x] Confirm the `PrincipalSchema` is compatible with the D26 plan's verified-principal contract so D26 will not need a competing principal type.
+- [x] Confirm the `PrincipalSchema` is compatible with the authentication plan's verified-principal contract so authentication will not need a competing principal type.
 - [x] Run `bun test packages/contracts/src/memory.test.ts` and require all focused tests to pass.
 - [x] Run `bun run check`, `bun run typecheck`, `bun test`, `bun run build`, and `git diff --check`.
 - [x] Inspect `git status --short` and `git diff`; exclude `.idea/` and unrelated changes.
@@ -170,7 +170,7 @@ The execution order is therefore:
 
 **Design:** `docs/superpowers/specs/2026-09-11-local-repository-brain-design.md`
 
-**Prerequisites:** Phase 1 component/catalog files, Git, and CodeGraph 1.6.0. No D26 or shared service is required.
+**Prerequisites:** Phase 1 component/catalog files, Git, and CodeGraph 1.6.0. No authentication or shared service is required.
 
 **Interfaces:**
 
@@ -191,20 +191,20 @@ The execution order is therefore:
 
 ---
 
-### Task 2: Deliver Milestone 2 — D26 SSH Authentication
+### Task 2: Deliver Milestone 2 — SSH Authentication
 
 **Detailed plan:** `docs/superpowers/plans/2026-09-12-d26-ssh-authentication.md`
 
-**Contract:** `docs/api-reference.md` section “D26 authentication”.
+**Contract:** `docs/api-reference.md` section “SSH authentication”.
 
 **Prerequisites:** Backstage User entities and registered SSH public keys in the merged catalog. Complete Milestone 1 first to preserve the approved release order.
 
 **Interfaces:**
 
 - Consumes: catalog identities/public keys, `ssh-agent`, OpenSSH SSHSIG, and issuer key configuration.
-- Produces: `@wagglebot/d26-auth`, one-use challenge storage, canonical challenge bytes, local signing/session cache, EdDSA issuing and verification, `services/auth`, and audience-bound principals for registry, memory, and coordination.
+- Produces: `@wagglebot/auth-protocol`, one-use challenge storage, canonical challenge bytes, local signing/session cache, EdDSA issuing and verification, `services/auth`, and audience-bound principals for registry, memory, and coordination.
 
-- [x] Execute Task 1 of the detailed plan: define strict versioned D26 request, response, token, and principal contracts.
+- [x] Execute Task 1 of the detailed plan: define strict versioned authentication request, response, token, and principal contracts.
 - [x] Execute Task 2: implement canonical newline-delimited challenge bytes and local SSH signing without exporting a private key.
 - [x] Execute Task 3: implement the per-audience in-memory token client/cache and exact-audience verifier.
 - [x] Execute Task 4: resolve public keys from the catalog and the optional pinned GitHub host with last-known-good refresh behavior.
@@ -222,11 +222,11 @@ The execution order is therefore:
 
 **Detailed plan:** `docs/superpowers/plans/2026-09-12-authenticated-registry-serving.md`
 
-**Prerequisites:** Milestone 2 D26 verifier and the Phase 1 company repository layout.
+**Prerequisites:** Milestone 2 authentication verifier and the Phase 1 company repository layout.
 
 **Interfaces:**
 
-- Consumes: D26 `wagglebot-registry` principal, `company/registry.yaml`, matching `teams/<group>/registry.yaml`, all catalog fragments, and the root `tool_catalog.yaml`.
+- Consumes: authentication `wagglebot-registry` principal, `company/registry.yaml`, matching `teams/<group>/registry.yaml`, all catalog fragments, and the root `tool_catalog.yaml`.
 - Produces: a validated, principal-specific registry snapshot with deterministic shallow replacement, revision/ETag behavior, atomic last-known-good refresh, and no credential values.
 
 - [x] Execute Task 1 of the detailed plan: make the registry, tool-catalog, and company-layout schemas canonical and reject removed aliases.
@@ -247,13 +247,13 @@ The execution order is therefore:
 
 **Interfaces:**
 
-- Consumes: local hub bearer token, D26 registry client, principal-specific registry, local credential sources, and explicit trust approvals.
+- Consumes: local hub bearer token, authentication registry client, principal-specific registry, local credential sources, and explicit trust approvals.
 - Produces: `services/mcp-hub`, four upstream transports, atomic registry refresh, bounded discovery cache, CodeMode `search/get_schema/execute`, four introspection tools, and degraded namespace status.
 
 - [x] Execute Task 1 of the detailed plan: define strict hub-facing contracts and configuration.
 - [x] Execute Task 2: resolve credentials only on the workstation and require a `0600` trust approval for new or changed privileged registry entries.
 - [ ] Execute Task 3: fetch, validate, and atomically swap complete registry revisions; drain removed namespaces and invalidate their schemas.
-- [ ] Execute Task 4: implement exactly `remote_http`, `remote_sse`, `stdio_npx`, and `stdio_cmd`; strip local hub and D26 credentials before every upstream call.
+- [ ] Execute Task 4: implement exactly `remote_http`, `remote_sse`, `stdio_npx`, and `stdio_cmd`; strip local hub and authentication credentials before every upstream call.
 - [ ] Execute Task 5: add bounded, concurrent discovery with five-second discovery timeouts and adaptive refresh.
 - [ ] Execute Task 6: expose only CodeMode and introspection tools; never expose raw downstream tool lists.
 - [ ] Execute Task 7: wire Streamable HTTP MCP, local auth, startup/degraded behavior, response caps, and end-to-end transport fixtures.
@@ -269,11 +269,11 @@ The execution order is therefore:
 
 **Design:** current shared-layer, C3 service contract, and Phase 4 ingestion specification.
 
-**Prerequisites:** Task 0 contract checkpoint, Milestone 2 D26, catalog fixtures, PostgreSQL with `vector`, Ruby 3/Sequel migration image, and the CPU embedding model.
+**Prerequisites:** Task 0 contract checkpoint, Milestone 2 authentication, catalog fixtures, PostgreSQL with `vector`, Ruby 3/Sequel migration image, and the CPU embedding model.
 
 **Interfaces:**
 
-- Consumes: D26 `wagglebot-memory` principal, catalog scopes/owners, scanned explicit writes, and complete reviewed Git publications.
+- Consumes: authentication `wagglebot-memory` principal, catalog scopes/owners, scanned explicit writes, and complete reviewed Git publications.
 - Produces: canonical PostgreSQL records, in-process CPU embeddings, migration manifest/schema checks, fact search and invalidation, HTTP/MCP routes, compose deployment, and recovery proof.
 
 
@@ -300,11 +300,11 @@ The execution order is therefore:
 
 **Interfaces:**
 
-- Consumes: local-brain providers, D26 memory client, shared-memory search, project identity, task/query, context controls, and content-free cursor state.
+- Consumes: local-brain providers, authentication memory client, shared-memory search, project identity, task/query, context controls, and content-free cursor state.
 - Produces: deterministic planning, concurrent bounded retrieval, weighted reciprocal-rank fusion, deduplication/conflict reporting, token/item budgets, four `brain_*` MCP tools, and status without prose.
 
 - [ ] Execute Task 1 of the detailed plan: define strict `ContextPacket`, evidence, conflict, degraded-provider, omitted-reason, control, and status contracts.
-- [ ] Execute Task 2: add the private shared-memory client and reuse D26 per-audience token caching without persisting tokens.
+- [ ] Execute Task 2: add the private shared-memory client and reuse authentication per-audience token caching without persisting tokens.
 - [ ] Execute Task 3: map wake/search/explain requests deterministically to independent providers.
 - [ ] Execute Task 4: retrieve concurrently with provider-specific and aggregate deadlines; preserve successful evidence when another provider fails.
 - [ ] Execute Task 5: apply reciprocal-rank fusion, authority-aware tie breaking, identity/content deduplication, cursor repeat suppression, and explicit conflict reporting.
@@ -338,7 +338,7 @@ The execution order is therefore:
 - [ ] Execute Task 6: prove project mismatch, owner mismatch, expiry, revocation, import cap, process restart, size limits, secret rejection, and transcript absence end to end.
 - [ ] Confirm Wake never discovers or imports bridge packets and imports never mutate durable local or shared memory.
 
-**Gate:** A user explicitly exports a bounded packet and imports it in another local chat through an opaque expiring handle; default project binding, same-user ownership, permissions, limits, revocation, and cleanup hold across process restart; no network or D26 call occurs.
+**Gate:** A user explicitly exports a bounded packet and imports it in another local chat through an opaque expiring handle; default project binding, same-user ownership, permissions, limits, revocation, and cleanup hold across process restart; no network or authentication call occurs.
 
 ---
 
@@ -364,7 +364,7 @@ The execution order is therefore:
 - [ ] Prove concurrent/repeated migrations, complete ordered migration-history
   checks, explicit rollback, schema-reference reproducibility, and preservation
   of unrelated database objects and the shared `vector` extension.
-- [ ] Prove D26 identity, exact audience isolation, principal-specific registry composition, local credential isolation, and trust-change approval.
+- [ ] Prove authentication identity, exact audience isolation, principal-specific registry composition, local credential isolation, and trust-change approval.
 - [ ] Prove all four hub transports, namespace degradation, CodeMode, and introspection bounds.
 - [ ] Prove L0/L1/L2 context budgets, cursor suppression, conflict handling, provider degradation, and single-representation MCP responses.
 - [ ] Prove Context Bridge export/import/revoke/expiry and same-user/project boundaries without network access.
@@ -381,7 +381,7 @@ Do not fold Phase 3 or Phase 4 into Phase 2 implementation commits.
 
 After the Phase 2 release gate:
 
-1. Convert `docs/superpowers/specs/2026-08-28-phase-3-collaboration.md` into approved subsystem plans for presence, persistent messaging/channels, and lease/fencing-safe task coordination. Reuse D26 with the reserved `wagglebot-coordination` audience and preserve the trusted-coworker model.
+1. Convert `docs/superpowers/specs/2026-08-28-phase-3-collaboration.md` into approved subsystem plans for presence, persistent messaging/channels, and lease/fencing-safe task coordination. Reuse SSH authentication with the reserved `wagglebot-coordination` audience and preserve the trusted-coworker model.
 2. Complete and release Phase 3 before planning Phase 4 integration points that depend on coordination behavior.
 3. After Phase 3 exposes stable collaboration service functions and scoped
    metadata, write a separate implementation plan for

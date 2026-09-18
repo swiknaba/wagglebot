@@ -4,13 +4,13 @@ export const UsernameSchema = z.string().regex(/^[a-z0-9][a-z0-9._-]{0,63}$/);
 const username = UsernameSchema;
 const signatureNamespace = "wagglebot-auth@wagglebot.dev" as const;
 
-export const D26AudienceSchema = z.enum(["wagglebot-registry", "wagglebot-memory", "wagglebot-coordination"]);
+export const AuthAudienceSchema = z.enum(["wagglebot-registry", "wagglebot-memory", "wagglebot-coordination"]);
 
 export const AuthChallengeRequestSchema = z
   .object({
     schemaVersion: z.literal(1),
     username,
-    audience: D26AudienceSchema,
+    audience: AuthAudienceSchema,
   })
   .strict();
 
@@ -20,7 +20,7 @@ export const AuthChallengeResponseSchema = z
     challengeId: z.string().regex(/^ch_[A-Za-z0-9_-]{28}$/),
     nonce: z.string().regex(/^[A-Za-z0-9_-]{43}$/),
     username,
-    audience: D26AudienceSchema,
+    audience: AuthAudienceSchema,
     signatureNamespace: z.literal(signatureNamespace),
     expiresAt: z.iso.datetime({ offset: true }),
   })
@@ -46,11 +46,11 @@ export const AuthSessionResponseSchema = z
   })
   .strict();
 
-export const D26SessionClaimsSchema = z
+export const AuthSessionClaimsSchema = z
   .object({
     iss: z.string().url(),
     sub: username,
-    aud: D26AudienceSchema,
+    aud: AuthAudienceSchema,
     iat: z.number().int(),
     exp: z.number().int(),
     jti: z.string().regex(/^jti_[A-Za-z0-9_-]{28}$/),
@@ -71,33 +71,33 @@ export const AuthErrorCodeSchema = z.enum([
   "auth_unavailable",
 ]);
 
-export type D26Audience = z.infer<typeof D26AudienceSchema>;
+export type AuthAudience = z.infer<typeof AuthAudienceSchema>;
 export type AuthChallengeRequest = z.infer<typeof AuthChallengeRequestSchema>;
 export type AuthChallengeResponse = z.infer<typeof AuthChallengeResponseSchema>;
 export type AuthSessionRequest = z.infer<typeof AuthSessionRequestSchema>;
 export type AuthSessionResponse = z.infer<typeof AuthSessionResponseSchema>;
-export type D26SessionClaims = z.infer<typeof D26SessionClaimsSchema>;
+export type AuthSessionClaims = z.infer<typeof AuthSessionClaimsSchema>;
 export type AuthErrorCode = z.infer<typeof AuthErrorCodeSchema>;
 
 export type AuthChallengeRecord = {
   challengeId: string;
   nonceHash: string;
   username: string;
-  audience: D26Audience;
+  audience: AuthAudience;
   expiresAtMs: number;
   attempts: number;
 };
 
-export type D26Principal = {
+export type AuthPrincipal = {
   username: string;
-  audience: D26Audience;
+  audience: AuthAudience;
   issuedAt: Date;
   expiresAt: Date;
   tokenId: string;
 };
 
-export type D26SessionToken = {
+export type AuthSessionToken = {
   accessToken: string;
   expiresAt: Date;
-  principal: D26Principal;
+  principal: AuthPrincipal;
 };

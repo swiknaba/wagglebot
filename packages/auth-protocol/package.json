@@ -1,5 +1,5 @@
 {
-  "name": "@wagglebot/d26-auth",
+  "name": "@wagglebot/auth-protocol",
   "version": "0.0.0",
   "private": true,
   "type": "module",

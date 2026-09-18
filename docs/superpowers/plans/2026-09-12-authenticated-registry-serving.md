@@ -4,9 +4,9 @@
 
 **Goal:** Serve one validated, principal-specific effective MCP registry to each authenticated local hub without exposing secrets or allowing a caller to choose its own team membership.
 
-**Architecture:** A shared `services/registry` service reads the existing company repository layout, verifies the D26 `wagglebot-registry` audience token, derives the caller's groups from the merged Backstage catalog, and returns `company/registry.yaml` merged with the matching `teams/<group>/registry.yaml` layers. The merge is shallow and deterministic; the complete candidate is validated before an atomic in-memory swap. The service serves no local trust approvals or resolved credentials.
+**Architecture:** A shared `services/registry` service reads the existing company repository layout, verifies the authentication `wagglebot-registry` audience token, derives the caller's groups from the merged Backstage catalog, and returns `company/registry.yaml` merged with the matching `teams/<group>/registry.yaml` layers. The merge is shallow and deterministic; the complete candidate is validated before an atomic in-memory swap. The service serves no local trust approvals or resolved credentials.
 
-**Tech Stack:** TypeScript, Bun, Zod 4, YAML 2.8.3, `@wagglebot/contracts`, `@wagglebot/d26-auth`, Bun `fetch`, native filesystem APIs, Bun tests, Biome, and the existing `createServer`/`createApp` pattern.
+**Tech Stack:** TypeScript, Bun, Zod 4, YAML 2.8.3, `@wagglebot/contracts`, `@wagglebot/auth-protocol`, Bun `fetch`, native filesystem APIs, Bun tests, Biome, and the existing `createServer`/`createApp` pattern.
 
 **Spec:** The company/team layout in
 `docs/superpowers/specs/2026-08-28-phase-1-provisioning.md`, the registry
@@ -19,7 +19,7 @@ contract in `docs/api-reference.md`.
 ## Global Constraints
 
 - The registry is a relevance selector, not a team authorization boundary. Every registered engineer receives the company layer plus the team layers selected from the catalog; memory and publication authorization remain separate concerns.
-- Require a valid D26 token with exact audience `wagglebot-registry` on `GET /registry`. Derive `username` from verified `sub`; ignore any query/header/body team or username selector.
+- Require a valid authentication token with exact audience `wagglebot-registry` on `GET /registry`. Derive `username` from verified `sub`; ignore any query/header/body team or username selector.
 - Do not create `users.yaml` or a second membership store. The Backstage catalog is authoritative for User, Group, `memberOf`, and ownership data.
 - Source files carry credential references only. Reject `credential.source.from: literal` and any unknown auth/source fields in the shared registry. Never return or persist resolved credential values.
 - Use the existing strict `ProxyConfig`, `AuthScheme`, `CredentialSource`, and tool-catalog contracts. The CLI and registry service must not maintain competing schemas.
@@ -28,7 +28,7 @@ contract in `docs/api-reference.md`.
   caller's `teams/<group>/registry.yaml` files in lexicographic group-name
   order; a later complete team entry replaces the complete company/team entry
   with the same namespace. Never deep-merge fields.
-- A registry response contains only validated configuration, revision metadata, and first-party tool-catalog content. It contains no secrets, local file paths, private trust approvals, D26 tokens, or upstream responses.
+- A registry response contains only validated configuration, revision metadata, and first-party tool-catalog content. It contains no secrets, local file paths, private trust approvals, authentication tokens, or upstream responses.
 - The source snapshot is immutable after validation. Publish by replacing the in-memory snapshot as one operation; a failed refresh keeps the last good snapshot and readiness state.
 - Use `ETag` equal to the revision identifier. `If-None-Match` may return `304` only after authenticating the caller and confirming the same effective revision; never use an unauthenticated cache hit.
 - Return generic authentication errors without revealing whether a username, group, or registry entry exists. Do not log usernames on rejected requests, catalog content, tokens, credentials, endpoints with query/userinfo, or registry prose.
@@ -99,7 +99,7 @@ docs/api-reference.md
   their inferred types, and the shared `loadCompanyRepo`/
   `assertTeamDirsKnown` company-layout loader.
 - Consumes: the existing Phase 1 registry validation and company repository
-  behavior and D26 `D26Principal` only at service boundaries, not in the pure
+  behavior and authentication `AuthPrincipal` only at service boundaries, not in the pure
   schema package.
 
 - [ ] **Step 1: Write failing contract tests**
@@ -309,7 +309,7 @@ git commit -m "feat(registry): load validated catalog and registry sources"
 
 **Interfaces:**
 
-- Consumes: `ValidatedSourceSnapshot` and verified `D26Principal`.
+- Consumes: `ValidatedSourceSnapshot` and verified `AuthPrincipal`.
 - Produces: `composeRegistry(principal, source): RegistrySnapshot`.
 
 - [ ] **Step 1: Write composition tests**
@@ -335,7 +335,7 @@ Run: `bun test services/registry/src/compose.test.ts`
 
 ```typescript
 export function composeRegistry(
-  principal: D26Principal,
+  principal: AuthPrincipal,
   source: ValidatedSourceSnapshot,
 ): RegistrySnapshot {
   const groups = source.catalog.groupsFor(principal.username).toSorted();
@@ -357,7 +357,7 @@ or log credentials.
 
 Compute the snapshot on demand from the last valid source and memoize it by
 `sourceRevision + username`; evict only when a new source revision is accepted.
-The principal is trusted only after D26 verification; catalog lookup still
+The principal is trusted only after authentication verification; catalog lookup still
 confirms that the user remains registered.
 
 - [ ] **Step 3: Commit composition**
@@ -381,7 +381,7 @@ git commit -m "feat(registry): compose principal-specific snapshots"
 
 **Interfaces:**
 
-- Consumes: `composeRegistry`, `verifyD26SessionToken`, source refresh state,
+- Consumes: `composeRegistry`, `verifyAuthSessionToken`, source refresh state,
   and registry contracts.
 - Produces: authenticated `GET /registry`, `GET /livez`, and `GET /readyz`.
 
@@ -422,14 +422,14 @@ Create `services/registry/package.json`:
   "dependencies": {
     "@wagglebot/company-config": "workspace:*",
     "@wagglebot/contracts": "workspace:*",
-    "@wagglebot/d26-auth": "workspace:*",
+    "@wagglebot/auth-protocol": "workspace:*",
     "yaml": "2.8.3",
     "zod": "4.6.1"
   }
 }
 ```
 
-Require `Authorization: Bearer <D26 registry token>`. Verify the token before
+Require `Authorization: Bearer <authentication registry token>`. Verify the token before
 reading the `If-None-Match` value or composing a response. Set
 `Content-Type: application/json`, `Cache-Control: no-store`, and `ETag` to the
 snapshot revision. Return a compact error envelope:
@@ -453,7 +453,7 @@ trigger one bounded refresh only when no valid snapshot exists.
 - [ ] **Step 3: Add deployment and commit**
 
 The Docker image runs as a non-root user, mounts the company configuration
-repository read-only at `REGISTRY_COMPANY_ROOT`, receives only the D26 issuer
+repository read-only at `REGISTRY_COMPANY_ROOT`, receives only the authentication issuer
 public key, and exposes `/livez` and `/readyz`. It does not mount
 `.env.credentials` or any upstream credential.
 
@@ -477,7 +477,7 @@ git commit -m "feat(registry): serve authenticated effective registries"
 
 Create a fixture company repository with two users in different groups,
 `company/registry.yaml`, two `teams/<group>/registry.yaml` files, and a root
-tool catalog. Use signed fixture D26 tokens. Prove:
+tool catalog. Use signed fixture authentication tokens. Prove:
 
 1. Each user receives the company layer plus only their team layer.
 2. A user cannot select another team by request fields.
@@ -489,7 +489,7 @@ tool catalog. Use signed fixture D26 tokens. Prove:
 6. A source revision swap is atomic; concurrent requests see either the old or
    new complete snapshot, never a mixed layer.
 7. Invalid refresh retains the last accepted revision.
-8. A wrong-audience D26 token is rejected.
+8. A wrong-audience authentication token is rejected.
 9. ETags are principal-specific and authenticated.
 
 Run: `bun test services/registry/integration/registry-e2e.test.ts`
@@ -498,7 +498,7 @@ Run: `bun test services/registry/integration/registry-e2e.test.ts`
 
 Add the registry service to the shared compose profile and document
 `REGISTRY_*` variables, the read-only company-repository mount, catalog
-revision injection, D26
+revision injection, authentication
 public-key distribution, refresh behavior, and `/readyz` semantics. Add the
 complete `GET /registry` request/response/error/ETag contract to
 `docs/api-reference.md`, including the fact that the response is a derived
@@ -521,7 +521,7 @@ git commit -m "feat(registry): verify principal-specific publication"
 ## Completion Checklist
 
 - [ ] Registry contracts are shared with Phase 1 CLI validation.
-- [ ] D26 registry tokens are verified before composition and request fields
+- [ ] Authentication registry tokens are verified before composition and request fields
       cannot select identity or team.
 - [ ] Catalog membership is authoritative; no `users.yaml` or second identity
       store exists.

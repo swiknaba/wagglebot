@@ -13,7 +13,7 @@
 ## Global Constraints
 
 - Execute this plan only after the Local Repository Brain and Unified Context Engine milestones have established `packages/contracts`, `packages/local-brain`, the project identity/path policy, `EvidenceRef`, the shared secret scanner, and the local MCP server.
-- Keep the implementation local-only: no network client, no shared-memory worker call, no D26 token, no CodeGraph write, no Git mutation, and no telemetry containing packet data.
+- Keep the implementation local-only: no network client, no shared-memory worker call, no authentication token, no CodeGraph write, no Git mutation, and no telemetry containing packet data.
 - Export and import are always explicit MCP calls. Wake must not search the vault, infer a handle, or import a packet automatically.
 - Accept only the packet fields defined below. Never accept or persist a transcript, prompt, hidden reasoning, session object, session-file path, source excerpt, diff, credential, arbitrary metadata, or free-form replacement payload.
 - Default to `project` scope. `workstation` scope must be selected during export and cannot be added or overridden at import time.

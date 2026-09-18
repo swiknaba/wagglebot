@@ -13,7 +13,7 @@
 
 **Architecture:** A TypeScript/Bun memory worker remains the only public memory boundary. It commits canonical records and an index outbox to PostgreSQL, then a narrow adapter files and searches those records through a private MemPalace 3.9.0 service using pgvector. Reviewed knowledge is published from committed Git Markdown; component memory never enters this service.
 
-**Tech Stack:** TypeScript 5.9.2, Bun, PostgreSQL with pgvector, `pg` 8.23.0, SQL migrations managed by a TypeScript/Bun one-shot job, `zod` 4.6.1, `yaml` 2.8.3, `jose` 6.2.12, `@modelcontextprotocol/sdk` 1.30.0, `@wagglebot/d26-auth`, MemPalace 3.9.0, gitleaks 8.30.1.
+**Tech Stack:** TypeScript 5.9.2, Bun, PostgreSQL with pgvector, `pg` 8.23.0, SQL migrations managed by a TypeScript/Bun one-shot job, `zod` 4.6.1, `yaml` 2.8.3, `jose` 6.2.12, `@modelcontextprotocol/sdk` 1.30.0, `@wagglebot/auth-protocol`, MemPalace 3.9.0, gitleaks 8.30.1.
 
 **Spec:** `docs/superpowers/specs/2026-09-11-shared-memory-foundation-design.md`
 
@@ -354,7 +354,7 @@ const MemoryConfigSchema = z.object({
 }).strict();
 ```
 
-Use `verifyD26SessionToken` from `@wagglebot/d26-auth` with the configured
+Use `verifyAuthSessionToken` from `@wagglebot/auth-protocol` with the configured
 issuer public key and exact `wagglebot-memory` audience. The package owns the
 EdDSA algorithm allow-list, issuer, expiration, `sub`, and `jti` validation;
 the worker maps the verified `sub` to the current catalog User and converts
@@ -1265,7 +1265,7 @@ Capture service logs and assert that fixture content, query text, DSNs, tokens, 
 explicit-target rollback, startup with bundled or external PostgreSQL, `/livez`,
 `/readyz`, schema-reference regeneration, scoped PostgreSQL logical dump,
 restore into an empty database, full MemPalace reindex, admin-token rotation,
-D26 public-key rotation, and a failed-index investigation. Dump/restore uses the
+authentication public-key rotation, and a failed-index investigation. Dump/restore uses the
 manifest's explicit object list, includes migration history and embedding
 metadata, preserves unrelated objects and `vector`, and never prints a DSN. The
 runbook explains that Git-published documents can be rebuilt, while confirmed
@@ -1313,7 +1313,7 @@ Before declaring the Shared Memory Foundation milestone complete:
 - Git source replacement and deletion are reflected immediately in search.
 - MemPalace outage leaves lexical search and canonical writes operational.
 - Security fixtures appear nowhere in PostgreSQL text fields, MemPalace, logs, errors, or snapshots.
-- The original Phase 2 hub/auth contracts remain unchanged and the worker accepts their D26 principal tokens.
+- The original Phase 2 hub/auth contracts remain unchanged and the worker accepts their authentication principal tokens.
 - Wake retrieval returns at most three active, high-confidence, unexpired,
   reviewed records, and agent proposals cannot enable it.
 - Direct memory MCP search responses contain each fact's prose in one response

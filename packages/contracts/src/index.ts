@@ -1,23 +1,23 @@
 export type {
+  AuthAudience,
   AuthChallengeRecord,
   AuthChallengeRequest,
   AuthChallengeResponse,
   AuthErrorCode,
+  AuthPrincipal,
+  AuthSessionClaims,
   AuthSessionRequest,
   AuthSessionResponse,
-  D26Audience,
-  D26Principal,
-  D26SessionClaims,
-  D26SessionToken,
+  AuthSessionToken,
 } from "./auth";
 export {
+  AuthAudienceSchema,
   AuthChallengeRequestSchema,
   AuthChallengeResponseSchema,
   AuthErrorCodeSchema,
+  AuthSessionClaimsSchema,
   AuthSessionRequestSchema,
   AuthSessionResponseSchema,
-  D26AudienceSchema,
-  D26SessionClaimsSchema,
   UsernameSchema,
 } from "./auth";
 export type {

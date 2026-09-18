@@ -1,6 +1,6 @@
 import { readFile, stat } from "node:fs/promises";
+import type { SessionTokenProvider } from "@wagglebot/auth-protocol";
 import { type HubConfig, type RegistrySnapshot, RegistrySnapshotSchema } from "@wagglebot/contracts";
-import type { SessionTokenProvider } from "@wagglebot/d26-auth";
 import type { TrustStore } from "./trust";
 
 const MAX_RESPONSE_BYTES = 262_144;
@@ -68,7 +68,7 @@ export class RegistryManager {
   private async loadRemote(signal?: AbortSignal): Promise<RegistrySnapshot> {
     const url = new URL(this.input.config.configUrl as string);
     const tokens = this.input.tokens;
-    if (!tokens) throw new Error("D26 token provider is required for remote registry");
+    if (!tokens) throw new Error("authentication token provider is required for remote registry");
     const token = await tokens.get("wagglebot-registry", signal ?? new AbortController().signal);
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 30_000);

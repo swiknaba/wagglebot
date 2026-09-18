@@ -1,7 +1,7 @@
 import { afterEach, expect, test } from "bun:test";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { canonicalChallengeBytes, D26Client, SshAgentSigner, verifyD26SessionToken } from "@wagglebot/d26-auth";
+import { AuthClient, canonicalChallengeBytes, SshAgentSigner, verifyAuthSessionToken } from "@wagglebot/auth-protocol";
 import { generateKeyPair } from "jose";
 import { createCatalogPublicKeyResolver } from "../src/catalog-keys";
 import { InMemoryChallengeStore } from "../src/challenge-store";
@@ -14,14 +14,14 @@ let signatureSequence = 0;
 
 async function run(args: string[]): Promise<void> {
   const process = Bun.spawn(args, { stdout: "ignore", stderr: "ignore" });
-  if ((await process.exited) !== 0) throw new Error("OpenSSH is required for D26 end-to-end tests");
+  if ((await process.exited) !== 0) throw new Error("OpenSSH is required for authentication end-to-end tests");
 }
 
 async function agent(privateKeyPath: string) {
   const socketPath = join(dirname(privateKeyPath), "agent.sock");
   const agentProcess = Bun.spawn(["ssh-agent", "-a", socketPath, "-s"], { stdout: "pipe", stderr: "ignore" });
   const output = await new Response(agentProcess.stdout).text();
-  if ((await agentProcess.exited) !== 0) throw new Error("ssh-agent is required for D26 end-to-end tests");
+  if ((await agentProcess.exited) !== 0) throw new Error("ssh-agent is required for authentication end-to-end tests");
   const socket = output.match(/SSH_AUTH_SOCK=([^;]+);/)?.[1];
   const processId = output.match(/SSH_AGENT_PID=(\d+);/)?.[1];
   if (!socket || !processId) throw new Error("ssh-agent did not report a socket");
@@ -105,9 +105,9 @@ afterEach(async () => {
   await Promise.all(directories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })));
 });
 
-test("real SSHSIG exchange binds a D26 token to its audience and expires it", async () => {
+test("real SSHSIG exchange binds an authentication token to its audience and expires it", async () => {
   const environment = await fixture();
-  const client = new D26Client({
+  const client = new AuthClient({
     baseUrl: "https://auth.example.test",
     username: "alice",
     signer: { sign: (payload) => sign(environment.privateKeyPath, payload) },
@@ -116,7 +116,7 @@ test("real SSHSIG exchange binds a D26 token to its audience and expires it", as
   });
   const token = await client.get("wagglebot-memory", new AbortController().signal);
   await expect(
-    verifyD26SessionToken(token.token, {
+    verifyAuthSessionToken(token.token, {
       issuer: "https://auth.example.test",
       audience: "wagglebot-memory",
       publicKey: environment.issuerPublicKey,
@@ -124,7 +124,7 @@ test("real SSHSIG exchange binds a D26 token to its audience and expires it", as
     }),
   ).resolves.toMatchObject({ username: "alice", audience: "wagglebot-memory" });
   await expect(
-    verifyD26SessionToken(token.token, {
+    verifyAuthSessionToken(token.token, {
       issuer: "https://auth.example.test",
       audience: "wagglebot-registry",
       publicKey: environment.issuerPublicKey,
@@ -133,7 +133,7 @@ test("real SSHSIG exchange binds a D26 token to its audience and expires it", as
   ).rejects.toThrow("invalid session token");
   environment.advance(16);
   await expect(
-    verifyD26SessionToken(token.token, {
+    verifyAuthSessionToken(token.token, {
       issuer: "https://auth.example.test",
       audience: "wagglebot-memory",
       publicKey: environment.issuerPublicKey,
@@ -178,7 +178,7 @@ test("real SSHSIG verification rejects a replay and mismatched challenge values"
 
 test("a catalog key rotation rejects new old-key exchanges without revoking issued tokens", async () => {
   const environment = await fixture();
-  const client = new D26Client({
+  const client = new AuthClient({
     baseUrl: "https://auth.example.test",
     username: "alice",
     signer: { sign: (payload) => sign(environment.privateKeyPath, payload) },
@@ -197,14 +197,14 @@ test("a catalog key rotation rejects new old-key exchanges without revoking issu
   await environment.resolver.refresh(new AbortController().signal);
 
   await expect(
-    verifyD26SessionToken(issued.token, {
+    verifyAuthSessionToken(issued.token, {
       issuer: "https://auth.example.test",
       audience: "wagglebot-memory",
       publicKey: environment.issuerPublicKey,
       clock: () => new Date("2026-09-13T12:00:00.000Z"),
     }),
   ).resolves.toMatchObject({ username: "alice" });
-  const staleKeyClient = new D26Client({
+  const staleKeyClient = new AuthClient({
     baseUrl: "https://auth.example.test",
     username: "alice",
     signer: { sign: (payload) => sign(environment.privateKeyPath, payload) },
@@ -212,14 +212,14 @@ test("a catalog key rotation rejects new old-key exchanges without revoking issu
     clock: () => new Date("2026-09-13T12:00:00.000Z"),
   });
   await expect(staleKeyClient.get("wagglebot-registry", new AbortController().signal)).rejects.toThrow(
-    "D26 auth request failed",
+    "authentication request failed",
   );
 });
 
 test("the real client refreshes near expiry once for concurrent callers", async () => {
   const environment = await fixture();
   let signatures = 0;
-  const client = new D26Client({
+  const client = new AuthClient({
     baseUrl: "https://auth.example.test",
     username: "alice",
     signer: {
@@ -256,7 +256,7 @@ test("an isolated ssh-agent signs an SSHSIG without exposing its private key", a
     await expect(
       signer.sign(new TextEncoder().encode("agent proof\n"), new AbortController().signal),
     ).resolves.toContain("BEGIN SSH SIGNATURE");
-    const client = new D26Client({
+    const client = new AuthClient({
       baseUrl: "https://auth.example.test",
       username: "alice",
       signer,

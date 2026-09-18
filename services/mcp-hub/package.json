@@ -9,6 +9,6 @@
   },
   "dependencies": {
     "@wagglebot/contracts": "workspace:*",
-    "@wagglebot/d26-auth": "workspace:*"
+    "@wagglebot/auth-protocol": "workspace:*"
   }
 }

@@ -98,7 +98,7 @@ deploy/
 - [ ] Write failing tests for component-scope rejection, secret-scan rejection before SQL execution, canonical-key idempotency, supersession, invalidation, and scope filtering before result limit.
 - [ ] Implement fact-only writes to the single table, preserving JSON provenance, lifecycle columns, and operation-key semantics without introducing side tables.
 - [ ] Implement cosine search and wake search using only the table; prove inactive and below-threshold records are absent.
-- [ ] Expose the C3 HTTP and MCP operations through the existing D26 principal verification, with bounded request/response schemas and safe error envelopes.
+- [ ] Expose the C3 HTTP and MCP operations through the existing authentication principal verification, with bounded request/response schemas and safe error envelopes.
 - [ ] Run focused service tests, complete workspace check/typecheck/build, and PostgreSQL integration tests.
 - [ ] Commit as `feat(memory): serve shared facts from PostgreSQL`.
 
