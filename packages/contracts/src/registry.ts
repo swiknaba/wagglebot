@@ -22,7 +22,7 @@ export const CredentialSourceSchema = z.discriminatedUnion("from", [
 ]);
 
 const bearerScheme = z.object({ kind: z.literal("bearer") }).strict();
-const basicScheme = z.object({ kind: z.literal("basic") }).strict();
+const basicScheme = z.object({ kind: z.literal("basic"), username: z.string().min(1).max(256) }).strict();
 const noneScheme = z.object({ kind: z.literal("none") }).strict();
 const headerScheme = z
   .object({ kind: z.literal("header"), name: z.string().min(1).max(256), prefix: z.string().max(256).optional() })

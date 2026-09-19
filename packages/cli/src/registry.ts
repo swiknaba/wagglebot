@@ -62,13 +62,8 @@ function validateAuth(file: string, ns: string, mode: ProxyConfig["mode"], auth:
     if (scheme.prefix !== undefined && typeof scheme.prefix !== "string")
       fail(file, ns, "auth.scheme.prefix must be a string");
   }
-  if (kind === "basic" && scheme.username !== undefined) {
-    fail(
-      file,
-      ns,
-      'auth.scheme.username is not used — put the base64 value of "username:password" in the variable that auth.source.var names',
-    );
-  }
+  if (kind === "basic" && (typeof scheme.username !== "string" || scheme.username === ""))
+    fail(file, ns, 'auth.scheme.username is required for kind "basic"');
   if (kind === "env" && !isStringRecord(scheme.map))
     fail(file, ns, 'auth.scheme.map must be a mapping of strings for kind "env"');
   if (from === "env" && (typeof source.var !== "string" || source.var === ""))

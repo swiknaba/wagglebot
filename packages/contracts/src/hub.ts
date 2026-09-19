@@ -32,11 +32,12 @@ export const HubConfigSchema = z
 
 export const DiscoveryStateSchema = z
   .object({
-    status: z.enum(["ready", "empty", "error"]),
+    status: z.enum(["unknown", "refreshing", "ready", "empty", "error"]),
     toolCount: z.number().int().nonnegative().max(10_000),
     tools: z.array(z.unknown()).max(10_000),
     lastAttemptAt: z.string().datetime({ offset: true }).nullable(),
     lastSuccessAt: z.string().datetime({ offset: true }).nullable(),
+    lastDiscoveryError: z.string().max(1024).nullable(),
     consecutiveFailures: z.number().int().nonnegative().max(1000),
     nextRetryAt: z.string().datetime({ offset: true }).nullable(),
   })

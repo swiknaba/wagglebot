@@ -28,6 +28,17 @@ test("rejects literal credentials and unknown fields", () => {
   expect(ProxyConfigSchema.safeParse({ ...validProxy, unexpected: true }).success).toBe(false);
 });
 
+test("requires a username for basic upstream authentication", () => {
+  expect(
+    ProxyConfigSchema.safeParse({
+      namespace: "example",
+      mode: "remote_http",
+      endpoint: "https://mcp.example.com/mcp",
+      auth: { scheme: { kind: "basic" }, source: { from: "env", var: "EXAMPLE_TOKEN" } },
+    }).success,
+  ).toBe(false);
+});
+
 test("registry snapshots contain revision and no resolved credential value", () => {
   const snapshot = {
     schemaVersion: 1 as const,

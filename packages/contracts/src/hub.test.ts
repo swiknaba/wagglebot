@@ -17,15 +17,16 @@ test("hub config requires a registry source", () => {
       .success,
   ).toBe(false);
 });
-test("CodeMode rejects traversal and discovery state is bounded", () => {
+test("CodeMode rejects traversal and discovery state models the scheduler lifecycle", () => {
   expect(CodeModeExecuteInputSchema.safeParse({ tool: "../../secrets", arguments: {} }).success).toBe(false);
   expect(
     DiscoveryStateSchema.safeParse({
-      status: "ready",
-      toolCount: 2,
+      status: "unknown",
+      toolCount: 0,
       tools: [],
       lastAttemptAt: null,
-      lastSuccessAt: "2026-09-12T12:00:00.000Z",
+      lastSuccessAt: null,
+      lastDiscoveryError: null,
       consecutiveFailures: 0,
       nextRetryAt: null,
     }).success,

@@ -75,7 +75,7 @@ test("codex maps a prefix-free header scheme to env_http_headers", () => {
   });
 });
 
-test("codex skips a header with a prefix, basic auth, and sse", () => {
+test("static harness renderers skip basic auth because they cannot encode a password placeholder", () => {
   const prefixed: ProxyConfig = {
     ...remote,
     auth: {
@@ -88,9 +88,17 @@ test("codex skips a header with a prefix, basic auth, and sse", () => {
   );
   const basic: ProxyConfig = {
     ...remote,
-    auth: { scheme: { kind: "basic" }, source: { from: "env", var: "API_KEY" } },
+    auth: { scheme: { kind: "basic", username: "alice" }, source: { from: "env", var: "API_KEY" } },
   };
-  expect(reasonOf(renderEntry("codex", basic))).toBe("Codex has no env-var mechanism for basic auth");
+  expect(reasonOf(renderEntry("claude", basic))).toBe(
+    "static harness configuration cannot encode Basic authentication from a password environment placeholder",
+  );
+  expect(reasonOf(renderEntry("gemini", basic))).toBe(
+    "static harness configuration cannot encode Basic authentication from a password environment placeholder",
+  );
+  expect(reasonOf(renderEntry("codex", basic))).toBe(
+    "static harness configuration cannot encode Basic authentication from a password environment placeholder",
+  );
   expect(reasonOf(renderEntry("codex", sse))).toBe("Codex documents no SSE transport");
 });
 

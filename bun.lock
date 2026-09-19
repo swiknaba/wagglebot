@@ -85,6 +85,7 @@
       "name": "@wagglebot/mcp-hub",
       "version": "0.0.0",
       "dependencies": {
+        "@modelcontextprotocol/sdk": "1.30.0",
         "@wagglebot/auth-protocol": "workspace:*",
         "@wagglebot/contracts": "workspace:*",
       },
