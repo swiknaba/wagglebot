@@ -10,6 +10,7 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.30.0",
     "@wagglebot/contracts": "workspace:*",
-    "@wagglebot/auth-protocol": "workspace:*"
+    "@wagglebot/auth-protocol": "workspace:*",
+    "yaml": "2.8.3"
   }
 }

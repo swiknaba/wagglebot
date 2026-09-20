@@ -13,26 +13,67 @@ type CodeModeOptions = {
   credentialFor?: (proxy: ProxyConfig) => Promise<ResolvedCredential | null>;
 };
 
+function isObject(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
 export class CodeMode {
   public constructor(private readonly options: CodeModeOptions) {}
 
-  public search(query: string): Array<{ tool: string; namespace: string; description: string }> {
-    if ([...query].length > 500) throw new Error("hub_invalid_request");
+  public search(
+    query: string,
+    namespace?: string,
+    limit = 10,
+  ): { schemaVersion: 1; results: Array<{ tool: string; namespace: string; description: string; score: number }> } {
+    if ([...query].length < 1 || [...query].length > 500 || !Number.isInteger(limit) || limit < 1 || limit > 20)
+      throw new Error("hub_invalid_request");
     const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
-    return this.options
+    if (terms.length === 0) throw new Error("hub_invalid_request");
+    const results = this.options
       .catalog()
-      .filter((tool) => terms.every((term) => `${tool.qualifiedName} ${tool.description}`.toLowerCase().includes(term)))
-      .slice(0, 20)
-      .map((tool) => ({ tool: tool.qualifiedName, namespace: tool.namespace, description: tool.description }));
+      .filter((tool) => namespace === undefined || tool.namespace === namespace)
+      .map((tool) => ({
+        tool,
+        score: terms.filter((term) => `${tool.qualifiedName} ${tool.description}`.toLowerCase().includes(term)).length,
+      }))
+      .filter(({ score }) => score === terms.length)
+      .sort(
+        (left, right) => right.score - left.score || left.tool.qualifiedName.localeCompare(right.tool.qualifiedName),
+      )
+      .slice(0, limit)
+      .map(({ tool, score }) => ({
+        tool: tool.qualifiedName,
+        namespace: tool.namespace,
+        description: tool.description,
+        score,
+      }));
+    return { schemaVersion: 1, results };
   }
 
-  public getSchema(tool: string): { tool: string; inputSchema: Record<string, unknown> } {
+  public getSchema(tool: string): {
+    schemaVersion: 1;
+    tool: string;
+    namespace: string;
+    description: string;
+    inputSchema: Record<string, unknown>;
+  } {
     const found = this.options.catalog().find((candidate) => candidate.qualifiedName === tool);
     if (!found) throw new Error("hub_tool_unavailable");
-    return { tool: found.qualifiedName, inputSchema: structuredClone(found.inputSchema) };
+    return {
+      schemaVersion: 1,
+      tool: found.qualifiedName,
+      namespace: found.namespace,
+      description: found.description,
+      inputSchema: structuredClone(found.inputSchema),
+    };
   }
 
-  public async execute(tool: string, args: Record<string, unknown>, signal: AbortSignal): Promise<CallToolResult> {
+  public async execute(
+    tool: string,
+    args: unknown,
+    signal: AbortSignal,
+  ): Promise<{ schemaVersion: 1; tool: string; namespace: string; result: CallToolResult }> {
+    if (!isObject(args)) throw new Error("hub_invalid_request");
     const found = this.options.catalog().find((candidate) => candidate.qualifiedName === tool);
     if (!found) throw new Error("hub_tool_unavailable");
     if (this.options.cache.state(found.namespace).status !== "ready") throw new Error("hub_namespace_unavailable");
@@ -45,6 +86,6 @@ export class CodeMode {
     );
     if (new TextEncoder().encode(JSON.stringify(result)).byteLength > 1024 * 1024)
       throw new Error("hub_response_too_large");
-    return result;
+    return { schemaVersion: 1, tool: found.qualifiedName, namespace: found.namespace, result };
   }
 }
