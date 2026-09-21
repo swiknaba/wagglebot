@@ -1,10 +1,12 @@
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
-import type { Exec } from "../exec";
+import { stripVTControlCharacters } from "node:util";
+import type { Exec, ExecResult } from "../exec";
+import { HARNESSES } from "../harness";
 import { type ListEntry, parseList, replaceListLine, VERSION_TAG } from "../lists";
 import type { Reporter } from "../report";
 import { loadSkillLock, skillsOfSource, staleSkills } from "../skill-lock";
-import { loadState, saveState } from "../state";
+import { clearManagedSkills, loadState, saveState } from "../state";
 
 // The floor check below reads process.version, and the invocation of the skills CLI runs
 // under process.execPath. Both name the same Node binary that runs wagglebot.
@@ -50,6 +52,13 @@ const isSha = (ref: string | undefined): boolean =>
   ref !== undefined && /^[0-9a-f]{7,40}$/i.test(ref) && /[a-f]/i.test(ref);
 const sameAgents = (a: string[] | undefined, b: string[]): boolean => JSON.stringify(a ?? null) === JSON.stringify(b);
 
+// Skills 1.5.23 can report removal or scan failures with exit code zero.
+const removalSucceeded = (result: ExecResult): boolean =>
+  result.code === 0 &&
+  !/Could not (?:remove skill from|scan directory) |Failed to remove \d+ skill\(s\)/.test(
+    stripVTControlCharacters(`${result.stdout}\n${result.stderr}`),
+  );
+
 // Highest tag by numeric comparison of "v1.2.3"-like names. Non-numeric tags sort last.
 const highestTag = (lsRemote: string): string | undefined =>
   lsRemote
@@ -76,11 +85,17 @@ export async function runInstallSkills(deps: {
   organization?: string[];
   nodeVersion?: string;
   update?: boolean;
+  overwriteLocal?: boolean;
   writeList?: (path: string, text: string) => void;
 }): Promise<number> {
   const { reporter, exec } = deps;
   reporter.section("Skills");
-  const agents = [...deps.skillsAgents].sort();
+  const agents = [...new Set(deps.skillsAgents)].sort();
+  const allowed = HARNESSES.flatMap((harness) => harness.skillsAgents);
+  if (agents.some((agent) => !allowed.includes(agent))) {
+    reporter.item("skills", "failed", "The selected skills adapter is not supported");
+    return 1;
+  }
   const parsed = deps.lists.map((l) => ({ ...l, ...parseList(l.text, { organization: deps.organization }) }));
   for (const l of parsed) for (const w of l.warnings) reporter.warn(`${l.path}: ${w}`);
 
@@ -122,7 +137,8 @@ export async function runInstallSkills(deps: {
   }
 
   const entries = parsed.flatMap((l) => l.entries);
-  if (entries.length === 0) {
+  const state = loadState(deps.managedFile);
+  if (entries.length === 0 && Object.keys(state.skills).length === 0 && !deps.overwriteLocal) {
     reporter.item("skills", "skipped", "no entries in any skills.list");
     return 0;
   }
@@ -149,16 +165,43 @@ export async function runInstallSkills(deps: {
     return 1;
   }
 
-  const state = loadState(deps.managedFile);
-  const next: Record<string, string[]> = {};
+  if (deps.overwriteLocal) {
+    for (const agent of agents) {
+      const result = await exec(process.execPath, [
+        skillsBin,
+        "remove",
+        "--skill",
+        "*",
+        "--global",
+        "--yes",
+        "--agent",
+        agent,
+      ]);
+      if (removalSucceeded(result)) {
+        clearManagedSkills(state, [agent]);
+        saveState(deps.managedFile, state);
+        reporter.item(agent, "updated", "Removed all global skills for this adapter");
+      } else reporter.item(agent, "failed", "Cannot remove global skills for this adapter");
+    }
+  }
+  const next: Record<string, string[]> = { ...state.skills };
   const agentFlags = agents.flatMap((a) => ["-a", a]);
   // The repo a raw list line names. Handles both "owner/repo@ref" and "<url> ref" forms.
   const repoOf = (raw: string): string => parseList(raw).entries[0]?.repo ?? raw;
 
-  const removeSkill = async (name: string, reason: string): Promise<void> => {
-    const result = await exec(process.execPath, [skillsBin, "remove", name, "-g", "-y", ...agentFlags]);
-    if (result.code === 0) reporter.item(name, "updated", `removed — ${reason}`);
+  const removeSkill = async (name: string, reason: string, selected = agents): Promise<boolean> => {
+    const result = await exec(process.execPath, [
+      skillsBin,
+      "remove",
+      name,
+      "-g",
+      "-y",
+      ...selected.flatMap((agent) => ["-a", agent]),
+    ]);
+    const removed = removalSucceeded(result);
+    if (removed) reporter.item(name, "updated", `removed — ${reason}`);
     else reporter.item(name, "failed", `skills remove failed — ${reason}`);
+    return removed;
   };
 
   for (const entry of entries) {
@@ -182,7 +225,12 @@ export async function runInstallSkills(deps: {
       reporter.item(entry.raw, "failed", reason ?? "skills add failed");
       continue;
     }
-    next[entry.raw] = agents;
+    for (const raw of Object.keys(next).filter((raw) => repoOf(raw) === entry.repo)) {
+      const kept = (next[raw] ?? []).filter((agent) => !agents.includes(agent));
+      if (kept.length === 0) delete next[raw];
+      else next[raw] = kept;
+    }
+    next[entry.raw] = [...new Set([...(next[entry.raw] ?? []), ...agents])].sort();
 
     const lock = loadSkillLock(deps.skillLockFile);
     const mine = skillsOfSource(lock, entry.repo);
@@ -207,15 +255,24 @@ export async function runInstallSkills(deps: {
 
   // A state entry that no list names any more. A pin bump (same repo, new ref) and a failed entry
   // are not stale: the first is reported as updated, the second as failed.
-  for (const raw of Object.keys(state.skills).filter((r) => !(r in next))) {
+  for (const raw of Object.keys(state.skills)) {
     if (entries.some((e) => e.raw === raw || e.repo === repoOf(raw))) continue;
+    const selected = (state.skills[raw] ?? []).filter((agent) => agents.includes(agent));
+    if (selected.length === 0 || deps.overwriteLocal) continue;
     const repo = repoOf(raw);
     const names = skillsOfSource(loadSkillLock(deps.skillLockFile), repo);
     if (names.length === 0) {
       reporter.item(raw, "ok", "no longer listed — nothing left to remove");
-      continue;
     }
-    for (const name of names) await removeSkill(name, `${repo} is no longer listed`);
+    let removed = true;
+    for (const name of names) {
+      if (!(await removeSkill(name, `${repo} is no longer listed`, selected))) removed = false;
+    }
+    if (removed) {
+      const kept = (next[raw] ?? []).filter((agent) => !selected.includes(agent));
+      if (kept.length === 0) delete next[raw];
+      else next[raw] = kept;
+    }
   }
   state.skills = next;
   saveState(deps.managedFile, state);
