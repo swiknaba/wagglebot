@@ -5,6 +5,10 @@ export type WagglePaths = {
   managedFile: string;
   backupsDir: string;
   agentsCacheDir: string;
+  configFile: string;
+  companyDir: string;
+  activeCompanyDir: string;
+  runtimeDir: string;
 };
 
 export function resolvePaths(home: string): WagglePaths {
@@ -14,5 +18,9 @@ export function resolvePaths(home: string): WagglePaths {
     managedFile: join(stateDir, "managed.json"),
     backupsDir: join(stateDir, "backups"),
     agentsCacheDir: join(stateDir, "agents-cache"),
+    configFile: join(stateDir, "config.json"),
+    companyDir: join(stateDir, "company"),
+    activeCompanyDir: join(stateDir, "company", "active"),
+    runtimeDir: join(stateDir, "runtime"),
   };
 }
