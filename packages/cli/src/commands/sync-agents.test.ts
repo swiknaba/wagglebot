@@ -30,6 +30,16 @@ test("writes every template target inside a managed block, chmod 600", () => {
   expect(statSync(join(home, ".claude/settings.json")).mode & 0o777).toBe(0o600);
 });
 
+test("the shared base prompt offers a requirements interview for substantial unspecced work", () => {
+  const { home, instructionsDir } = setup();
+  runSyncAgents({ home, harnesses: HARNESSES, instructionDirs: [instructionsDir], reporter: quiet() });
+
+  const claude = readFileSync(join(home, ".claude/CLAUDE.md"), "utf8");
+  expect(claude).toContain("## Requirements Interviews");
+  expect(claude).toContain("offer a requirements interview");
+  expect(claude).toContain("use the `brainstorming` skill");
+});
+
 test("second run reports every item ok and changes nothing", () => {
   const { home, instructionsDir } = setup();
   runSyncAgents({ home, harnesses: HARNESSES, instructionDirs: [instructionsDir], reporter: quiet() });

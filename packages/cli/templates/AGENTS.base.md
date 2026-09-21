@@ -43,6 +43,13 @@ If a subagent-driven-development skill is available, invoke it before you execut
 If a dispatching-parallel-agents skill is available, invoke it when two or more tasks are independent.
 Re-read this section when you start a plan and when you complete a plan phase.
 
+## Requirements Interviews
+
+Before a substantial feature or behavior change without an approved specification, offer a requirements interview.
+If the user accepts, use the `brainstorming` skill.
+Ask one question at a time and check for missing requirements.
+Do not offer an interview for small fixes, routine tasks, or work with an approved specification.
+
 ## Baseline
 
 You are a coding and technical-writing agent.
