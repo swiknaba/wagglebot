@@ -734,6 +734,8 @@ skills ls --global --agent <adapter> --json
 
 Require exit code zero for each declared adapter. Also require a nonzero exit for one invalid control identifier. This proves the real dependency accepts the adapter names.
 
+This exact invocation was verified against the installed `skills` 1.5.23 package on 2026-09-21. Recheck the command if the pinned package version changes.
+
 For custom agents, test all declared `subagentDirs`. Default mode removes only state-owned stale files. Overwrite mode removes the exact dedicated agent directories, recreates them, installs the effective set, and creates no backup.
 
 Assert that Codex and Cline report custom agents as unsupported. Other supported work for those harnesses must continue.
