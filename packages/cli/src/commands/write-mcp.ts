@@ -1,10 +1,11 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { parse as parseToml } from "smol-toml";
 import type { BackupSet } from "../backup";
 import { startBackupSet } from "../backup";
 import type { Harness, McpTarget } from "../harness";
 import { MARKERS, removeManagedBlock, renderManagedBlock } from "../managed-block";
-import { hasJsonComments, mergeManagedSection } from "../managed-json";
+import { hasJsonComments, mergeManagedSection, replaceJsonCategory } from "../managed-json";
 import { envVarNames, renderEntry, renderTomlTables } from "../mcp-dialects";
 import { resolvePaths } from "../paths";
 import type { ProxyConfig } from "../registry";
@@ -41,6 +42,68 @@ const definesTable = (text: string, table: string, namespace: string): boolean =
   return new RegExp(`^\\s*\\[${escapeRegExp(table)}\\.(?:${key}|"${key}"|'${key}')\\]`, "m").test(text);
 };
 
+// Remove category tables without a TOML rewrite. Quotes and arrays can contain text that resembles a table.
+function removeTomlCategory(text: string, table: string): string {
+  try {
+    parseToml(text);
+  } catch {
+    throw new Error("The file contains invalid TOML. The writer did not change the file.");
+  }
+  const key = String.raw`(?:[A-Za-z0-9_-]+|"(?:\\.|[^"\\])*"|'[^']*')`;
+  const header = new RegExp(`^\\s*\\[\\[?\\s*(${key})(?:\\s*\\.\\s*${key})*\\s*\\]\\]?\\s*(?:#.*)?$`);
+  const assignment = new RegExp(`^\\s*(${key})(?:\\s*\\.\\s*${key})*\\s*=`);
+  const keyName = (root: string): string => {
+    if (root.startsWith("'")) return root.slice(1, -1);
+    if (!root.startsWith('"')) return root;
+    // TOML also accepts eight-digit Unicode escapes in basic keys.
+    const jsonKey = root.replace(/\\(?:U([0-9a-fA-F]{8})|.)/g, (escaped, code: string | undefined) =>
+      code === undefined ? escaped : JSON.stringify(String.fromCodePoint(Number.parseInt(code, 16))).slice(1, -1),
+    );
+    return JSON.parse(jsonKey);
+  };
+  let quote = "";
+  let multiline = false;
+  let depth = 0;
+  let discard = false;
+  let discardValue = false;
+  let atRoot = true;
+  const kept: string[] = [];
+  for (const line of text.match(/[^\n]*\n|[^\n]+$/g) ?? []) {
+    if (quote === "" && depth === 0) {
+      const assignedRoot = atRoot ? assignment.exec(line)?.[1] : undefined;
+      discardValue = assignedRoot !== undefined && keyName(assignedRoot) === table;
+    }
+    if (quote === "" && depth === 0 && [TOML_BLOCK_BEGIN, TOML_BLOCK_END].includes(line.trim())) continue;
+    const root = quote === "" && depth === 0 ? header.exec(line.trimEnd())?.[1] : undefined;
+    if (root !== undefined) {
+      atRoot = false;
+      discard = keyName(root) === table;
+    } else {
+      for (let i = 0; i < line.length; i += 1) {
+        const char = line[i];
+        if (quote !== "") {
+          if (quote === '"' && char === "\\") i += 1;
+          else if (multiline && line.startsWith(quote.repeat(3), i)) {
+            while (line[i + 1] === quote) i += 1;
+            quote = "";
+            multiline = false;
+          } else if (!multiline && char === quote) quote = "";
+        } else if (char === "#") break;
+        else if (char === '"' || char === "'") {
+          quote = char;
+          multiline = line.startsWith(char.repeat(3), i);
+          if (multiline) i += 2;
+        } else if (char === "[" || char === "{") depth += 1;
+        else if (char === "]" || char === "}") depth -= 1;
+      }
+    }
+    if (!discard && !discardValue) kept.push(line);
+  }
+  if (quote !== "" || depth !== 0)
+    throw new Error("The TOML contains an incomplete string or array. The writer did not change the file.");
+  return kept.join("");
+}
+
 // Every ${VAR} the written config will expand. Missing ones are reported, never guessed.
 export function missingEnvVars(proxies: ProxyConfig[], env: NodeJS.ProcessEnv): string[] {
   const names = new Set<string>();
@@ -57,6 +120,7 @@ function writeJsonTarget(deps: {
   backups: BackupSet;
   state: ManagedState;
   managedFile: string;
+  overwrite: boolean;
 }): void {
   const { target, path, reporter, state } = deps;
   const entries = Object.fromEntries(deps.rendered.map((r) => [r.namespace, r.entry]));
@@ -64,7 +128,7 @@ function writeJsonTarget(deps: {
   const previouslyOwned = (state.jsonKeys[path] ?? [])
     .filter((k) => k.startsWith(prefix))
     .map((k) => k.slice(prefix.length));
-  if (Object.keys(entries).length === 0 && previouslyOwned.length === 0) {
+  if (Object.keys(entries).length === 0 && previouslyOwned.length === 0 && !(deps.overwrite && existsSync(path))) {
     reporter.item(target.path, "skipped", deps.emptyReason);
     return;
   }
@@ -79,16 +143,18 @@ function writeJsonTarget(deps: {
     );
     return;
   }
-  const result = mergeManagedSection(existing, target.parentKey, entries, previouslyOwned);
-  const written = commitTarget({
+  const result = deps.overwrite
+    ? { ...replaceJsonCategory(existing, target.parentKey, entries), ownedNow: Object.keys(entries) }
+    : mergeManagedSection(existing, target.parentKey, entries, previouslyOwned);
+  commitTarget({
     path,
     label: target.path,
     result,
     detail: `${result.ownedNow.length} managed entries`,
     reporter,
     backups: deps.backups,
+    overwrite: deps.overwrite,
   });
-  if (!written) return;
   state.jsonKeys[path] = [
     ...(state.jsonKeys[path] ?? []).filter((k) => !k.startsWith(prefix)),
     ...result.ownedNow.map((k) => `${prefix}${k}`),
@@ -106,11 +172,13 @@ function writeTomlTarget(deps: {
   emptyReason: string;
   reporter: Reporter;
   backups: BackupSet;
+  overwrite: boolean;
 }): void {
   const { harness, target, path, reporter } = deps;
   const existing = existsSync(path) ? readFileSync(path, "utf8") : "";
   const foreign = outsideBlock(existing);
   const kept = deps.rendered.filter(({ namespace }) => {
+    if (deps.overwrite) return true;
     if (!definesTable(foreign, target.table, namespace)) return true;
     reporter.item(
       `${namespace} (${harness.name})`,
@@ -119,16 +187,23 @@ function writeTomlTarget(deps: {
     );
     return false;
   });
-  if (kept.length === 0 && !existing.includes(TOML_BLOCK_BEGIN)) {
+  if (kept.length === 0 && !existing.includes(TOML_BLOCK_BEGIN) && !deps.overwrite) {
     // A conflict already produced its failed line. Only an entry that no dialect rendered needs
     // the extra explanation.
     if (deps.rendered.length === 0) reporter.item(target.path, "skipped", deps.emptyReason);
     return;
   }
-  const result =
-    kept.length === 0
-      ? removeManagedBlock(existing, "hash")
-      : renderManagedBlock(existing, renderTomlTables(target.table, kept), "hash");
+  const content = renderTomlTables(target.table, kept);
+  let next: string;
+  if (deps.overwrite) {
+    const base = removeTomlCategory(existing, target.table);
+    const separator = base === "" || base.endsWith("\n") ? "" : "\n\n";
+    next = kept.length === 0 ? base : `${base}${separator}${renderManagedBlock("", content, "hash").next}`;
+  } else {
+    next = (kept.length === 0 ? removeManagedBlock(existing, "hash") : renderManagedBlock(existing, content, "hash"))
+      .next;
+  }
+  const result = { next, changed: next !== existing };
   // No chmod: the file belongs to the harness, and the block carries no secret.
   commitTarget({
     path,
@@ -137,6 +212,7 @@ function writeTomlTarget(deps: {
     detail: `${kept.length} managed entries`,
     reporter,
     backups: deps.backups,
+    overwrite: deps.overwrite,
   });
 }
 
@@ -149,12 +225,13 @@ function commitTarget(deps: {
   detail: string;
   reporter: Reporter;
   backups: BackupSet;
+  overwrite: boolean;
 }): boolean {
   if (!deps.result.changed) {
     deps.reporter.item(deps.label, "ok", "already ok");
     return false;
   }
-  deps.backups.backup(deps.path);
+  if (!deps.overwrite) deps.backups.backup(deps.path);
   mkdirSync(dirname(deps.path), { recursive: true });
   writeFileSync(deps.path, deps.result.next);
   deps.reporter.item(deps.label, "updated", deps.detail);
@@ -168,6 +245,7 @@ export function runWriteMcp(deps: {
   env: NodeJS.ProcessEnv;
   reporter: Reporter;
   backups?: BackupSet;
+  overwrite?: boolean;
 }): number {
   const { home, proxies, reporter } = deps;
   const paths = resolvePaths(home);
@@ -207,7 +285,16 @@ export function runWriteMcp(deps: {
             ? "no MCP servers in the registry — file not created"
             : "no MCP server can be written for this harness — every entry was skipped above — file not created";
         if (mcpTarget.format === "toml") {
-          writeTomlTarget({ harness, target: mcpTarget, path, rendered, emptyReason, reporter, backups });
+          writeTomlTarget({
+            harness,
+            target: mcpTarget,
+            path,
+            rendered,
+            emptyReason,
+            reporter,
+            backups,
+            overwrite: deps.overwrite ?? false,
+          });
         } else {
           writeJsonTarget({
             target: mcpTarget,
@@ -218,6 +305,7 @@ export function runWriteMcp(deps: {
             backups,
             state,
             managedFile: paths.managedFile,
+            overwrite: deps.overwrite ?? false,
           });
         }
       } catch (error) {

@@ -2,6 +2,18 @@ import { expect, test } from "bun:test";
 import * as managedJson from "./managed-json";
 import { hasJsonComments, mergeHooks, mergeManagedSection } from "./managed-json";
 
+test("replaceJsonCategory clears all MCP entries and preserves unrelated settings", () => {
+  const original = JSON.stringify({
+    theme: "dark",
+    hooks: { custom: [1] },
+    mcpServers: { foreign: { command: "old" } },
+  });
+  const result = managedJson.replaceJsonCategory(original, "mcpServers", {});
+  expect(JSON.parse(result.next)).toEqual({ theme: "dark", hooks: { custom: [1] }, mcpServers: {} });
+  expect(result.changed).toBe(true);
+  expect(managedJson.replaceJsonCategory(result.next, "mcpServers", {}).changed).toBe(false);
+});
+
 test("replaceJsonCategory replaces all hooks and preserves unrelated settings", () => {
   expect(typeof managedJson.replaceJsonCategory).toBe("function");
   const existing = JSON.stringify({ theme: "dark", model: "test", keybindings: ["ctrl+k"], hooks: { Old: [1] } });
