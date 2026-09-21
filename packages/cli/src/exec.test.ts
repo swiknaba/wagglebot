@@ -28,3 +28,14 @@ test("realExec runs in the given cwd", async () => {
   const result = await realExec(process.execPath, ["-e", "process.stdout.write(process.cwd())"], { cwd: "/" });
   expect(result.stdout).toBe("/");
 });
+
+test("realExec passes an optional environment override to the command", async () => {
+  const result = await realExec(
+    process.execPath,
+    ["-e", "process.stdout.write(process.env.WAGGLEBOT_EXEC_TEST ?? '')"],
+    {
+      env: { WAGGLEBOT_EXEC_TEST: "present" },
+    },
+  );
+  expect(result.stdout).toBe("present");
+});
