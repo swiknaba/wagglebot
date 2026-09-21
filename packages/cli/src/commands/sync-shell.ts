@@ -48,11 +48,11 @@ export function runSyncShell(deps: {
   home: string;
   companyRoot: string;
   reporter: Reporter;
-  backups?: BackupSet;
+  backups?: BackupSet | false;
   env?: Record<string, string | undefined>;
 }): number {
   const { home, reporter } = deps;
-  const backups = deps.backups ?? startBackupSet(resolvePaths(home).backupsDir);
+  const backups = deps.backups === false ? undefined : (deps.backups ?? startBackupSet(resolvePaths(home).backupsDir));
   reporter.section("Shell environment");
   if (!existsSync(join(deps.companyRoot, SCRIPT))) {
     reporter.item(
@@ -74,7 +74,7 @@ export function runSyncShell(deps: {
         reporter.item(file, "ok", "already ok");
         continue;
       }
-      backups.backup(target);
+      backups?.backup(target);
       writeFileSync(target, result.next);
       reporter.item(file, "updated", "synced — open a new terminal to load .env.credentials");
     } catch (error) {

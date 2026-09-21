@@ -237,7 +237,8 @@ export async function runInstallSkills(deps: {
     const added = mine.filter((name) => !known.includes(name));
     const wasKnown = Object.keys(state.skills).some((raw) => repoOf(raw) === entry.repo);
     const detail = `agents: ${agents.join(", ")}${added.length === 0 ? "" : `; new: ${added.join(", ")}`}`;
-    const moved = added.length > 0 || !sameAgents(state.skills[entry.raw], agents);
+    const selectedBefore = state.skills[entry.raw]?.filter((agent) => agents.includes(agent)).sort();
+    const moved = added.length > 0 || !sameAgents(selectedBefore, agents);
     if (!wasKnown) reporter.item(entry.raw, "installed", detail);
     else if (moved) reporter.item(entry.raw, "updated", detail);
     else reporter.item(entry.raw, "ok", "already installed");

@@ -117,7 +117,7 @@ function writeJsonTarget(deps: {
   rendered: Entry[];
   emptyReason: string;
   reporter: Reporter;
-  backups: BackupSet;
+  backups: BackupSet | undefined;
   state: ManagedState;
   managedFile: string;
   overwrite: boolean;
@@ -171,7 +171,7 @@ function writeTomlTarget(deps: {
   rendered: Entry[];
   emptyReason: string;
   reporter: Reporter;
-  backups: BackupSet;
+  backups: BackupSet | undefined;
   overwrite: boolean;
 }): void {
   const { harness, target, path, reporter } = deps;
@@ -224,14 +224,14 @@ function commitTarget(deps: {
   result: { next: string; changed: boolean };
   detail: string;
   reporter: Reporter;
-  backups: BackupSet;
+  backups: BackupSet | undefined;
   overwrite: boolean;
 }): boolean {
   if (!deps.result.changed) {
     deps.reporter.item(deps.label, "ok", "already ok");
     return false;
   }
-  if (!deps.overwrite) deps.backups.backup(deps.path);
+  if (!deps.overwrite) deps.backups?.backup(deps.path);
   mkdirSync(dirname(deps.path), { recursive: true });
   writeFileSync(deps.path, deps.result.next);
   deps.reporter.item(deps.label, "updated", deps.detail);
@@ -250,7 +250,7 @@ export function runWriteMcp(deps: {
   const { home, proxies, reporter } = deps;
   const paths = resolvePaths(home);
   const state = loadState(paths.managedFile);
-  const backups = deps.backups ?? startBackupSet(paths.backupsDir);
+  const backups = deps.overwrite ? undefined : (deps.backups ?? startBackupSet(paths.backupsDir));
   reporter.section("MCP configs");
 
   for (const name of missingEnvVars(proxies, deps.env)) {

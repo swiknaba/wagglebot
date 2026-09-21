@@ -1,50 +1,48 @@
 import { expect, test } from "bun:test";
-import { loadCatalog } from "./catalog";
 import type { Exec } from "./exec";
 import { getUsername } from "./identity";
 
-const catalog = loadCatalog(
-  `kind: Group\nmetadata: { name: t }\nspec: { members: [alice] }\n---\nkind: User\nmetadata: { name: alice }\nspec: { memberOf: [t] }\n`,
-  "catalog.yaml",
-);
+test("a failed username write fails identity collection", async () => {
+  const exec: Exec = async (_cmd, args) => ({
+    code: args.length === 3 ? 1 : 2,
+    stdout: "",
+    stderr: "Cannot write Git config",
+  });
+  await expect(getUsername(exec, async () => "alice")).rejects.toThrow("Cannot store");
+});
 
-const fakeExec =
-  (stored: string, writes: string[][]): Exec =>
-  async (_cmd, args) => {
-    if (args.includes("wagglebot.username") && args.length === 3)
-      return { code: stored === "" ? 1 : 0, stdout: `${stored}\n`, stderr: "" };
+test("a Git config read failure does not prompt or replace the value", async () => {
+  const exec: Exec = async () => ({ code: 2, stdout: "", stderr: "Invalid Git config" });
+  await expect(
+    getUsername(exec, async () => {
+      throw new Error("Unexpected prompt");
+    }),
+  ).rejects.toThrow("Cannot read");
+});
+
+test("returns a stored username without a catalog or prompt", async () => {
+  const exec: Exec = async () => ({ code: 0, stdout: " ghost\n", stderr: "" });
+  expect(
+    await getUsername(exec, async () => {
+      throw new Error("Unexpected prompt");
+    }),
+  ).toBe("ghost");
+});
+
+test("prompts once and stores the answer without a catalog", async () => {
+  const writes: string[][] = [];
+  let prompts = 0;
+  const exec: Exec = async (_cmd, args) => {
+    if (args.length === 3) return { code: 1, stdout: "", stderr: "" };
     writes.push(args);
     return { code: 0, stdout: "", stderr: "" };
   };
-
-test("returns the stored username when it matches the catalog", async () => {
-  expect(await getUsername(fakeExec("alice", []), async () => "never", catalog)).toBe("alice");
-});
-
-test("asks once, validates, and stores on first run", async () => {
-  const writes: string[][] = [];
-  expect(await getUsername(fakeExec("", writes), async () => " alice ", catalog)).toBe("alice");
+  expect(
+    await getUsername(exec, async () => {
+      prompts += 1;
+      return " alice ";
+    }),
+  ).toBe("alice");
+  expect(prompts).toBe(1);
   expect(writes).toEqual([["config", "--global", "wagglebot.username", "alice"]]);
-});
-
-test("rejects a non-matching answer with near matches", async () => {
-  await expect(getUsername(fakeExec("", []), async () => "alcie", catalog)).rejects.toThrow(/alice/);
-});
-
-test("rejects a stored value that no longer matches", async () => {
-  await expect(getUsername(fakeExec("ghost", []), async () => "n/a", catalog)).rejects.toThrow(/ghost/);
-});
-
-test("a rejected answer explains how to add the User entity", async () => {
-  const exec: Exec = async () => ({ code: 1, stdout: "", stderr: "" });
-  await expect(getUsername(exec, async () => "carol", catalog, { companyRoot: "/srv/co" })).rejects.toThrow(
-    /teams\/<your-team>\/catalog\.yaml.*\/srv\/co/s,
-  );
-});
-
-test("a rejected stored name explains how to change it", async () => {
-  const exec: Exec = async () => ({ code: 0, stdout: "ghost\n", stderr: "" });
-  await expect(getUsername(exec, async () => "", catalog)).rejects.toThrow(
-    /git config --global --unset wagglebot\.username/,
-  );
 });

@@ -15,9 +15,9 @@ import { runInstallAgents } from "./commands/install-agents";
 import { resolveSkillsBin, runInstallSkills } from "./commands/install-skills";
 import { runMcpHubApprove } from "./commands/mcp-hub-approve";
 import { runProjectUpdate } from "./commands/project-update";
+import { runUpdate } from "./commands/provision-company";
 import { restoreHarnesses, runSyncHarnesses } from "./commands/sync-harnesses";
 import { runSyncShell } from "./commands/sync-shell";
-import { runUpdate } from "./commands/update";
 import { runWriteMcp } from "./commands/write-mcp";
 import { assertTeamDirsKnown, findCompanyRoot, loadCompanyRepo } from "./company";
 import type { Exec } from "./exec";
@@ -72,7 +72,7 @@ async function companyContext(
     company,
     catalog.groups.map((g) => g.name),
   );
-  const username = await getUsername(exec, ask, catalog, { companyRoot: root });
+  const username = await getUsername(exec, ask);
   const teams = teamsOf(catalog, username);
   return { company, catalog, username, teams };
 }

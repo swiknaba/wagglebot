@@ -11,6 +11,16 @@ const companyRoot = () => mkdtempSync(join(tmpdir(), "wgl-company-"));
 // Every test pins $SHELL. The real value of the machine that runs the suite must not
 // decide which startup file sync-shell creates.
 const zsh = { SHELL: "/bin/zsh" };
+test("backups false replaces only the managed block without a backup", () => {
+  const h = home();
+  const company = companyRootWithScript();
+  writeFileSync(join(h, ".zshenv"), "export PERSONAL=yes\n# wagglebot:begin\nold\n# wagglebot:end\n");
+  expect(runSyncShell({ home: h, companyRoot: company, reporter: quiet(), env: zsh, backups: false })).toBe(0);
+  expect(readFileSync(join(h, ".zshenv"), "utf8")).toContain("export PERSONAL=yes");
+  expect(readFileSync(join(h, ".zshenv"), "utf8")).toContain(company);
+  expect(readFileSync(join(h, ".zshenv"), "utf8")).not.toContain("\nold\n");
+  expect(existsSync(join(h, ".wagglebot/backups"))).toBe(false);
+});
 const bash = { SHELL: "/bin/bash" };
 // A company root that carries the shipped shell script, the way `yarn install` leaves it.
 const companyRootWithScript = () => {
