@@ -36,7 +36,10 @@
 - Modify: `packages/company-config/package.json`
 - Modify: `packages/company-config/src/company.ts`
 - Modify: `packages/company-config/src/index.ts`
+- Modify: `packages/cli/src/company.ts`
 - Modify: `packages/cli/src/company.test.ts`
+- Modify: `packages/cli/src/index.ts`
+- Modify: `packages/cli/src/commands/update.ts`
 - Modify: `packages/cli/src/project-root.ts`
 - Modify: `packages/cli/src/project-root.test.ts`
 
@@ -94,16 +97,20 @@ Add `yaml` as a direct dependency of `@wagglebot/company-config`. Parse the mark
 
 Do not validate team names in this loader. Catalog validation belongs to the later company-context step.
 
+Re-export the new types and functions through `packages/cli/src/company.ts`. Keep `findCompanyRoot` and `assertTeamDirsKnown` as compatibility exports until Task 10.
+
+Adapt the two current company callers to the optional `company.catalog` shape. Preserve their current catalog-required behavior until Task 10 adds company-only fallback behavior.
+
 - [ ] **Step 4: Verify the task**
 
-Run: `bun test packages/cli/src/company.test.ts packages/cli/src/project-root.test.ts && bun run typecheck`
+Run: `bun test packages/cli/src/company.test.ts packages/cli/src/project-root.test.ts && bun run check && bun run typecheck`
 
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
 
 ```sh
-git add packages/company-config/package.json packages/company-config/src/company.ts packages/company-config/src/index.ts packages/cli/src/company.test.ts packages/cli/src/project-root.ts packages/cli/src/project-root.test.ts bun.lock
+git add packages/company-config/package.json packages/company-config/src/company.ts packages/company-config/src/index.ts packages/cli/src/company.ts packages/cli/src/company.test.ts packages/cli/src/index.ts packages/cli/src/commands/update.ts packages/cli/src/project-root.ts packages/cli/src/project-root.test.ts bun.lock
 git commit -m "Detect marked company repositories"
 ```
 
@@ -191,7 +198,7 @@ Use `writeFileAtomic` for the config and apply mode `0600`. Store no credential 
 
 - [ ] **Step 4: Verify the task**
 
-Run: `bun test packages/cli/src/company-url.test.ts packages/cli/src/commands/connect.test.ts packages/cli/src/paths.test.ts && bun run typecheck`
+Run: `bun test packages/cli/src/company-url.test.ts packages/cli/src/commands/connect.test.ts packages/cli/src/paths.test.ts && bun run check && bun run typecheck`
 
 Expected: PASS.
 
@@ -430,7 +437,7 @@ Also assert the new targets:
 | Devin | `.config/devin/AGENTS.md`, `.codeium/windsurf/memories/global_rules.md` | `devin`, `windsurf` | `.config/devin/agents` | `.config/devin/config.json`, `.codeium/windsurf/hooks.json` | `.config/devin/mcp_config.json`, `.codeium/windsurf/mcp_config.json` |
 | Kiro | `.kiro/steering/AGENTS.md` | `kiro-cli` | `.kiro/agents` | `.kiro/hooks/wagglebot.json` | `.kiro/settings/mcp.json` |
 
-All three use root `AGENTS.md` for project instructions.
+Cursor, Devin, and Kiro use root `AGENTS.md` for project instructions.
 
 - [ ] **Step 2: Run the focused test**
 
@@ -462,7 +469,7 @@ export type McpDialect =
 
 - [ ] **Step 4: Verify the task**
 
-Run: `bun test packages/cli/src/harness.test.ts && bun run typecheck`
+Run: `bun test packages/cli/src/harness.test.ts && bun run check && bun run typecheck`
 
 Expected: PASS.
 
@@ -481,6 +488,8 @@ git commit -m "Support nine harness capability adapters"
 
 - Rename: `packages/cli/src/commands/sync-project.ts` to `packages/cli/src/commands/project-update.ts`
 - Rename: `packages/cli/src/commands/sync-project.test.ts` to `packages/cli/src/commands/project-update.test.ts`
+- Modify: `packages/cli/src/index.ts`
+- Modify: `packages/cli/src/help.ts`
 - Create: `packages/cli/src/commands/project-init.ts`
 - Create: `packages/cli/src/commands/project-init.test.ts`
 - Create: `packages/cli/templates/agent-changelog.md`
@@ -522,6 +531,7 @@ Cover these cases:
 - Root `AGENTS.md` serves Codex, Junie, Cline, Cursor, Devin, and Kiro.
 - Claude, Gemini, and Copilot keep their existing vendor targets.
 - Personal text outside each managed block survives.
+- Memory, changelog, and `.agents/subagents/` text never appears in a published instruction target.
 
 Use this changelog template:
 
@@ -543,6 +553,8 @@ Make `runProjectUpdate` create only missing memory and changelog files before it
 
 Make `runProjectInit` require a Git repository. Create missing files only, then call `runProjectUpdate`.
 
+Update router and help imports when the module and constant names change. Preserve the existing `sync-project` route. Task 11 makes it a hidden alias.
+
 Add an `## Agent Changelog` section to `AGENTS.base.md`. Require concise dated bullets after durable changes. Exclude research, failed attempts, and no-change sessions. Remove the Phase 2 `## Local Repository Brain` section from the Phase 1 base template. Keep the direct `.agents/memory.md` contract.
 
 Update the repository onboarding skill. It must ask for the component owner and system before it writes `catalog-info.yaml`. It must not guess either value from a directory or Git remote.
@@ -556,7 +568,7 @@ Expected: PASS.
 - [ ] **Step 5: Commit**
 
 ```sh
-git add packages/cli/src/commands/project-update.ts packages/cli/src/commands/project-update.test.ts packages/cli/src/commands/project-init.ts packages/cli/src/commands/project-init.test.ts packages/cli/templates/agent-changelog.md packages/cli/templates/component-memory.md packages/cli/templates/AGENTS.base.md packages/cli/src/commands/sync-project.ts packages/cli/src/commands/sync-project.test.ts skills/onboarding-a-repository/SKILL.md packages/cli/e2e/first-party-skills.test.ts
+git add packages/cli/src/commands/project-update.ts packages/cli/src/commands/project-update.test.ts packages/cli/src/commands/project-init.ts packages/cli/src/commands/project-init.test.ts packages/cli/src/index.ts packages/cli/src/help.ts packages/cli/templates/agent-changelog.md packages/cli/templates/component-memory.md packages/cli/templates/AGENTS.base.md packages/cli/src/commands/sync-project.ts packages/cli/src/commands/sync-project.test.ts skills/onboarding-a-repository/SKILL.md packages/cli/e2e/first-party-skills.test.ts
 git commit -m "Add project initialization and updates"
 ```
 
@@ -568,6 +580,7 @@ git commit -m "Add project initialization and updates"
 
 - Rename: `packages/cli/src/commands/sync-agents.ts` to `packages/cli/src/commands/sync-harnesses.ts`
 - Rename: `packages/cli/src/commands/sync-agents.test.ts` to `packages/cli/src/commands/sync-harnesses.test.ts`
+- Modify: `packages/cli/src/index.ts`
 - Modify: `packages/cli/src/managed-json.ts`
 - Modify: `packages/cli/src/managed-json.test.ts`
 - Modify: `packages/cli/templates/hooks/claude-code.json`
@@ -605,6 +618,7 @@ Prove that default mode:
 - Writes Devin CLI hooks under the `hooks` key in `.config/devin/config.json`.
 - Writes Cascade hooks under `hooks.post_write_code`.
 - Writes the Kiro v1 owned file with `PostFileSave` and a Markdown matcher.
+- Reports hooks as unsupported for Codex, Junie, and Cline while their global instructions contain the same durable rules.
 - Continues when one target contains malformed JSON.
 
 Prove that overwrite mode:
@@ -647,6 +661,8 @@ Use these vendor mappings:
 
 In default mode, create one backup set for changed files. In overwrite mode, never create or call a backup set.
 
+Update the router import when the module name changes. Preserve the existing `sync-agents` route. Task 11 adds `sync-harnesses` and hides the alias.
+
 - [ ] **Step 4: Verify the task**
 
 Run: `bun test packages/cli/src/commands/sync-harnesses.test.ts packages/cli/src/managed-json.test.ts && bun run check && bun run typecheck`
@@ -656,7 +672,7 @@ Expected: PASS.
 - [ ] **Step 5: Commit**
 
 ```sh
-git add packages/cli/src/commands/sync-harnesses.ts packages/cli/src/commands/sync-harnesses.test.ts packages/cli/src/managed-json.ts packages/cli/src/managed-json.test.ts packages/cli/templates/hooks packages/cli/src/commands/sync-agents.ts packages/cli/src/commands/sync-agents.test.ts
+git add packages/cli/src/index.ts packages/cli/src/commands/sync-harnesses.ts packages/cli/src/commands/sync-harnesses.test.ts packages/cli/src/managed-json.ts packages/cli/src/managed-json.test.ts packages/cli/templates/hooks packages/cli/src/commands/sync-agents.ts packages/cli/src/commands/sync-agents.test.ts
 git commit -m "Synchronize instructions and hooks for nine harnesses"
 ```
 
@@ -672,6 +688,7 @@ git commit -m "Synchronize instructions and hooks for nine harnesses"
 - Modify: `packages/cli/src/commands/install-agents.test.ts`
 - Modify: `packages/cli/src/state.ts`
 - Modify: `packages/cli/src/state.test.ts`
+- Create: `packages/cli/e2e/skills-adapters.test.ts`
 
 **Interface changes:**
 
@@ -709,13 +726,23 @@ Test that overwrite mode runs this once per adapter before installation:
 [skillsBin, "remove", "--skill", "*", "--global", "--yes", "--agent", agent]
 ```
 
+In `skills-adapters.test.ts`, run the installed `skills` 1.5.23 binary against every adapter. Use a temporary `HOME` and this offline command:
+
+```sh
+skills ls --global --agent <adapter> --json
+```
+
+Require exit code zero for each declared adapter. Also require a nonzero exit for one invalid control identifier. This proves the real dependency accepts the adapter names.
+
 For custom agents, test all declared `subagentDirs`. Default mode removes only state-owned stale files. Overwrite mode removes the exact dedicated agent directories, recreates them, installs the effective set, and creates no backup.
+
+Assert that Codex and Cline report custom agents as unsupported. Other supported work for those harnesses must continue.
 
 Also test a clone failure followed by a successful local agent install. The command must finish all independent work and return failure.
 
 - [ ] **Step 2: Run the focused tests**
 
-Run: `bun test packages/cli/src/commands/install-skills.test.ts packages/cli/src/commands/install-agents.test.ts packages/cli/src/state.test.ts`
+Run: `bun test packages/cli/src/commands/install-skills.test.ts packages/cli/src/commands/install-agents.test.ts packages/cli/src/state.test.ts packages/cli/e2e/skills-adapters.test.ts`
 
 Expected: FAIL because the installers use singular adapters and have no overwrite mode.
 
@@ -729,14 +756,14 @@ Reset the matching managed state after the category clear. Continue with the nor
 
 - [ ] **Step 4: Verify the task**
 
-Run: `bun test packages/cli/src/commands/install-skills.test.ts packages/cli/src/commands/install-agents.test.ts packages/cli/src/state.test.ts && bun run check && bun run typecheck`
+Run: `bun test packages/cli/src/commands/install-skills.test.ts packages/cli/src/commands/install-agents.test.ts packages/cli/src/state.test.ts packages/cli/e2e/skills-adapters.test.ts && bun run check && bun run typecheck`
 
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
 
 ```sh
-git add packages/cli/src/commands/install-skills.ts packages/cli/src/commands/install-skills.test.ts packages/cli/src/commands/install-agents.ts packages/cli/src/commands/install-agents.test.ts packages/cli/src/state.ts packages/cli/src/state.test.ts
+git add packages/cli/src/commands/install-skills.ts packages/cli/src/commands/install-skills.test.ts packages/cli/src/commands/install-agents.ts packages/cli/src/commands/install-agents.test.ts packages/cli/src/state.ts packages/cli/src/state.test.ts packages/cli/e2e/skills-adapters.test.ts
 git commit -m "Install skills and agents across all harnesses"
 ```
 
@@ -828,6 +855,7 @@ git commit -m "Write safe MCP configs for nine harnesses"
 - Create: `packages/cli/src/company-context.test.ts`
 - Rename: `packages/cli/src/commands/update.ts` to `packages/cli/src/commands/provision-company.ts`
 - Rename: `packages/cli/src/commands/update.test.ts` to `packages/cli/src/commands/provision-company.test.ts`
+- Modify: `packages/cli/src/index.ts`
 - Modify: `packages/cli/src/commands/sync-shell.ts`
 - Modify: `packages/cli/src/commands/sync-shell.test.ts`
 
@@ -904,6 +932,8 @@ The summary must count and name `ok`, `updated`, `skipped`, `warned`, and `faile
 
 Let `runSyncShell` accept `backups: false`. In that mode, update only its managed block and never initialize a backup set. Company overwrite mode must pass this value.
 
+Update the router import when the command module name changes. Preserve the public `update` command name.
+
 - [ ] **Step 4: Verify the task**
 
 Run: `bun test packages/cli/src/identity.test.ts packages/cli/src/company-context.test.ts packages/cli/src/commands/provision-company.test.ts packages/cli/src/commands/sync-shell.test.ts && bun run check && bun run typecheck`
@@ -913,7 +943,7 @@ Expected: PASS.
 - [ ] **Step 5: Commit**
 
 ```sh
-git add packages/cli/src/identity.ts packages/cli/src/identity.test.ts packages/cli/src/company-context.ts packages/cli/src/company-context.test.ts packages/cli/src/commands/provision-company.ts packages/cli/src/commands/provision-company.test.ts packages/cli/src/commands/update.ts packages/cli/src/commands/update.test.ts packages/cli/src/commands/sync-shell.ts packages/cli/src/commands/sync-shell.test.ts
+git add packages/cli/src/identity.ts packages/cli/src/identity.test.ts packages/cli/src/company-context.ts packages/cli/src/company-context.test.ts packages/cli/src/index.ts packages/cli/src/commands/provision-company.ts packages/cli/src/commands/provision-company.test.ts packages/cli/src/commands/update.ts packages/cli/src/commands/update.test.ts packages/cli/src/commands/sync-shell.ts packages/cli/src/commands/sync-shell.test.ts
 git commit -m "Provision the stable company and team layers"
 ```
 
@@ -963,6 +993,7 @@ Also prove:
 - `connect <git-url>` works outside a Git repository.
 - `init --wagglebot [directory]` writes `wagglebot.yaml`.
 - Plain company `update` includes uncommitted working-tree files and does not refresh Git.
+- Plain company `update` uses the current CLI process and never installs or re-executes the repository pin.
 - `update --wagglebot` resolves URL precedence, refreshes cache, installs the pin, and re-executes once.
 - A failed refresh re-executes with `--source-failed`, provisions the stale cache, and returns failure.
 - A lower-level command with `--wagglebot` selects the active cache pin before it runs.
@@ -986,7 +1017,7 @@ Use these rules:
 
 1. Parse `connect` before any Git-root lookup.
 2. Parse `init --wagglebot` as company scaffold mode.
-3. For plain `update`, find the Git root once and inspect its marker.
+3. For plain `update` in a marked company repository, use the current process and working tree. Do not install or re-execute the pin.
 4. For `update --wagglebot`, refresh the cache before runtime selection.
 5. For hidden `--company-root`, skip refresh and runtime selection, then provision that validated root.
 6. For lower-level `--wagglebot`, use the active cache and its exact pin. Re-execute with that pinned runtime before the command runs.
@@ -1075,6 +1106,15 @@ Commit these fixture properties:
 Keep normal npm registry access in the dependency-install phase of CI. After install, run tests without a service, harness binary, LLM, or network fixture.
 
 Keep the Node.js 22 and 24 package smoke checks. Run the same built CLI artifact in both checks. Do not install or start any supported harness.
+
+Add explicit CI steps after `bun test`:
+
+```sh
+bun run regen:test-app
+git diff --exit-code -- test-app
+```
+
+These steps make fixture drift a named GitHub Actions gate instead of relying only on test discovery.
 
 - [ ] **Step 4: Verify the drift gate**
 
