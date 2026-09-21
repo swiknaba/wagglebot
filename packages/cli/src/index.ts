@@ -14,8 +14,8 @@ import { runInit } from "./commands/init";
 import { runInstallAgents } from "./commands/install-agents";
 import { resolveSkillsBin, runInstallSkills } from "./commands/install-skills";
 import { runMcpHubApprove } from "./commands/mcp-hub-approve";
+import { runProjectUpdate } from "./commands/project-update";
 import { runSyncAgents } from "./commands/sync-agents";
-import { runSyncProject } from "./commands/sync-project";
 import { runSyncShell } from "./commands/sync-shell";
 import { runUpdate } from "./commands/update";
 import { runWriteMcp } from "./commands/write-mcp";
@@ -281,7 +281,7 @@ export async function main(argv: string[], deps: CliDeps = { write: console.log 
       // identity, and no harness selection, because the repository is shared by engineers who use
       // different harnesses. Every supported project target is written. Git is the undo.
       parseArgs({ args: rest });
-      const code = runSyncProject({ cwd, reporter });
+      const code = runProjectUpdate({ cwd, reporter });
       deps.write(reporter.summary());
       return code;
     }

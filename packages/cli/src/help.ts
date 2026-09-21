@@ -1,4 +1,4 @@
-import { INSTRUCTIONS_DIR } from "./commands/sync-project";
+import { PROJECT_INSTRUCTIONS_DIR } from "./commands/project-update";
 import { SHELL_RC_FILES } from "./commands/sync-shell";
 import { HARNESSES } from "./harness";
 
@@ -77,7 +77,7 @@ const SECTIONS: Record<string, Section> = {
     title: "sync-project",
     purpose:
       "Publishes the instructions of the current repository to every supported harness. Reads the Git root from the current directory. Needs no company repository, no catalog, and no identity. Writes every harness target, because the repository is shared by engineers who use different harnesses. Content outside each managed block stays untouched. Removing every source file removes the managed blocks, and deletes a file that held nothing else. Every target is inside the repository, so git is the backup and the undo. Sizes are reported in UTF-8 bytes. Codex reads the root AGENTS.md under a default 32 KiB budget that global and nested files share, so a root file above that budget produces a warning.",
-    reads: [`<git root>/${INSTRUCTIONS_DIR}/*.md  (sorted by name, concatenated)`],
+    reads: [`<git root>/${PROJECT_INSTRUCTIONS_DIR}/*.md  (sorted by name, concatenated)`],
     writes: projectFiles(),
   },
   "sync-shell": {
