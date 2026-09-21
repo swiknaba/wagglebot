@@ -103,9 +103,32 @@ The bootstrap does not silently replace the global npm package.
 wagglebot connect <git-url>
 ```
 
-This command stores the company repository URL in
+This command stores an explicit company repository URL in
 `~/.wagglebot/config.json`. It stores no Git credential. Git uses the
-engineer's existing SSH or HTTPS authentication.
+engineer's existing SSH or HTTPS authentication. An engineer does not need to
+run this command when the installed package contains the correct company URL.
+
+The installed package can declare a default:
+
+```json
+{
+  "wagglebot": {
+    "companyRepository": "git@company.example:platform/mycompany-wagglebot.git"
+  }
+}
+```
+
+The official package uses this reserved `.example` value as documentation. The
+CLI treats a `.example` host as unset and never tries to fetch it. A company
+build replaces the value before it publishes the package to its internal
+registry. This needs no build-time environment variable.
+
+Resolve the company repository URL in this order:
+
+1. `WAGGLEBOT_COMPANY_REPOSITORY_URL`, as a temporary runtime override.
+2. The URL saved by `wagglebot connect`.
+3. `wagglebot.companyRepository` in the installed package.
+4. A clear error that asks the engineer to run `wagglebot connect`.
 
 ### Initialize a project
 
@@ -413,6 +436,7 @@ Automated coverage must include:
 - Partial harness failures and final exit codes.
 - Project memory and changelog initialization and preservation.
 - Company marker detection, explicit cached mode, and working-tree mode.
+- Company repository URL precedence and reserved `.example` handling.
 - First clone, cache refresh, invalid candidate, and stale-cache behavior.
 - Pinned runtime installation and execution.
 
