@@ -1,5 +1,46 @@
 import { expect, test } from "bun:test";
+import * as managedJson from "./managed-json";
 import { hasJsonComments, mergeHooks, mergeManagedSection } from "./managed-json";
+
+test("replaceJsonCategory replaces all hooks and preserves unrelated settings", () => {
+  expect(typeof managedJson.replaceJsonCategory).toBe("function");
+  const existing = JSON.stringify({ theme: "dark", model: "test", keybindings: ["ctrl+k"], hooks: { Old: [1] } });
+  const hooks = { PostToolUse: [{ command: "new-hook" }] };
+  const result = managedJson.replaceJsonCategory(existing, "hooks", hooks);
+  expect(JSON.parse(result.next)).toEqual({ theme: "dark", model: "test", keybindings: ["ctrl+k"], hooks });
+  expect(result.changed).toBe(true);
+  expect(managedJson.replaceJsonCategory(result.next, "hooks", hooks).changed).toBe(false);
+  expect(JSON.parse(managedJson.replaceJsonCategory("", "hooks", []).next)).toEqual({ hooks: [] });
+  for (const invalid of ["{broken", "[]", "null", "1"]) {
+    expect(() => managedJson.replaceJsonCategory(invalid, "hooks", hooks)).toThrow();
+  }
+});
+
+test("mergeHooks recognizes direct commands, Copilot bash commands, and Kiro actions", () => {
+  for (const [old, fresh] of [
+    [{ command: "wagglebot:old" }, { command: "wagglebot:new" }],
+    [
+      { type: "command", bash: "wagglebot:old" },
+      { type: "command", bash: "wagglebot:new" },
+    ],
+    [{ action: { command: "wagglebot:old" } }, { action: { command: "wagglebot:new" } }],
+  ]) {
+    const foreign = { name: "wagglebot:decoy", matcher: "wagglebot:decoy", command: "personal" };
+    const result = mergeHooks(JSON.stringify({ hooks: { Event: [foreign, old] } }), { hooks: { Event: [fresh] } });
+    expect(JSON.parse(result.next).hooks.Event).toEqual([foreign, fresh]);
+    expect(mergeHooks(result.next, { hooks: { Event: [fresh] } }).changed).toBe(false);
+  }
+});
+
+test("mergeHooks preserves foreign commands in a mixed nested hook group", () => {
+  const personal = { type: "command", command: "personal" };
+  const old = { type: "command", command: "wagglebot:old" };
+  const fresh = { matcher: "Write", hooks: [{ type: "command", command: "wagglebot:new" }] };
+  const existing = JSON.stringify({ hooks: { Event: [{ matcher: "Edit", hooks: [old, personal] }] } });
+  const result = mergeHooks(existing, { hooks: { Event: [fresh] } });
+  expect(JSON.parse(result.next).hooks.Event).toEqual([{ matcher: "Edit", hooks: [personal] }, fresh]);
+  expect(mergeHooks(result.next, { hooks: { Event: [fresh] } }).changed).toBe(false);
+});
 
 test("writes owned entries, preserves foreign keys, removes stale owned entries", () => {
   const existing = JSON.stringify({ theme: "dark", mcpServers: { mine: { url: "http://x" }, old: { url: "y" } } });

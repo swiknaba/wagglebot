@@ -13,7 +13,7 @@ import type { Reporter } from "../report";
 import { resolveSkillLockFile } from "../skill-lock";
 import { runInstallAgents } from "./install-agents";
 import { runInstallSkills } from "./install-skills";
-import { runSyncAgents } from "./sync-agents";
+import { runSyncHarnesses } from "./sync-harnesses";
 import { runSyncShell } from "./sync-shell";
 import { runWriteMcp } from "./write-mcp";
 
@@ -130,7 +130,7 @@ export async function runUpdate(deps: {
     organization: company.organization,
     backups,
   });
-  runSyncAgents({
+  runSyncHarnesses({
     home: deps.home,
     harnesses,
     instructionDirs: layers.map((l) => l.instructionsDir),

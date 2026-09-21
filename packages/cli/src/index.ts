@@ -15,7 +15,7 @@ import { runInstallAgents } from "./commands/install-agents";
 import { resolveSkillsBin, runInstallSkills } from "./commands/install-skills";
 import { runMcpHubApprove } from "./commands/mcp-hub-approve";
 import { runProjectUpdate } from "./commands/project-update";
-import { runSyncAgents } from "./commands/sync-agents";
+import { restoreHarnesses, runSyncHarnesses } from "./commands/sync-harnesses";
 import { runSyncShell } from "./commands/sync-shell";
 import { runUpdate } from "./commands/update";
 import { runWriteMcp } from "./commands/write-mcp";
@@ -254,19 +254,17 @@ export async function main(argv: string[], deps: CliDeps = { write: console.log 
         options: { restore: { type: "boolean" } },
       });
       if (values.restore === true) {
-        const code = runSyncAgents({
+        const code = restoreHarnesses({
           home,
-          harnesses: [],
-          instructionDirs: [],
           reporter,
-          options: { restore: true, restoreTarget: positionals[0] },
+          target: positionals[0],
         });
         deps.write(reporter.summary());
         return code;
       }
       const { company, teams } = await companyContext(cwd, exec, ask);
       const harnesses = HARNESSES;
-      const code = runSyncAgents({
+      const code = runSyncHarnesses({
         home,
         harnesses,
         instructionDirs: company.layersFor(teams).map((l) => l.instructionsDir),

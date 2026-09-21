@@ -1,0 +1,10 @@
+{
+  "hooks": {
+    "post_write_code": [
+      {
+        "command": "printf '%s\\n' 'wagglebot:prose-changelog - Apply ASD-STE100 Issue 9 to prose. After durable repository changes, update .agents/changelog.md before the final response.'",
+        "show_output": true
+      }
+    ]
+  }
+}
