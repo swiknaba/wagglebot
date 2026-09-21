@@ -31,6 +31,7 @@ export async function runCompanyProvision(input: {
   env?: NodeJS.ProcessEnv;
   overwriteLocal?: boolean;
   sourceFailed?: boolean;
+  shellScriptPath?: string;
 }): Promise<number> {
   const { reporter } = input;
   let failed = input.sourceFailed === true;
@@ -116,6 +117,7 @@ export async function runCompanyProvision(input: {
       runSyncShell({
         home: input.home,
         companyRoot: input.companyRoot,
+        shellScriptPath: input.shellScriptPath,
         reporter,
         backups: input.overwriteLocal ? false : backups,
         env,

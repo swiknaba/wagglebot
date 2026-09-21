@@ -131,6 +131,38 @@ test("runs the installed bin with hidden company and runtime arguments", async (
   expect(code).toBe(7);
 });
 
+test("an interactive runtime owns its output and preserves its exit status without buffered execution", async () => {
+  const lines: string[] = [];
+  let call: string[] | undefined;
+  const code = await runPinnedRuntime({
+    runtime: { version: "6.7.8", bin: "/tmp/runtime/bin/wagglebot.js" },
+    argv: ["update", "--wagglebot"],
+    companyRoot: "/tmp/company/active",
+    sourceFailed: true,
+    exec: async () => {
+      throw new Error("Buffered execution cannot accept a username");
+    },
+    interactiveExec: async (cmd: string, args: string[]) => {
+      call = [cmd, ...args];
+      return 17;
+    },
+    write: (line) => lines.push(line),
+  });
+  expect(call).toEqual([
+    process.execPath,
+    "/tmp/runtime/bin/wagglebot.js",
+    "--company-root",
+    "/tmp/company/active",
+    "--pinned-runtime",
+    "6.7.8",
+    "--source-failed",
+    "update",
+    "--wagglebot",
+  ]);
+  expect(code).toBe(17);
+  expect(lines).toEqual([]);
+});
+
 test("passes stale source failure state to the child runtime", async () => {
   let args: string[] | undefined;
   const exec: Exec = async (cmd, received) => {

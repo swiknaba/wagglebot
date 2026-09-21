@@ -42,18 +42,63 @@ const skillDirs = () =>
   );
 
 const LAYERS = "company/ and teams/<team>/ for each team of the engineer";
+const COMPANY_SOURCE =
+  "Use the marked company working tree. Elsewhere, use --wagglebot to select the active cache and its exact runtime pin.";
+const projectWrites = () => [
+  "<git root>/.agents/memory.md  (create only when missing)",
+  "<git root>/.agents/changelog.md  (create only when missing)",
+  ...projectFiles(),
+];
+
+function overwriteScope(command: string): string[] {
+  const all = command === "update";
+  const targets = [
+    ...(all || command === "sync-harnesses"
+      ? HARNESSES.flatMap((h) => h.templateTargets.map((path) => `~/${path}  (entire instruction file)`))
+      : []),
+    ...(all || command === "install-skills" ? skillDirs() : []),
+    ...(all || command === "install-agents"
+      ? HARNESSES.flatMap((h) => h.subagentDirs.map((path) => `~/${path}/  (entire custom agent directory)`))
+      : []),
+    ...(all || command === "sync-harnesses"
+      ? HARNESSES.flatMap((h) =>
+          h.hookTargets.map(
+            (target) =>
+              `~/${target.path}  (${target.path.endsWith("/wagglebot.json") ? "entire owned hooks file" : "complete hooks category"})`,
+          ),
+        )
+      : []),
+    ...(all || command === "write-mcp"
+      ? HARNESSES.flatMap((h) =>
+          h.mcpTargets.map(
+            (target) =>
+              `~/${target.path}  (complete ${target.format === "toml" ? target.table : target.parentKey} category)`,
+          ),
+        )
+      : []),
+  ];
+  return [
+    "",
+    "Overwrite mode: --overwrite-local",
+    "The flag authorizes replacement on this run, with no confirmation and no backup.",
+    "Unrelated IDE settings remain unchanged. The shell stage replaces only its managed block.",
+    ...(targets.length ? ["Replacement targets:", ...targets.map((target) => `  ${target}`)] : []),
+  ];
+}
 
 const SECTIONS: Record<string, Section> = {
   "install-skills": {
     title: "install-skills",
     purpose:
-      "Syncs every entry of the curated skills lists with the skills CLI, into every harness. Each run installs the skills that are new in a listed repository, and removes each skill that the repository deleted or that no list names any more.",
+      "Installs the curated skills in every compatible harness. Removes only previously managed skills that no effective list names.",
     reads: [
       `skills.list in ${LAYERS}`,
       "~/.agents/.skill-lock.json  (the lock file of the skills CLI: which skill came from which source)",
     ],
     writes: [...skillDirs(), "~/.wagglebot/managed.json  (which entry was installed for which harness)"],
-    flags: ["--update    Bump each pinned entry to the highest version tag on its remote and rewrite the list."],
+    flags: [
+      "--update    Bump each pin to the highest version tag. Requires a marked company working tree. Cached revisions are immutable.",
+    ],
   },
   "install-agents": {
     title: "install-agents",
@@ -62,10 +107,10 @@ const SECTIONS: Record<string, Section> = {
     reads: [`agents/*.md and agents.list in ${LAYERS}`, "~/.wagglebot/agents-cache/  (clones of listed repositories)"],
     writes: [...subagentDirs(), "~/.wagglebot/managed.json  (every subagent file it wrote)"],
   },
-  "sync-agents": {
-    title: "sync-agents",
+  "sync-harnesses": {
+    title: "sync-harnesses",
     purpose:
-      "Writes the base prompt plus the company and team instructions into the global instruction file of each harness, and merges the hook fragments.",
+      "Writes the base, company, and team instructions into each global instruction file. Merges compatible deterministic hooks.",
     reads: [
       "the base prompt shipped in the wagglebot package",
       `company/instructions/*.md, then teams/<team>/instructions/*.md`,
@@ -73,12 +118,12 @@ const SECTIONS: Record<string, Section> = {
     writes: [...templateFiles(), ...hookFiles()],
     flags: ["--restore [~/path]   Write the newest backup set back (every file, or one file)."],
   },
-  "sync-project": {
-    title: "sync-project",
+  project: {
+    title: "update",
     purpose:
-      "Publishes the instructions of the current repository to every supported harness. Reads the Git root from the current directory. Needs no company repository, no catalog, and no identity. Writes every harness target, because the repository is shared by engineers who use different harnesses. Content outside each managed block stays untouched. Removing every source file removes the managed blocks, and deletes a file that held nothing else. Every target is inside the repository, so git is the backup and the undo. Sizes are reported in UTF-8 bytes. Codex reads the root AGENTS.md under a default 32 KiB budget that global and nested files share, so a root file above that budget produces a warning.",
+      "Publishes sorted project instructions to every supported project target. Preserves personal content outside managed blocks and all existing memory and changelog files. Git provides history and recovery. Requires a Git repository, but no company configuration or identity.",
     reads: [`<git root>/${PROJECT_INSTRUCTIONS_DIR}/*.md  (sorted by name, concatenated)`],
-    writes: projectFiles(),
+    writes: projectWrites(),
   },
   "sync-shell": {
     title: "sync-shell",
@@ -90,7 +135,7 @@ const SECTIONS: Record<string, Section> = {
   "write-mcp": {
     title: "write-mcp",
     purpose:
-      "Writes the merged MCP registry into the MCP config of each harness. A credential appears as ${VAR}, or as the name of an environment variable. A harness that reads neither form has that entry left out, with the reason on its report line.",
+      "Writes compatible MCP entries into each harness configuration. Writes safe variable references, never credential values. Skips unsupported transports and credential forms with an explanation.",
     reads: [`registry.yaml in ${LAYERS}  (a team entry with the same namespace wins)`],
     writes: [...mcpFiles(), "~/.wagglebot/managed.json  (every key it wrote)"],
   },
@@ -101,14 +146,27 @@ const SECTIONS: Record<string, Section> = {
     writes: ["~/.wagglebot/mcp-hub/registry.trust.json  (mode 0600 trust records)"],
   },
   init: {
-    title: "init [dir]",
-    purpose: "Scaffolds a new company repository. Refuses a directory that is not empty.",
+    title: "init [--wagglebot [directory]]",
+    purpose:
+      "Initializes the current Git project, then performs the first project update. With --wagglebot, scaffolds an empty company directory instead.",
     reads: [],
-    writes: ["package.json, README.md, company/, teams/team-payments/, and the example files"],
+    writes: [
+      "<git root>/.agents/instructions/",
+      ...projectWrites(),
+      "Company scaffold only: wagglebot.yaml, package.json, README.md, company/, teams/, and example files",
+    ],
+  },
+  connect: {
+    title: "connect <git-url>",
+    purpose:
+      "Stores the company repository URL without Git credentials. Works outside a Git repository. Git uses your existing authentication.",
+    reads: [],
+    writes: ["~/.wagglebot/config.json  (mode 0600, preserves unrelated settings)"],
   },
   brain: {
     title: "brain <init|remember|status>",
-    purpose: "Maintains local component memory, CodeGraph, and Git evidence. It does not contact shared services.",
+    purpose:
+      "Phase 2: Maintains local component memory, CodeGraph, and Git evidence. Phase 1 init and update do not invoke these commands.",
     reads: ["the current Git repository", ".agents/memory.md when it exists"],
     writes: [
       ".agents/memory.md only with brain remember --save",
@@ -139,47 +197,70 @@ const GENERAL = (): string[] => [
   "",
   "Usage: wagglebot <command> [options]",
   "",
-  "Commands:",
-  "  update             Pull the company repository, then run every installer below.",
-  "  init [dir]         Scaffold a new company repository.",
+  "Phase 1 workflow:",
+  "  connect <git-url>   Save the company repository URL. Optional when the package has a real default.",
+  "  init               Initialize the current Git project and perform its first update.",
+  "  update             Update the project, or provision from a marked company working tree.",
+  "  init --wagglebot [directory]   Scaffold a company repository with wagglebot.yaml.",
+  "  update --wagglebot  Refresh the company cache and provision with its exact runtime pin.",
+  "",
+  "Advanced company commands:",
+  `  ${COMPANY_SOURCE}`,
   "  install-skills     Install the curated skills lists.",
   "  install-agents     Install the shared subagents.",
-  "  sync-agents        Write the base prompt and instructions into every harness.",
-  "  sync-project       Publish the .agents/instructions/ of this repository to every harness.",
+  "  sync-harnesses     Write global instructions and compatible hooks.",
   "  sync-shell         Load .env.credentials into new shells.",
   "  write-mcp          Write MCP server configs from the registry.",
+  "",
+  "Outside the Phase 1 workflow:",
   "  mcp-hub            Approve local MCP hub registry entries.",
+  "  Phase 2:",
   "  brain              Maintain local component memory and repository evidence.",
   "",
   "Options:",
   "  --version          Print the wagglebot version.",
   "  --help             Print this help. `wagglebot <command> --help` describes one command.",
+  "  --overwrite-local  Replace company-managed categories. See update --help for every target.",
   "",
   "Workstation settings (global git config):",
-  "  wagglebot.username    The company Git username. Asked once, then stored. Must be a User in the catalog.",
+  "  wagglebot.username    The company Git username. Asked once, then stored. Unknown users receive the company layer.",
   "",
-  "Every mutation lands inside a managed block (<!-- wagglebot:begin --> in Markdown, # wagglebot:begin",
-  "in shell files, recorded keys in JSON). Content outside stays untouched. Changed files are backed up",
-  "to ~/.wagglebot/backups/<timestamp>/ first. Restore with `wagglebot sync-agents --restore`.",
-  "`sync-project` writes only files inside the repository, so git is its backup and its undo.",
+  "Default company updates preserve personal content through owned blocks, entries, files, and installation state.",
+  "Changed company targets use ~/.wagglebot/backups/. Restore with wagglebot sync-harnesses --restore.",
+  "Overwrite mode creates no backup and requests no confirmation. Project mode rejects --overwrite-local.",
+  "Company URLs resolve from WAGGLEBOT_COMPANY_REPOSITORY_URL, saved configuration, then package metadata.",
+  "Reserved .example hosts count as unset. Run wagglebot connect when no usable URL exists.",
 ];
 
 export function helpText(command?: string): string {
+  if (command === "sync-project") return render(SECTIONS.project as Section).join("\n");
+  if (command === "sync-agents") command = "sync-harnesses";
   if (command === "update") {
-    const all = ["install-skills", "install-agents", "sync-agents", "sync-shell", "write-mcp"].map((c) => SECTIONS[c]);
+    const all = ["install-skills", "install-agents", "sync-harnesses", "sync-shell", "write-mcp"].map(
+      (c) => SECTIONS[c],
+    );
     return [
-      "wagglebot update",
+      "wagglebot update [--wagglebot] [--overwrite-local]",
       "",
-      "1. git pull --ff-only in the company repository.",
-      "2. yarn install, when the wagglebot pin in package.json moved, then re-run itself.",
-      "3. Run every installer, in this order:",
+      ...render(SECTIONS.project as Section),
+      "",
+      "Inside a marked company working tree, use all current files, including uncommitted changes, with the current CLI process.",
+      "With --wagglebot, refresh the connected cache, validate its exact pin, and continue with that pinned runtime.",
+      "A failed refresh uses a valid stale cache and returns failure after provisioning.",
+      "Project mode rejects --overwrite-local.",
+      "Company provisioning runs these stages in order:",
       "",
       ...all.flatMap((s) => (s ? [...render(s), ""] : [])),
-      "Flags:",
-      "  --skip-self-update   Internal. Set by the re-run after a pin move.",
+      ...overwriteScope("update"),
     ].join("\n");
   }
   const section = command === undefined ? undefined : SECTIONS[command];
-  if (section !== undefined) return render(section).join("\n");
+  if (section !== undefined)
+    return [
+      ...render(section),
+      ...(["install-skills", "install-agents", "sync-harnesses", "sync-shell", "write-mcp"].includes(command ?? "")
+        ? ["", COMPANY_SOURCE, ...overwriteScope(command ?? "")]
+        : []),
+    ].join("\n");
   return GENERAL().join("\n");
 }

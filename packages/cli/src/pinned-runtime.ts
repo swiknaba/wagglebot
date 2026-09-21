@@ -1,9 +1,19 @@
+import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { lstatSync, mkdirSync, renameSync, rmSync, statSync } from "node:fs";
 import { join } from "node:path";
 import type { Exec } from "./exec";
 
 export type PinnedRuntime = { version: string; bin: string };
+export type RuntimeExec = (cmd: string, args: string[]) => Promise<number>;
+
+// A pinned CLI needs the same terminal input and output as its bootstrap process.
+export const interactiveRuntimeExec: RuntimeExec = (cmd, args) =>
+  new Promise((resolve, reject) => {
+    const child = spawn(cmd, args, { stdio: "inherit" });
+    child.on("error", reject);
+    child.on("close", (code) => resolve(code ?? 1));
+  });
 
 const binFor = (root: string): string => join(root, "node_modules", "wagglebot", "bin", "wagglebot.js");
 
@@ -105,14 +115,13 @@ export async function runPinnedRuntime(input: {
   sourceFailed?: boolean;
   exec: Exec;
   write: (line: string) => void;
+  interactiveExec?: RuntimeExec;
 }): Promise<number> {
   const hiddenArgs = ["--company-root", input.companyRoot, "--pinned-runtime", input.runtime.version];
   if (input.sourceFailed === true) hiddenArgs.push("--source-failed");
-  const result = await input.exec(process.execPath, [
-    input.runtime.bin,
-    ...hiddenArgs,
-    ...removeReservedArguments(input.argv),
-  ]);
+  const args = [input.runtime.bin, ...hiddenArgs, ...removeReservedArguments(input.argv)];
+  if (input.interactiveExec !== undefined) return input.interactiveExec(process.execPath, args);
+  const result = await input.exec(process.execPath, args);
   if (result.stdout !== "") input.write(result.stdout);
   if (result.stderr !== "") input.write(result.stderr);
   return result.code;

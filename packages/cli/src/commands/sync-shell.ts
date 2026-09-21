@@ -36,17 +36,20 @@ export function shellRcTargets(
 
 const SCRIPT = "node_modules/wagglebot/templates/shell/wagglebot.sh";
 
-// The block names the company checkout and sources the script that ships in the package.
-// A pin bump changes the script, never this block.
-export const shellBlock = (companyRoot: string): string =>
+// Keep the company source separate from the selected runtime script.
+// Working trees retain the original package-relative script path.
+export const shellBlock = (companyRoot: string, shellScriptPath?: string): string =>
   [
     `export WAGGLEBOT_COMPANY_REPO="${companyRoot}"`,
-    `[ -r "$WAGGLEBOT_COMPANY_REPO/${SCRIPT}" ] && . "$WAGGLEBOT_COMPANY_REPO/${SCRIPT}"`,
+    shellScriptPath === undefined
+      ? `[ -r "$WAGGLEBOT_COMPANY_REPO/${SCRIPT}" ] && . "$WAGGLEBOT_COMPANY_REPO/${SCRIPT}"`
+      : `[ -r '${shellScriptPath.replaceAll("'", "'\\''")}' ] && . '${shellScriptPath.replaceAll("'", "'\\''")}'`,
   ].join("\n");
 
 export function runSyncShell(deps: {
   home: string;
   companyRoot: string;
+  shellScriptPath?: string;
   reporter: Reporter;
   backups?: BackupSet | false;
   env?: Record<string, string | undefined>;
@@ -54,11 +57,14 @@ export function runSyncShell(deps: {
   const { home, reporter } = deps;
   const backups = deps.backups === false ? undefined : (deps.backups ?? startBackupSet(resolvePaths(home).backupsDir));
   reporter.section("Shell environment");
-  if (!existsSync(join(deps.companyRoot, SCRIPT))) {
+  const script = deps.shellScriptPath ?? join(deps.companyRoot, SCRIPT);
+  if (!existsSync(script)) {
     reporter.item(
-      SCRIPT,
+      deps.shellScriptPath ?? SCRIPT,
       "failed",
-      "not found under the company repository — run yarn install, then run this command again",
+      deps.shellScriptPath === undefined
+        ? "not found under the company repository — run yarn install, then run this command again"
+        : "The selected runtime shell script does not exist. Reinstall the pinned runtime.",
     );
   }
   for (const { file, shell, createIfMissing } of shellRcTargets(home, deps.env)) {
@@ -69,7 +75,7 @@ export function runSyncShell(deps: {
         continue;
       }
       const existing = existsSync(target) ? readFileSync(target, "utf8") : "";
-      const result = renderManagedBlock(existing, shellBlock(deps.companyRoot), "hash");
+      const result = renderManagedBlock(existing, shellBlock(deps.companyRoot, deps.shellScriptPath), "hash");
       if (!result.changed) {
         reporter.item(file, "ok", "already ok");
         continue;
