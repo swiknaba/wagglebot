@@ -82,8 +82,7 @@ export function runSyncAgents(deps: {
     for (const relative of harness.templateTargets) {
       writeTarget(relative, (existing) => renderManagedBlock(existing, rendered), 0o600);
     }
-    const hooksTarget = harness.hooksTarget;
-    if (hooksTarget !== undefined) {
+    for (const hooksTarget of harness.hookTargets) {
       // The fragment is read inside the try of writeTarget: a bad fragment fails this item only.
       writeTarget(hooksTarget.path, (existing) => mergeHooks(existing, readFragment(hooksTarget.fragmentFile)), 0o600);
     }

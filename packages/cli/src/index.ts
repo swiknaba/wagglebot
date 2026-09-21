@@ -22,7 +22,7 @@ import { runWriteMcp } from "./commands/write-mcp";
 import { assertTeamDirsKnown, findCompanyRoot, loadCompanyRepo } from "./company";
 import type { Exec } from "./exec";
 import { realExec } from "./exec";
-import { selectAndAnnounce } from "./harness-select";
+import { HARNESSES } from "./harness";
 import { helpText } from "./help";
 import type { Ask } from "./identity";
 import { getUsername } from "./identity";
@@ -206,7 +206,7 @@ export async function main(argv: string[], deps: CliDeps = { write: console.log 
     if (command === "install-skills") {
       const { values } = parseArgs({ args: rest, options: { update: { type: "boolean" } } });
       const { company, teams } = await companyContext(cwd, exec, ask);
-      const harnesses = await selectAndAnnounce(home, exec, deps.write);
+      const harnesses = HARNESSES;
       const lists = company
         .layersFor(teams)
         .flatMap((l) =>
@@ -217,7 +217,7 @@ export async function main(argv: string[], deps: CliDeps = { write: console.log 
         exec,
         reporter,
         skillsBin: resolveSkillsBin(),
-        skillsAgents: harnesses.flatMap((h) => (h.skillsAgent ? [h.skillsAgent] : [])),
+        skillsAgents: harnesses.flatMap((h) => h.skillsAgents),
         managedFile: resolvePaths(home).managedFile,
         skillLockFile: resolveSkillLockFile(home),
         organization: company.organization,
@@ -230,7 +230,7 @@ export async function main(argv: string[], deps: CliDeps = { write: console.log 
 
     if (command === "install-agents") {
       const { company, teams } = await companyContext(cwd, exec, ask);
-      const harnesses = await selectAndAnnounce(home, exec, deps.write);
+      const harnesses = HARNESSES;
       const layers = company.layersFor(teams);
       const code = await runInstallAgents({
         home,
@@ -265,7 +265,7 @@ export async function main(argv: string[], deps: CliDeps = { write: console.log 
         return code;
       }
       const { company, teams } = await companyContext(cwd, exec, ask);
-      const harnesses = await selectAndAnnounce(home, exec, deps.write);
+      const harnesses = HARNESSES;
       const code = runSyncAgents({
         home,
         harnesses,
@@ -296,7 +296,7 @@ export async function main(argv: string[], deps: CliDeps = { write: console.log 
     if (command === "write-mcp") {
       parseArgs({ args: rest });
       const { company, teams } = await companyContext(cwd, exec, ask);
-      const harnesses = await selectAndAnnounce(home, exec, deps.write);
+      const harnesses = HARNESSES;
       const proxies = company
         .layersFor(teams)
         .filter((l) => l.registryText !== undefined)

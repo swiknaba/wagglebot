@@ -93,10 +93,11 @@ test("reports every ${VAR} that is not set in the shell", () => {
 test("a file credential source is reported once, not once per harness", () => {
   const home = mkdtempSync(join(tmpdir(), "wgl-"));
   const claude = HARNESSES.find((h) => h.name === "claude-code");
-  if (claude?.mcpTarget === undefined) throw new Error("fixture");
+  const claudeTarget = claude?.mcpTargets[0];
+  if (claude === undefined || claudeTarget === undefined) throw new Error("fixture");
   const twice: Harness[] = [
     claude,
-    { ...claude, name: "second", mcpTarget: { ...claude.mcpTarget, path: ".second.json" } },
+    { ...claude, name: "second", mcpTargets: [{ ...claudeTarget, path: ".second.json" }] },
   ];
   const fileSourced: ProxyConfig = {
     namespace: "vault",
@@ -112,7 +113,7 @@ test("a file credential source is reported once, not once per harness", () => {
 
 const codexHarness = (): Harness => {
   const codex = HARNESSES.find((h) => h.name === "codex");
-  if (codex?.mcpTarget === undefined) throw new Error("fixture");
+  if (codex === undefined || codex.mcpTargets[0] === undefined) throw new Error("fixture");
   return codex;
 };
 
@@ -175,9 +176,9 @@ test("a namespace the TOML file already declares outside the block is failed and
 test("a dialect skip is reported once per harness, and names the harness", () => {
   const home = mkdtempSync(join(tmpdir(), "wgl-toml-"));
   const codex = codexHarness();
-  const target = codex.mcpTarget;
+  const target = codex.mcpTargets[0];
   if (target === undefined || target.format !== "toml") throw new Error("fixture");
-  const twice: Harness[] = [codex, { ...codex, name: "codex-2", mcpTarget: { ...target, path: ".codex/two.toml" } }];
+  const twice: Harness[] = [codex, { ...codex, name: "codex-2", mcpTargets: [{ ...target, path: ".codex/two.toml" }] }];
   const sse: ProxyConfig = { ...remote, mode: "remote_sse" };
   const lines: string[] = [];
   runWriteMcp({
@@ -215,7 +216,7 @@ test("a harness that can write no entry says so, instead of blaming the registry
 test("a JSON dialect that expands no ${VAR} skips the credentialed proxy and writes the rest", () => {
   const home = mkdtempSync(join(tmpdir(), "wgl-copilot-"));
   const copilot = HARNESSES.find((h) => h.name === "copilot");
-  if (copilot?.mcpTarget === undefined) throw new Error("fixture");
+  if (copilot === undefined || copilot.mcpTargets[0] === undefined) throw new Error("fixture");
   const plain: ProxyConfig = { namespace: "docs", mode: "remote_http", endpoint: "https://docs.example/mcp" };
   const lines: string[] = [];
   const r = createReporter((l) => lines.push(l), false);
@@ -232,7 +233,7 @@ test("a JSON dialect that expands no ${VAR} skips the credentialed proxy and wri
 test("a JSON target that can write no entry says so too", () => {
   const home = mkdtempSync(join(tmpdir(), "wgl-copilot-"));
   const copilot = HARNESSES.find((h) => h.name === "copilot");
-  if (copilot?.mcpTarget === undefined) throw new Error("fixture");
+  if (copilot === undefined || copilot.mcpTargets[0] === undefined) throw new Error("fixture");
   const lines: string[] = [];
   runWriteMcp({
     home,
@@ -250,7 +251,7 @@ test("a JSON target that can write no entry says so too", () => {
 
 const geminiHarness = (): Harness => {
   const gemini = HARNESSES.find((h) => h.name === "gemini");
-  if (gemini?.mcpTarget === undefined) throw new Error("fixture");
+  if (gemini === undefined || gemini.mcpTargets[0] === undefined) throw new Error("fixture");
   return gemini;
 };
 

@@ -1,12 +1,12 @@
 import { expect, test } from "bun:test";
 import { helpText } from "./help";
 
-test("general help lists every command and the two git config keys", () => {
+test("general help lists every command and the user git config key", () => {
   const text = helpText();
   for (const c of ["update", "init", "install-skills", "install-agents", "sync-agents", "sync-shell", "write-mcp"])
     expect(text).toContain(`  ${c}`);
   expect(text).toContain("wagglebot.username");
-  expect(text).toContain("wagglebot.harnesses");
+  expect(text).not.toContain("wagglebot.harnesses");
 });
 
 test("command help names what the command reads and writes", () => {

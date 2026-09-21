@@ -55,8 +55,8 @@ export async function runInstallAgents(deps: {
   const parsed = deps.listTexts.map((l) => ({ ...l, ...parseList(l.text, { organization: deps.organization }) }));
   for (const l of parsed) for (const w of l.warnings) reporter.warn(`${l.path}: ${w}`);
   const entries = parsed.flatMap((l) => l.entries);
-  const targets = deps.harnesses.filter((h) => h.subagentDir !== undefined);
-  const without = deps.harnesses.filter((h) => h.subagentDir === undefined).map((h) => h.name);
+  const targets = deps.harnesses.flatMap((harness) => harness.subagentDirs.map((dir) => ({ harness, dir })));
+  const without = deps.harnesses.filter((h) => h.subagentDirs.length === 0).map((h) => h.name);
   if (without.length > 0) {
     reporter.item("subagents", "skipped", `no Markdown subagent directory: ${without.join(", ")}`);
   }
@@ -104,8 +104,8 @@ export async function runInstallAgents(deps: {
       continue;
     }
     const files = subagentFiles(cacheDir);
-    for (const harness of targets) {
-      const dir = join(home, harness.subagentDir ?? "");
+    for (const { dir: relative } of targets) {
+      const dir = join(home, relative);
       mkdirSync(dir, { recursive: true });
       for (const file of files) {
         const dest = join(dir, `${prefix}${file}`);
@@ -118,8 +118,8 @@ export async function runInstallAgents(deps: {
   for (const { prefix, dir: agentsDir } of deps.agentDirs) {
     if (!existsSync(agentsDir)) continue;
     const files = subagentFiles(agentsDir);
-    for (const harness of targets) {
-      const dir = join(home, harness.subagentDir ?? "");
+    for (const { dir: relative } of targets) {
+      const dir = join(home, relative);
       mkdirSync(dir, { recursive: true });
       for (const file of files) {
         const dest = join(dir, `${prefix}${file}`);

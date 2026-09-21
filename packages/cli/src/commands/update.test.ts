@@ -37,7 +37,6 @@ const gitExec =
   async (cmd, args, _opts) => {
     calls.push([cmd, ...args]);
     if (cmd === "git" && args.includes("wagglebot.username")) return { code: 0, stdout: "alice\n", stderr: "" };
-    if (cmd === "git" && args.includes("wagglebot.harnesses")) return { code: 1, stdout: "", stderr: "" };
     return { code: 0, stdout: "", stderr: "" };
   };
 
@@ -85,7 +84,6 @@ const pinMovingExec =
       writeFileSync(join(root, "package.json"), JSON.stringify({ dependencies: { wagglebot: "1.5.0" } }));
     }
     if (cmd === "git" && args.includes("wagglebot.username")) return { code: 0, stdout: "alice\n", stderr: "" };
-    if (cmd === "git" && args.includes("wagglebot.harnesses")) return { code: 1, stdout: "", stderr: "" };
     return { code: 0, stdout: "", stderr: "" };
   };
 

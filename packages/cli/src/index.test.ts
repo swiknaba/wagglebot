@@ -18,7 +18,7 @@ test("an unknown command exits 2 and names the command", async () => {
   expect(lines.join("\n")).toContain("bogus");
 });
 
-test("--help lists every command and the two git config keys", async () => {
+test("--help lists every command and the user git config key", async () => {
   const lines: string[] = [];
   const code = await main(["--help"], { write: (l) => lines.push(l) });
   expect(code).toBe(0);
@@ -33,7 +33,6 @@ test("--help lists every command and the two git config keys", async () => {
     "sync-shell",
     "write-mcp",
     "wagglebot.username",
-    "wagglebot.harnesses",
   ]) {
     expect(text).toContain(fragment);
   }

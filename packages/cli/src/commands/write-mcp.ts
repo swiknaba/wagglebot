@@ -179,7 +179,7 @@ export function runWriteMcp(deps: {
     reporter.item(name, "skipped", "not set in this shell — add it to .env.credentials, then open a new terminal");
   }
 
-  const without = deps.harnesses.filter((h) => h.mcpTarget === undefined).map((h) => h.name);
+  const without = deps.harnesses.filter((h) => h.mcpTargets.length === 0).map((h) => h.name);
   if (without.length > 0) {
     reporter.item("mcp", "skipped", `no MCP config adapter: ${without.join(", ")}`);
   }
@@ -191,38 +191,38 @@ export function runWriteMcp(deps: {
   }
 
   for (const harness of deps.harnesses) {
-    const mcpTarget = harness.mcpTarget;
-    if (mcpTarget === undefined) continue;
-    try {
-      const path = join(home, mcpTarget.path);
-      const rendered: Entry[] = [];
-      for (const p of usable) {
-        const result = renderEntry(mcpTarget.dialect, p);
-        if (result.ok) rendered.push({ namespace: p.namespace, entry: result.entry });
-        else reporter.item(`${p.namespace} (${harness.name})`, "skipped", result.reason);
+    for (const mcpTarget of harness.mcpTargets) {
+      try {
+        const path = join(home, mcpTarget.path);
+        const rendered: Entry[] = [];
+        for (const p of usable) {
+          const result = renderEntry(mcpTarget.dialect, p);
+          if (result.ok) rendered.push({ namespace: p.namespace, entry: result.entry });
+          else reporter.item(`${p.namespace} (${harness.name})`, "skipped", result.reason);
+        }
+        // The registry can be empty, or every entry can be one this harness cannot express. The
+        // second case must not read as an empty registry, because the skip lines say otherwise.
+        const emptyReason =
+          usable.length === 0
+            ? "no MCP servers in the registry — file not created"
+            : "no MCP server can be written for this harness — every entry was skipped above — file not created";
+        if (mcpTarget.format === "toml") {
+          writeTomlTarget({ harness, target: mcpTarget, path, rendered, emptyReason, reporter, backups });
+        } else {
+          writeJsonTarget({
+            target: mcpTarget,
+            path,
+            rendered,
+            emptyReason,
+            reporter,
+            backups,
+            state,
+            managedFile: paths.managedFile,
+          });
+        }
+      } catch (error) {
+        reporter.item(mcpTarget.path, "failed", error instanceof Error ? error.message : String(error));
       }
-      // The registry can be empty, or every entry can be one this harness cannot express. The
-      // second case must not read as an empty registry, because the skip lines say otherwise.
-      const emptyReason =
-        usable.length === 0
-          ? "no MCP servers in the registry — file not created"
-          : "no MCP server can be written for this harness — every entry was skipped above — file not created";
-      if (mcpTarget.format === "toml") {
-        writeTomlTarget({ harness, target: mcpTarget, path, rendered, emptyReason, reporter, backups });
-      } else {
-        writeJsonTarget({
-          target: mcpTarget,
-          path,
-          rendered,
-          emptyReason,
-          reporter,
-          backups,
-          state,
-          managedFile: paths.managedFile,
-        });
-      }
-    } catch (error) {
-      reporter.item(mcpTarget.path, "failed", error instanceof Error ? error.message : String(error));
     }
   }
   return reporter.failed() ? 1 : 0;

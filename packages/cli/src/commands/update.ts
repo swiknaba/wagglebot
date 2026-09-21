@@ -3,7 +3,7 @@ import { startBackupSet } from "../backup";
 import { loadCatalog, teamsOf } from "../catalog";
 import { assertTeamDirsKnown, findCompanyRoot, loadCompanyRepo } from "../company";
 import type { Exec } from "../exec";
-import { selectAndAnnounce } from "../harness-select";
+import { HARNESSES } from "../harness";
 import type { Ask } from "../identity";
 import { getUsername } from "../identity";
 import { resolvePaths } from "../paths";
@@ -97,7 +97,7 @@ export async function runUpdate(deps: {
   const username = await getUsername(exec, deps.ask, catalog, { companyRoot: root });
   const teams = teamsOf(catalog, username);
 
-  const harnesses = await selectAndAnnounce(deps.home, exec, write);
+  const harnesses = HARNESSES;
 
   const layers = company.layersFor(teams);
   const paths = resolvePaths(deps.home);
@@ -113,7 +113,7 @@ export async function runUpdate(deps: {
     exec,
     reporter,
     skillsBin: deps.skillsBin,
-    skillsAgents: harnesses.flatMap((h) => (h.skillsAgent ? [h.skillsAgent] : [])),
+    skillsAgents: harnesses.flatMap((h) => h.skillsAgents),
     managedFile: paths.managedFile,
     skillLockFile: resolveSkillLockFile(deps.home),
     organization: company.organization,

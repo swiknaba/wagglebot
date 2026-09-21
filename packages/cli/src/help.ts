@@ -1,25 +1,24 @@
 import { INSTRUCTIONS_DIR } from "./commands/sync-project";
 import { SHELL_RC_FILES } from "./commands/sync-shell";
 import { HARNESSES } from "./harness";
-import { HARNESS_CONFIG_KEY } from "./harness-select";
 
 type Section = { title: string; purpose: string; reads: string[]; writes: string[]; flags?: string[] };
 
 const templateFiles = () =>
   HARNESSES.flatMap((h) => h.templateTargets.map((t) => `~/${t}  (${h.name}, managed block)`));
 const hookFiles = () =>
-  HARNESSES.flatMap((h) => (h.hooksTarget ? [`~/${h.hooksTarget.path}  (${h.name}, managed hook entries)`] : []));
+  HARNESSES.flatMap((h) => h.hookTargets.map((t) => `~/${t.path}  (${h.name}, managed hook entries)`));
 const mcpFiles = () =>
   HARNESSES.flatMap((h) => {
-    const t = h.mcpTarget;
-    if (t === undefined) return [];
-    if (t.format === "toml")
-      return [`~/${t.path}  (${h.name}, managed block, one [${t.table}.<namespace>] table per server)`];
-    return [`~/${t.path}  (${h.name}, managed keys under ${t.parentKey})`];
+    return h.mcpTargets.map((t) => {
+      if (t.format === "toml")
+        return `~/${t.path}  (${h.name}, managed block, one [${t.table}.<namespace>] table per server)`;
+      return `~/${t.path}  (${h.name}, managed keys under ${t.parentKey})`;
+    });
   });
 const subagentDirs = () =>
   HARNESSES.flatMap((h) =>
-    h.subagentDir ? [`~/${h.subagentDir}/  (${h.name}, files prefixed company__, <team>__, or owner__repo__)`] : [],
+    h.subagentDirs.map((dir) => `~/${dir}/  (${h.name}, files prefixed company__, <team>__, or owner__repo__)`),
   );
 const projectFiles = () => {
   const byPath = new Map<string, { names: string[]; how: string }>();
@@ -37,9 +36,9 @@ const shellFiles = () =>
   SHELL_RC_FILES.map((f) => `~/${f.file}  (managed block, when the file exists or this machine uses ${f.shell})`);
 const skillDirs = () =>
   HARNESSES.flatMap((h) =>
-    h.skillsAgent
-      ? [`the global skills directory of ${h.name}  (written by the skills CLI, --agent ${h.skillsAgent})`]
-      : [],
+    h.skillsAgents.map(
+      (agent) => `the global skills directory of ${h.name}  (written by the skills CLI, --agent ${agent})`,
+    ),
   );
 
 const LAYERS = "company/ and teams/<team>/ for each team of the engineer";
@@ -48,7 +47,7 @@ const SECTIONS: Record<string, Section> = {
   "install-skills": {
     title: "install-skills",
     purpose:
-      "Syncs every entry of the curated skills lists with the skills CLI, into the selected harnesses. Each run installs the skills that are new in a listed repository, and removes each skill that the repository deleted or that no list names any more.",
+      "Syncs every entry of the curated skills lists with the skills CLI, into every harness. Each run installs the skills that are new in a listed repository, and removes each skill that the repository deleted or that no list names any more.",
     reads: [
       `skills.list in ${LAYERS}`,
       "~/.agents/.skill-lock.json  (the lock file of the skills CLI: which skill came from which source)",
@@ -66,7 +65,7 @@ const SECTIONS: Record<string, Section> = {
   "sync-agents": {
     title: "sync-agents",
     purpose:
-      "Writes the base prompt plus the company and team instructions into the global instruction file of each selected harness, and merges the hook fragments.",
+      "Writes the base prompt plus the company and team instructions into the global instruction file of each harness, and merges the hook fragments.",
     reads: [
       "the base prompt shipped in the wagglebot package",
       `company/instructions/*.md, then teams/<team>/instructions/*.md`,
@@ -91,7 +90,7 @@ const SECTIONS: Record<string, Section> = {
   "write-mcp": {
     title: "write-mcp",
     purpose:
-      "Writes the merged MCP registry into the MCP config of each selected harness. A credential appears as ${VAR}, or as the name of an environment variable. A harness that reads neither form has that entry left out, with the reason on its report line.",
+      "Writes the merged MCP registry into the MCP config of each harness. A credential appears as ${VAR}, or as the name of an environment variable. A harness that reads neither form has that entry left out, with the reason on its report line.",
     reads: [`registry.yaml in ${LAYERS}  (a team entry with the same namespace wins)`],
     writes: [...mcpFiles(), "~/.wagglebot/managed.json  (every key it wrote)"],
   },
@@ -145,7 +144,7 @@ const GENERAL = (): string[] => [
   "  init [dir]         Scaffold a new company repository.",
   "  install-skills     Install the curated skills lists.",
   "  install-agents     Install the shared subagents.",
-  "  sync-agents        Write the base prompt and instructions into every selected harness.",
+  "  sync-agents        Write the base prompt and instructions into every harness.",
   "  sync-project       Publish the .agents/instructions/ of this repository to every harness.",
   "  sync-shell         Load .env.credentials into new shells.",
   "  write-mcp          Write MCP server configs from the registry.",
@@ -158,8 +157,6 @@ const GENERAL = (): string[] => [
   "",
   "Workstation settings (global git config):",
   "  wagglebot.username    The company Git username. Asked once, then stored. Must be a User in the catalog.",
-  `  ${HARNESS_CONFIG_KEY}   Comma-separated harness names to provision. Default: every harness whose`,
-  `                        directory exists under ~. Valid: ${HARNESSES.map((h) => h.name).join(", ")}.`,
   "",
   "Every mutation lands inside a managed block (<!-- wagglebot:begin --> in Markdown, # wagglebot:begin",
   "in shell files, recorded keys in JSON). Content outside stays untouched. Changed files are backed up",
