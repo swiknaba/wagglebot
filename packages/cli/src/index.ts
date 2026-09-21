@@ -65,7 +65,9 @@ async function companyContext(
 }> {
   const root = findCompanyRoot(cwd);
   const company = loadCompanyRepo(root);
-  const catalog = loadCatalog(company.catalogText, company.catalogPath);
+  if (company.catalog === undefined)
+    throw new Error(`${root} has no catalog.yaml — add teams/<team>/catalog.yaml for each team`);
+  const catalog = loadCatalog(company.catalog.text, company.catalog.path);
   assertTeamDirsKnown(
     company,
     catalog.groups.map((g) => g.name),
