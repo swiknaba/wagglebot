@@ -76,6 +76,7 @@ const makeRemote = () => {
   runGit(source, ["add", "."]);
   runGit(source, ["-c", "commit.gpgsign=false", "commit", "-m", "first"]);
   runGit(root, ["init", "--bare", remote]);
+  runGit(remote, ["symbolic-ref", "HEAD", "refs/heads/main"]);
   runGit(source, ["remote", "add", "origin", remote]);
   runGit(source, ["push", "-u", "origin", "main"]);
   return { root, source, remote };
