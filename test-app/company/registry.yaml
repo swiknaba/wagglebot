@@ -1,16 +1,5 @@
-# MCP servers for every team. This file never contains a secret.
-# A team adds its own servers in teams/<team>/registry.yaml. A team entry with the same namespace wins.
-# For a credential, an entry names an environment variable. The value lives
-# in the gitignored .env.credentials file on each workstation.
+# The test writes configuration but never starts this command.
 proxies:
-  - namespace: project-brain
+  - namespace: fixture-company
     mode: stdio_cmd
-    command: wagglebot-context-engine
-# Example:
-# proxies:
-#   - namespace: example
-#     mode: remote_http
-#     endpoint: https://mcp.example.com/mcp
-#     auth:
-#       scheme: { kind: bearer }
-#       source: { from: env, var: EXAMPLE_TOKEN }
+    command: fixture-company-server

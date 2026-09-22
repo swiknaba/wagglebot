@@ -1,3 +1,5 @@
-# MCP servers for the members of Group team-payments. This file never contains a secret.
-# Same format as company/registry.yaml. A team entry with the same namespace as a company entry wins.
-proxies: []
+# The test writes configuration but never starts this command.
+proxies:
+  - namespace: fixture-payments
+    mode: stdio_cmd
+    command: fixture-payments-server
