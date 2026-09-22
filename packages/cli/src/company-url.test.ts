@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { isReservedExampleUrl, resolveCompanyRepositoryUrl } from "./company-url";
 
 const metadata = {
-  version: "0.2.1",
+  version: "0.3.0",
   wagglebot: { companyRepository: "git@metadata.example.invalid:platform/company.git" },
 };
 for (const source of ["environment", "saved", "package"]) {
@@ -13,7 +13,7 @@ for (const source of ["environment", "saved", "package"]) {
         env: source === "environment" ? { WAGGLEBOT_COMPANY_REPOSITORY_URL: unsafe } : {},
         config: source === "saved" ? { companyRepository: unsafe } : {},
         packageMetadata: {
-          version: "0.2.1",
+          version: "0.3.0",
           wagglebot: { companyRepository: source === "package" ? unsafe : "git@git.internal:company.git" },
         },
       }),
@@ -60,7 +60,7 @@ test("package metadata supplies the fallback URL", () => {
       env: {},
       config: {},
       packageMetadata: {
-        version: "0.2.1",
+        version: "0.3.0",
         wagglebot: { companyRepository: "git@company.internal:platform/company.git" },
       },
     }),
@@ -78,7 +78,7 @@ test("recognizes a reserved host-only SCP input", () => {
     resolveCompanyRepositoryUrl({
       env: { WAGGLEBOT_COMPANY_REPOSITORY_URL: "git@company.example" },
       config: {},
-      packageMetadata: { version: "0.2.1" },
+      packageMetadata: { version: "0.3.0" },
     }),
   ).toThrow('Run "wagglebot connect <git-url>" first.');
 });
@@ -89,7 +89,7 @@ test("reserved example URLs count as unset and are never returned", () => {
       env: { WAGGLEBOT_COMPANY_REPOSITORY_URL: "git@company.example:platform/company.git" },
       config: { companyRepository: "https://nested.company.example/platform/company.git" },
       packageMetadata: {
-        version: "0.2.1",
+        version: "0.3.0",
         wagglebot: { companyRepository: "git@company.example:platform/company.git" },
       },
     }),
@@ -97,7 +97,7 @@ test("reserved example URLs count as unset and are never returned", () => {
 });
 
 test("missing usable URL asks the engineer to connect", () => {
-  expect(() => resolveCompanyRepositoryUrl({ env: {}, config: {}, packageMetadata: { version: "0.2.1" } })).toThrow(
+  expect(() => resolveCompanyRepositoryUrl({ env: {}, config: {}, packageMetadata: { version: "0.3.0" } })).toThrow(
     'Run "wagglebot connect <git-url>" first.',
   );
 });

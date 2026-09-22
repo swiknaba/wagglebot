@@ -2,7 +2,7 @@
   "name": "company-wagglebot",
   "private": true,
   "dependencies": {
-    "wagglebot": "0.2.1"
+    "wagglebot": "0.3.0"
   },
   "scripts": {
     "update": "wagglebot update"
