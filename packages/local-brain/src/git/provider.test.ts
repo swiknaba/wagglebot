@@ -7,9 +7,23 @@ import { GitProvider } from "./provider";
 
 const commit = (repo: string, message: string): void => {
   Bun.spawnSync(["git", "add", "."], { cwd: repo });
-  Bun.spawnSync(["git", "-c", "user.name=Fixture", "-c", "user.email=fixture@example.test", "commit", "-m", message], {
-    cwd: repo,
-  });
+  Bun.spawnSync(
+    [
+      "git",
+      "-c",
+      "commit.gpgsign=false",
+      "-c",
+      "user.name=Fixture",
+      "-c",
+      "user.email=fixture@example.test",
+      "commit",
+      "-m",
+      message,
+    ],
+    {
+      cwd: repo,
+    },
+  );
 };
 
 test("returns bounded local history without sending a query to Git", async () => {

@@ -1,7 +1,9 @@
 import { expect, test } from "bun:test";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { HARNESSES, templatesDir } from "./harness";
+
+const repositoryFile = (...parts: string[]) => join(import.meta.dir, "../../..", ...parts);
 
 test("the harness table carries the nine verified capability adapters", () => {
   expect(HARNESSES.map((h) => h.name)).toEqual([
@@ -127,4 +129,70 @@ test("every MCP target is home-relative and names its dialect", () => {
       expect(target.dialect.length).toBeGreaterThan(0);
     }
   }
+});
+
+test("the harness reference documents all supported local adapters and Devin Desktop targets", () => {
+  const path = repositoryFile("docs", "harnesses.md");
+  expect(existsSync(path)).toBe(true);
+  const text = readFileSync(path, "utf8");
+
+  for (const name of [
+    "Claude Code",
+    "OpenAI Codex",
+    "JetBrains Junie",
+    "Gemini CLI",
+    "GitHub Copilot",
+    "Cline",
+    "Cursor",
+    "Devin Desktop",
+    "Kiro",
+  ])
+    expect(text).toContain(name);
+
+  for (const harness of HARNESSES) {
+    for (const path of harness.templateTargets) expect(text).toContain(`~/${path}`);
+    for (const target of harness.hookTargets) expect(text).toContain(`~/${target.path}`);
+    for (const target of harness.mcpTargets) expect(text).toContain(`~/${target.path}`);
+    for (const path of harness.subagentDirs) expect(text).toContain(`~/${path}`);
+    const project = harness.projectTarget;
+    if (project !== undefined) {
+      expect(text).toContain(`\`${project.path}\``);
+      expect(text).toContain(project.mode);
+      if (project.importLine !== undefined) expect(text).toContain(project.importLine);
+    }
+  }
+
+  for (const fragment of [
+    "Primary vendor source",
+    "local Devin Desktop only",
+    "Devin cloud agent",
+    "Devin CLI",
+    "Cascade",
+    ".config/devin/config.json",
+    ".codeium/windsurf/hooks.json",
+    "mcpServers",
+    "mcp_servers",
+    "Default mode preserves",
+    "foreign `mcpServers` entries",
+    "state-owned keys",
+    "env_vars",
+    "environment-map key",
+    "same-name restriction",
+    "bearer_token_env_var",
+    "env_http_headers",
+    "https://junie.jetbrains.com/docs/junie-plugin-mcp-settings.html",
+    "https://docs.devin.ai/desktop/devin-local",
+    "https://docs.devin.ai/cli/extensibility/mcp/configuration",
+    "https://docs.devin.ai/desktop/cascade/hooks",
+    "https://kiro.dev/docs/mcp/configuration/",
+    "httpUrl",
+    "streamableHttp",
+    "${env:NAME}",
+    "${NAME}",
+    "PostFileSave",
+  ])
+    expect(text).toContain(fragment);
+
+  const normalized = text.replace(/\s+/g, " ");
+  expect(normalized).not.toContain("Every dialect skips literal or file credential sources.");
 });

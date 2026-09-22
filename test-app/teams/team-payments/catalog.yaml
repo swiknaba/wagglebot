@@ -1,8 +1,8 @@
 # EDIT: replace every example entity with your own organization.
 # One directory per team lives in teams/. The directory name must equal the Group name.
 # wagglebot merges every catalog.yaml (company/ and teams/*/) into one catalog.
-# The catalog is the single source of truth. An unknown name is a hard error.
-# Every engineer needs a User entity here before the first `wagglebot update`.
+# The catalog adds team layers for known users. It is optional in Phase 1.
+# An unknown engineer receives the company layer and a warning.
 apiVersion: backstage.io/v1alpha1
 kind: Domain
 metadata:

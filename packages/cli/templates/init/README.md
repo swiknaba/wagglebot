@@ -4,39 +4,40 @@ Provisioned by [wagglebot](https://github.com/swiknaba/wagglebot) {{WAGGLEBOT_VE
 
 ## Before Your First Run
 
-You need a User entity in the catalog. Ask your team to add you to
-`teams/<team>/catalog.yaml`: one `User` entity with your company Git
-username, and your name in the `members` of the team Group. Merge that
-pull request first.
+The catalog is optional. An unknown engineer receives the company layer and a
+warning. Add a User and Group membership when that engineer needs a team layer.
 
 You need Node 22.20 or newer. Run `nvm use` in this directory.
 
-On Windows, do all of this inside the Windows Subsystem for Linux
-(WSL). Clone this repository under your Linux home directory, not
-under `/mnt/c`. Install your agent harness inside WSL too, because the
-provisioning writes to the Linux home directory only.
+On Windows, use WSL. Native Windows shells are unsupported. Run each harness
+inside the same WSL distribution as Wagglebot.
 
 ## Setup
 
-1. Run `git clone <this repo>`.
-2. Run `yarn install`.
-3. Run `yarn update:wagglebot`.
-4. Open a new terminal.
+Create this repository with:
 
-The first run asks for your company Git username once and stores it in
-your global git config. It then provisions this workstation: skills,
-subagents, base prompts, MCP configs, and a shell block that loads your
-credentials. Run it again after each merge to this repository.
+```sh
+wagglebot init --wagglebot mycompany-wagglebot
+cd mycompany-wagglebot
+git init
+wagglebot update
+```
 
-## Which Harnesses
+After the scaffold exists, run this sequence again only to provision local
+company changes.
 
-Wagglebot provisions every agent harness whose directory exists under
-your home directory, for example `~/.claude` or `~/.codex`. To choose
-explicitly, run:
+1. Run `git init`.
+2. Run `wagglebot update`.
+3. Open a new terminal.
 
-    git config --global wagglebot.harnesses claude-code,codex
+The first run asks for your company Git username once and stores it in your
+global git config. It provisions all nine local adapters. Run it after each
+reviewed company update.
 
-Run `yarn wagglebot --help` for the valid names.
+## Harnesses
+
+Wagglebot provisions all nine supported adapters. It creates required target
+directories. See the repository harness reference for paths and safe skips.
 
 ## Credentials
 
@@ -52,11 +53,11 @@ terminal so it sees the variables.
 | Path | Applies to | Content |
 |---|---|---|
 | `company/` | Everyone | `registry.yaml`, `skills.list`, `agents.list`, `agents/`, `instructions/`, optional `catalog.yaml` |
-| `teams/<team>/` | Members of Group `<team>` | The same files. `catalog.yaml` is required. |
+| `teams/<team>/` | Members of Group `<team>` | The same files. `catalog.yaml` is optional. |
 
 The directory name under `teams/` must equal the Group name. Every
-`catalog.yaml` merges into one catalog, and an unknown name is a hard
-error.
+`catalog.yaml` merges into one catalog. An unknown engineer receives only the
+company layer and a warning.
 
 ## Pins
 

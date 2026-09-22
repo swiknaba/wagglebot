@@ -5,6 +5,7 @@ import { loadCatalog } from "./catalog";
 
 function fixture(catalog: string, team = "payments") {
   const root = mkdtempSync(join("/tmp", "waggle-registry-"));
+  writeFileSync(join(root, "wagglebot.yaml"), "version: 1\nkind: company\n");
   writeFileSync(join(root, "package.json"), JSON.stringify({ dependencies: { wagglebot: "1.0.0" } }));
   mkdirSync(join(root, "company"), { recursive: true });
   mkdirSync(join(root, "teams", team), { recursive: true });
