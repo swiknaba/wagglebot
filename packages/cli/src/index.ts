@@ -20,7 +20,7 @@ import { restoreHarnesses, runSyncHarnesses } from "./commands/sync-harnesses";
 import { runSyncShell } from "./commands/sync-shell";
 import { runWriteMcp } from "./commands/write-mcp";
 import { isCompanyRoot } from "./company";
-import { refreshCompanyCache, validateCompanyBase } from "./company-cache";
+import { isCompanyCacheRoot, refreshCompanyCache, validateCompanyBase } from "./company-cache";
 import { resolveCompanyContext } from "./company-context";
 import { type PackageMetadata, resolveCompanyRepositoryUrl } from "./company-url";
 import type { Exec } from "./exec";
@@ -282,6 +282,7 @@ export async function main(argv: string[], deps: CliDeps = { write: console.log 
       const paths = resolvePaths(home);
       let companyRoot: string;
       let shellScriptPath: string | undefined;
+      let credentialsFile: string | undefined;
       if (runtime.root !== undefined) {
         companyRoot = resolve(cwd, runtime.root);
         const { pin } = validateCompanyBase(companyRoot);
@@ -291,8 +292,10 @@ export async function main(argv: string[], deps: CliDeps = { write: console.log 
           runtime.pin === undefined
             ? join(templatesDir(), "shell/wagglebot.sh")
             : join(paths.runtimeDir, pin, "node_modules/wagglebot/templates/shell/wagglebot.sh");
+        credentialsFile = paths.credentialsFile;
       } else if (values.wagglebot) {
         let sourceFailed = false;
+        let settleCredentials: (() => boolean) | undefined;
         companyRoot = paths.activeCompanyDir;
         if (command === "update") {
           const config = existsSync(paths.configFile) ? JSON.parse(readFileSync(paths.configFile, "utf8")) : {};
@@ -301,22 +304,39 @@ export async function main(argv: string[], deps: CliDeps = { write: console.log 
           const url = resolveCompanyRepositoryUrl({ env, config, packageMetadata: metadata });
           const cache = await refreshCompanyCache({ url, paths, exec });
           companyRoot = cache.root;
+          settleCredentials = cache.settleCredentials;
           sourceFailed = cache.refreshFailed;
           if (cache.warning) deps.write(cache.warning);
         } else if (!existsSync(companyRoot)) {
           throw new Error('Run "wagglebot update --wagglebot" first. No active company cache exists.');
         }
-        const { pin } = validateCompanyBase(companyRoot);
-        const pinned = await ensurePinnedRuntime({ pin, runtimeDir: paths.runtimeDir, exec });
-        return await runPinnedRuntime({
-          runtime: pinned,
-          argv: runtime.argv,
-          companyRoot,
-          sourceFailed,
-          exec,
-          write: deps.write,
-          interactiveExec: deps.runtimeExec ?? interactiveRuntimeExec,
-        });
+        let runtimeExit = 1;
+        try {
+          const { pin } = validateCompanyBase(companyRoot);
+          const pinned = await ensurePinnedRuntime({ pin, runtimeDir: paths.runtimeDir, exec });
+          runtimeExit = await runPinnedRuntime({
+            runtime: pinned,
+            argv: runtime.argv,
+            companyRoot,
+            sourceFailed,
+            exec,
+            write: deps.write,
+            interactiveExec: deps.runtimeExec ?? interactiveRuntimeExec,
+          });
+        } finally {
+          try {
+            if (settleCredentials?.() === false) {
+              runtimeExit ||= 1;
+              deps.write(
+                "Credential migration failed: shell readiness was not confirmed. The prior company cache was restored.",
+              );
+            }
+          } catch {
+            runtimeExit ||= 1;
+            deps.write("Credential migration failed: shell readiness or cache rollback could not be verified.");
+          }
+        }
+        return runtimeExit;
       } else {
         let root: string | undefined;
         try {
@@ -334,6 +354,14 @@ export async function main(argv: string[], deps: CliDeps = { write: console.log 
         }
         companyRoot = root;
         validateCompanyBase(companyRoot);
+        if (isCompanyCacheRoot(companyRoot, paths)) {
+          if (command === "install-skills" && values.update)
+            throw new Error(
+              "Cached company revisions are immutable. Run install-skills --update in a marked company working tree.",
+            );
+          shellScriptPath = join(templatesDir(), "shell/wagglebot.sh");
+          credentialsFile = paths.credentialsFile;
+        }
       }
       const overwriteLocal = values["overwrite-local"] === true;
       if (command === "update")
@@ -349,6 +377,7 @@ export async function main(argv: string[], deps: CliDeps = { write: console.log 
           overwriteLocal,
           sourceFailed: runtime.sourceFailed,
           shellScriptPath,
+          credentialsFile,
         });
       if (runtime.sourceFailed)
         reporter.item("Company source", "failed", "The source refresh failed. This run uses the cached company.");
@@ -365,6 +394,7 @@ export async function main(argv: string[], deps: CliDeps = { write: console.log 
           env,
           backups: overwriteLocal ? false : undefined,
           shellScriptPath,
+          credentialsFile,
         });
         deps.write(reporter.summary(true));
         return code;

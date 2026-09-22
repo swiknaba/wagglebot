@@ -1,8 +1,25 @@
 import { expect, test } from "bun:test";
-import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import {
+  chmodSync,
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { refreshCompanyCache, validateCompanyBase } from "./company-cache";
+import {
+  migrateCachedCredentials,
+  recordCachedShellReady,
+  refreshCompanyCache,
+  validateCompanyBase,
+} from "./company-cache";
 import { realExec } from "./exec";
 import { resolvePaths } from "./paths";
 
@@ -10,6 +27,43 @@ const runGit = (cwd: string, args: string[]) => {
   const result = Bun.spawnSync(["git", ...args], { cwd, stdout: "pipe", stderr: "pipe" });
   if (result.exitCode !== 0) throw new Error(new TextDecoder().decode(result.stderr));
 };
+
+for (const mode of [0o200, 0o666]) {
+  test(`shell receipt replaces existing mode ${mode.toString(8)} with readable owner-only permissions`, () => {
+    const home = mkdtempSync(join(tmpdir(), "wgl-receipt-"));
+    try {
+      const paths = resolvePaths(home);
+      mkdirSync(paths.stateDir);
+      const receipt = join(paths.stateDir, "company-shell-ready");
+      writeFileSync(receipt, "old");
+      chmodSync(receipt, mode);
+      recordCachedShellReady(paths, home);
+      expect(lstatSync(receipt).mode & 0o777).toBe(0o600);
+      expect(readFileSync(receipt, "utf8")).toBe(realpathSync(home));
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+}
+
+test("shell receipt replacement does not follow an existing symlink", () => {
+  const home = mkdtempSync(join(tmpdir(), "wgl-receipt-"));
+  try {
+    const paths = resolvePaths(home);
+    mkdirSync(paths.stateDir);
+    const target = join(home, "personal-file");
+    writeFileSync(target, "Personal fixture remains unchanged.", { mode: 0o644 });
+    const receipt = join(paths.stateDir, "company-shell-ready");
+    symlinkSync(target, receipt);
+    recordCachedShellReady(paths, home);
+    expect(readFileSync(target, "utf8")).toBe("Personal fixture remains unchanged.");
+    expect(lstatSync(target).mode & 0o777).toBe(0o644);
+    expect(lstatSync(receipt).isSymbolicLink()).toBe(false);
+    expect(lstatSync(receipt).mode & 0o777).toBe(0o600);
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
 
 const makeRemote = () => {
   const root = mkdtempSync(join(tmpdir(), "wgl-company-cache-"));
@@ -54,6 +108,42 @@ const pushCandidate = (
 };
 
 const readRevision = (root: string) => readFileSync(join(root, "revision.txt"), "utf8");
+
+test("credential migration preserves an existing stable file and leaves the legacy file untouched", () => {
+  const home = mkdtempSync(join(tmpdir(), "wgl-credential-migration-"));
+  try {
+    const paths = resolvePaths(home);
+    mkdirSync(paths.activeCompanyDir, { recursive: true });
+    const legacy = join(paths.activeCompanyDir, ".env.credentials");
+    writeFileSync(legacy, "TOKEN=legacy-fixture\n");
+    writeFileSync(paths.credentialsFile, "TOKEN=stable-fixture\n");
+    migrateCachedCredentials(paths);
+    expect(readFileSync(legacy, "utf8")).toBe("TOKEN=legacy-fixture\n");
+    expect(readFileSync(paths.credentialsFile, "utf8")).toBe("TOKEN=stable-fixture\n");
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test("the cache rejects HTTP userinfo before any direct clone", async () => {
+  const home = mkdtempSync(join(tmpdir(), "wgl-url-clone-"));
+  const calls: string[] = [];
+  try {
+    await expect(
+      refreshCompanyCache({
+        url: "https://user:fixture-token@git.internal/company.git",
+        paths: resolvePaths(home),
+        exec: async (cmd) => {
+          calls.push(cmd);
+          return { code: 1, stdout: "", stderr: "fixture refused clone" };
+        },
+      }),
+    ).rejects.toThrow("credential");
+    expect(calls).toEqual([]);
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
 
 test("first refresh clones and activates a valid candidate", async () => {
   const remote = makeRemote();
@@ -140,10 +230,19 @@ test("an activation failure keeps the prior active link usable", async () => {
   await refreshCompanyCache({ url: remote.remote, paths, exec: realExec });
   pushCandidate(remote.source, "second");
   mkdirSync(join(paths.companyDir, "active.next"));
+  writeFileSync(join(paths.activeCompanyDir, ".env.credentials"), "FIXTURE_TOKEN=synthetic-only\n");
+  const loadLegacy = () =>
+    execFileSync(
+      "bash",
+      ["-c", '. "$WAGGLEBOT_COMPANY_REPO/.env.credentials"; test "$FIXTURE_TOKEN" = synthetic-only'],
+      { env: { WAGGLEBOT_COMPANY_REPO: paths.activeCompanyDir } },
+    );
+  expect(loadLegacy().length).toBe(0);
 
   const result = await refreshCompanyCache({ url: remote.remote, paths, exec: realExec });
 
   expect(result.refreshFailed).toBe(true);
+  expect(loadLegacy().length).toBe(0);
   expect(readRevision(paths.activeCompanyDir)).toBe("first");
   expect(lstatSync(paths.activeCompanyDir).isSymbolicLink()).toBe(true);
   rmSync(remote.root, { recursive: true, force: true });

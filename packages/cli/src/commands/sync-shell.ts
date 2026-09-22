@@ -2,6 +2,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import type { BackupSet } from "../backup";
 import { startBackupSet } from "../backup";
+import { migrateCachedCredentials, recordCachedShellReady } from "../company-cache";
 import { renderManagedBlock } from "../managed-block";
 import { resolvePaths } from "../paths";
 import type { Reporter } from "../report";
@@ -38,9 +39,10 @@ const SCRIPT = "node_modules/wagglebot/templates/shell/wagglebot.sh";
 
 // Keep the company source separate from the selected runtime script.
 // Working trees retain the original package-relative script path.
-export const shellBlock = (companyRoot: string, shellScriptPath?: string): string =>
+export const shellBlock = (companyRoot: string, shellScriptPath?: string, credentialsFile?: string): string =>
   [
     `export WAGGLEBOT_COMPANY_REPO="${companyRoot}"`,
+    `export WAGGLEBOT_CREDENTIALS_FILE='${(credentialsFile ?? join(companyRoot, ".env.credentials")).replaceAll("'", "'\\''")}'`,
     shellScriptPath === undefined
       ? `[ -r "$WAGGLEBOT_COMPANY_REPO/${SCRIPT}" ] && . "$WAGGLEBOT_COMPANY_REPO/${SCRIPT}"`
       : `[ -r '${shellScriptPath.replaceAll("'", "'\\''")}' ] && . '${shellScriptPath.replaceAll("'", "'\\''")}'`,
@@ -50,6 +52,7 @@ export function runSyncShell(deps: {
   home: string;
   companyRoot: string;
   shellScriptPath?: string;
+  credentialsFile?: string;
   reporter: Reporter;
   backups?: BackupSet | false;
   env?: Record<string, string | undefined>;
@@ -57,13 +60,17 @@ export function runSyncShell(deps: {
   const { home, reporter } = deps;
   const backups = deps.backups === false ? undefined : (deps.backups ?? startBackupSet(resolvePaths(home).backupsDir));
   reporter.section("Shell environment");
+  const failuresBefore = reporter.counts().failed;
+  const paths = resolvePaths(home);
+  const cached = deps.credentialsFile === paths.credentialsFile;
+  const commitCredentials = cached ? migrateCachedCredentials(paths) : undefined;
   const script = deps.shellScriptPath ?? join(deps.companyRoot, SCRIPT);
   if (!existsSync(script)) {
     reporter.item(
       deps.shellScriptPath ?? SCRIPT,
       "failed",
       deps.shellScriptPath === undefined
-        ? "not found under the company repository — run yarn install, then run this command again"
+        ? "not found under the company repository — run npm install, then run this command again"
         : "The selected runtime shell script does not exist. Reinstall the pinned runtime.",
     );
   }
@@ -75,7 +82,11 @@ export function runSyncShell(deps: {
         continue;
       }
       const existing = existsSync(target) ? readFileSync(target, "utf8") : "";
-      const result = renderManagedBlock(existing, shellBlock(deps.companyRoot, deps.shellScriptPath), "hash");
+      const result = renderManagedBlock(
+        existing,
+        shellBlock(deps.companyRoot, deps.shellScriptPath, deps.credentialsFile),
+        "hash",
+      );
       if (!result.changed) {
         reporter.item(file, "ok", "already ok");
         continue;
@@ -86,6 +97,10 @@ export function runSyncShell(deps: {
     } catch (error) {
       reporter.item(file, "failed", error instanceof Error ? error.message : String(error));
     }
+  }
+  if (cached && reporter.counts().failed === failuresBefore) {
+    recordCachedShellReady(paths, deps.companyRoot);
+    commitCredentials?.();
   }
   return reporter.failed() ? 1 : 0;
 }

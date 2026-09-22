@@ -32,6 +32,7 @@ export async function runCompanyProvision(input: {
   overwriteLocal?: boolean;
   sourceFailed?: boolean;
   shellScriptPath?: string;
+  credentialsFile?: string;
 }): Promise<number> {
   const { reporter } = input;
   let failed = input.sourceFailed === true;
@@ -62,7 +63,25 @@ export async function runCompanyProvision(input: {
     const backups = input.overwriteLocal ? undefined : startBackupSet(paths.backupsDir);
     const env = input.env ?? process.env;
 
-    // Each harness has an independent failure boundary and retains the shared state of other harnesses.
+    const skillLists = layers.flatMap((layer) =>
+      layer.skillsListText === undefined ? [] : [{ path: join(layer.dir, "skills.list"), text: layer.skillsListText }],
+    );
+    // Shared skill storage requires one explicit adapter union during removal.
+    await stage("Skill removal", () =>
+      runInstallSkills({
+        lists: skillLists,
+        exec: input.exec,
+        reporter,
+        skillsBin: input.skillsBin,
+        skillsAgents: HARNESSES.flatMap((harness) => harness.skillsAgents),
+        managedFile: paths.managedFile,
+        skillLockFile: resolveSkillLockFile(input.home),
+        organization: company.organization,
+        overwriteLocal: input.overwriteLocal,
+        phase: "remove",
+      }),
+    );
+    // Each installation retains its independent failure boundary.
     for (const harness of HARNESSES) {
       await stage(`Skills (${harness.name})`, () =>
         runInstallSkills({
@@ -79,6 +98,8 @@ export async function runCompanyProvision(input: {
           skillLockFile: resolveSkillLockFile(input.home),
           organization: company.organization,
           overwriteLocal: input.overwriteLocal,
+          phase: "install",
+          staleRemovalAgents: HARNESSES.flatMap((target) => target.skillsAgents),
         }),
       );
     }
@@ -118,6 +139,7 @@ export async function runCompanyProvision(input: {
         home: input.home,
         companyRoot: input.companyRoot,
         shellScriptPath: input.shellScriptPath,
+        credentialsFile: input.credentialsFile,
         reporter,
         backups: input.overwriteLocal ? false : backups,
         env,

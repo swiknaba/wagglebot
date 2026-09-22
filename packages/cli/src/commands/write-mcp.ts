@@ -143,9 +143,13 @@ function writeJsonTarget(deps: {
     );
     return;
   }
+  const current = existing.trim() === "" ? {} : JSON.parse(existing)[target.parentKey];
+  const managedEntries = Object.fromEntries(
+    Object.entries(entries).filter(([key]) => previouslyOwned.includes(key) || !Object.hasOwn(current ?? {}, key)),
+  );
   const result = deps.overwrite
     ? { ...replaceJsonCategory(existing, target.parentKey, entries), ownedNow: Object.keys(entries) }
-    : mergeManagedSection(existing, target.parentKey, entries, previouslyOwned);
+    : mergeManagedSection(existing, target.parentKey, managedEntries, previouslyOwned);
   commitTarget({
     path,
     label: target.path,

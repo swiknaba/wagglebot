@@ -79,10 +79,10 @@ export function runSyncHarnesses(deps: {
     for (const relative of harness.templateTargets) {
       writeTarget(
         relative,
-        (existing) =>
-          deps.overwriteLocal
-            ? { next: rendered, changed: existing !== rendered }
-            : renderManagedBlock(existing, rendered),
+        (existing) => {
+          const result = renderManagedBlock(deps.overwriteLocal ? "" : existing, rendered);
+          return { ...result, changed: existing !== result.next };
+        },
         0o600,
       );
     }

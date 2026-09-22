@@ -20,6 +20,7 @@ Create this repository with:
 wagglebot init --wagglebot mycompany-wagglebot
 cd mycompany-wagglebot
 git init
+npm install
 wagglebot update
 ```
 
@@ -27,8 +28,9 @@ After the scaffold exists, run this sequence again only to provision local
 company changes.
 
 1. Run `git init`.
-2. Run `wagglebot update`.
-3. Open a new terminal.
+2. Run `npm install`.
+3. Run `wagglebot update`.
+4. Open a new terminal.
 
 The first run asks for your company Git username once and stores it in your
 global git config. It provisions all nine local adapters. Run it after each
@@ -41,12 +43,13 @@ directories. See the repository harness reference for paths and safe skips.
 
 ## Credentials
 
-Copy `.env.credentials.example` to `.env.credentials` and fill the
-values. The file is gitignored. No credential ever enters this
-repository. `wagglebot update` adds a block to the startup file of your
-shell, `~/.zshenv` for zsh or `~/.bashrc` for bash. The block exports
-the file into every new shell. Start an agent harness from a new
-terminal so it sees the variables.
+For a company working tree, copy `.env.credentials.example` to the gitignored `.env.credentials` at its root.
+For cached mode, copy the example to `~/.wagglebot/.env.credentials`.
+Enter the required values in the personal file. Never commit credentials.
+`wagglebot update` adds a managed block to `~/.zshenv` or `~/.bashrc`.
+The block selects the personal file for the current mode.
+Start each harness from a new terminal to load the variables.
+Cache refresh preserves the personal file outside its immutable revisions.
 
 ## Layout
 

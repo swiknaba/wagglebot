@@ -32,6 +32,7 @@ and `update` do not need company configuration.
 wagglebot init --wagglebot mycompany-wagglebot
 cd mycompany-wagglebot
 git init
+npm install
 wagglebot update
 ```
 
@@ -61,7 +62,8 @@ available for one release but do not appear in primary help. See the
 
 Wagglebot stores a repository URL only. Git uses existing SSH or HTTPS
 authentication. It never stores credentials. MCP entries use safe environment
-variable references or are skipped.
+variable references or are skipped. Cached shells load `~/.wagglebot/.env.credentials` outside immutable revisions.
+Working-tree shells load the gitignored `.env.credentials` at the company root.
 
 Default company updates preserve personal content. `--overwrite-local` replaces
 only documented instruction, skill, custom-agent, hook, and MCP categories. It

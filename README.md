@@ -18,7 +18,7 @@ the company URL. `wagglebot update --wagglebot` refreshes the private cache and
 uses the exact package pin from the validated company revision.
 
 Administrators scaffold with `wagglebot init --wagglebot mycompany-wagglebot`,
-then run `cd mycompany-wagglebot`, `git init`, and `wagglebot update`.
+then run `cd mycompany-wagglebot`, `git init`, `npm install`, and `wagglebot update`.
 
 Use these guides:
 

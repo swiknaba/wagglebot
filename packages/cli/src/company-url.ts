@@ -8,10 +8,23 @@ export type PackageMetadata = {
 function hostFromRepositoryUrl(input: string): string | undefined {
   try {
     const parsed = new URL(input);
-    return parsed.hostname;
+    if (parsed.hostname !== "") return parsed.hostname;
+  } catch {}
+  const scp = /^(?:[^@/:]+@)?([^/:]+)(?::.*)?$/.exec(input);
+  return scp?.[1];
+}
+
+export function rejectRepositoryCredentials(input: string): void {
+  let parsed: URL;
+  try {
+    parsed = new URL(input);
   } catch {
-    const scp = /^(?:[^@/:]+@)?([^/:]+)(?::.*)?$/.exec(input);
-    return scp?.[1];
+    if (/^https?:/i.test(input.trim()))
+      throw new Error("Invalid HTTP repository URL. Remove any embedded credentials.");
+    return;
+  }
+  if (["http:", "https:"].includes(parsed.protocol) && (parsed.username !== "" || parsed.password !== "")) {
+    throw new Error("HTTP repository URLs must not contain credentials. Use your existing Git authentication.");
   }
 }
 
@@ -33,6 +46,7 @@ export function resolveCompanyRepositoryUrl(input: {
   for (const candidate of candidates) {
     if (typeof candidate !== "string") continue;
     const url = candidate.trim();
+    rejectRepositoryCredentials(url);
     if (url !== "" && !isReservedExampleUrl(url)) return url;
   }
   throw new Error('Run "wagglebot connect <git-url>" first.');

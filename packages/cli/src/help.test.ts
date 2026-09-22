@@ -158,7 +158,8 @@ test("administrator documentation initializes a Git repository before update", (
     expect(text).toContain("git init");
     const administrator = text.slice(text.indexOf("wagglebot init --wagglebot mycompany-wagglebot"));
     expect(administrator.indexOf("git init")).toBeGreaterThan(administrator.indexOf("cd mycompany-wagglebot"));
-    expect(administrator.indexOf("wagglebot update")).toBeGreaterThan(administrator.indexOf("git init"));
+    expect(administrator.indexOf("npm install")).toBeGreaterThan(administrator.indexOf("git init"));
+    expect(administrator.indexOf("wagglebot update")).toBeGreaterThan(administrator.indexOf("npm install"));
   }
   expect(readDocumentation("packages", "cli", "README.md")).toContain(
     "https://github.com/swiknaba/wagglebot/blob/main/docs/phase-1-onboarding.md",

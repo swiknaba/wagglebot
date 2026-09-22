@@ -8,6 +8,7 @@ export type WagglePaths = {
   configFile: string;
   companyDir: string;
   activeCompanyDir: string;
+  credentialsFile: string;
   runtimeDir: string;
 };
 
@@ -21,6 +22,7 @@ export function resolvePaths(home: string): WagglePaths {
     configFile: join(stateDir, "config.json"),
     companyDir: join(stateDir, "company"),
     activeCompanyDir: join(stateDir, "company", "active"),
+    credentialsFile: join(stateDir, ".env.credentials"),
     runtimeDir: join(stateDir, "runtime"),
   };
 }

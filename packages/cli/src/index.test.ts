@@ -1,6 +1,18 @@
 import { afterEach, expect, test } from "bun:test";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { type Exec, realExec } from "./exec";
@@ -61,10 +73,14 @@ function fixture(company = false) {
       const prefix = args[args.indexOf("--prefix") + 1];
       if (!prefix) throw new Error("Missing runtime prefix");
       put(join(prefix, "node_modules/wagglebot/bin/wagglebot.js"), "// offline runtime\n");
-      put(join(prefix, "node_modules/wagglebot/templates/shell/wagglebot.sh"), "export FIXTURE_PINNED_SHELL=loaded\n");
+      put(
+        join(prefix, "node_modules/wagglebot/templates/shell/wagglebot.sh"),
+        `export FIXTURE_PINNED_SHELL=loaded\n${read(join(import.meta.dir, "../templates/shell/wagglebot.sh"))}`,
+      );
       return { code: 0, stdout: "", stderr: "" };
     }
-    if (cmd === process.execPath && args[0] === deps.skillsBin) return { code: 0, stdout: "", stderr: "" };
+    if (cmd === process.execPath && args[0] === deps.skillsBin)
+      return { code: 0, stdout: args[1] === "ls" ? "[]" : "", stderr: "" };
     if (cmd === process.execPath && args[0]?.endsWith("/bin/wagglebot.js")) {
       const child: string[] = [];
       const code = await main(args.slice(1), { ...deps, write: (line) => child.push(line) });
@@ -111,6 +127,19 @@ test("connect works outside Git and stores only the explicit repository URL", as
   });
   expect(f.calls).toEqual([]);
 });
+for (const url of ["company.example:platform/company.git", "https://user:secret@git.internal/company.git"]) {
+  for (const source of ["environment", "saved", "package"]) {
+    test(`cached update rejects unsafe ${source} URL before Git (${url.split(":")[0]})`, async () => {
+      const f = fixture();
+      if (source === "environment") f.deps.env = { WAGGLEBOT_COMPANY_REPOSITORY_URL: url };
+      if (source === "saved") put(join(f.home, ".wagglebot/config.json"), JSON.stringify({ companyRepository: url }));
+      if (source === "package") f.deps.packageMetadata = { version: "1.2.3", wagglebot: { companyRepository: url } };
+      expect(await f.run(["update", "--wagglebot"])).toBe(1);
+      expect(f.calls).toEqual([]);
+      expect(f.output()).not.toContain("user:secret");
+    });
+  }
+}
 
 for (const company of [false, true]) {
   test(`plain init initializes project files in ${company ? "company" : "project"} mode`, async () => {
@@ -319,6 +348,201 @@ test("skill pin updates remain available in a marked company working tree", asyn
   expect(read(join(f.cwd, "company/skills.list"))).toBe("acme/skills@v2.0.0\n");
   expect(f.calls.every((call) => call.cmd === "git" && call.args[0] === "config")).toBe(true);
 });
+for (const resolved of [false, true]) {
+  test(`plain skill pin updates reject the ${resolved ? "resolved revision" : "active symlink"} cache root`, async () => {
+    const f = fixture(true);
+    put(join(f.cwd, "company/skills.list"), "acme/skills@v1.0.0\n");
+    f.deps.env = { WAGGLEBOT_COMPANY_REPOSITORY_URL: f.remote() };
+    expect(await f.run(["update", "--wagglebot"])).toBe(0);
+    const active = join(f.home, ".wagglebot/company/active");
+    f.deps.cwd = resolved ? realpathSync(active) : active;
+    f.calls.length = 0;
+    f.lines.length = 0;
+    const exec = f.deps.exec;
+    if (!exec) throw new Error("Missing fixture executor");
+    f.deps.exec = (cmd, args, options) =>
+      args[0] === "ls-remote"
+        ? Promise.resolve({ code: 0, stdout: "abc\trefs/tags/v2.0.0\n", stderr: "" })
+        : exec(cmd, args, options);
+    expect(await f.run(["install-skills", "--update"])).toBe(1);
+    expect(read(join(active, "company/skills.list"))).toBe("acme/skills@v1.0.0\n");
+    expect(f.calls).toEqual([]);
+    expect(f.output()).toContain("immutable");
+  });
+}
+
+test("cached refresh migrates legacy personal credentials and retains them across later revisions", async () => {
+  const f = fixture(true);
+  f.deps.env = { SHELL: "/bin/zsh", WAGGLEBOT_COMPANY_REPOSITORY_URL: f.remote() };
+  expect(await f.run(["update", "--wagglebot"])).toBe(0);
+  const active = join(f.home, ".wagglebot/company/active");
+  const oldRevision = realpathSync(active);
+  put(join(active, ".env.credentials"), "FIXTURE_TOKEN=synthetic-only\n");
+  const credentialFile = join(f.home, ".wagglebot/.env.credentials");
+  for (let i = 0; i < 2; i += 1) {
+    expect(await f.run(["update", "--wagglebot"])).toBe(0);
+    const result = execFileSync("bash", ["-c", '. "$HOME/.zshenv"; test "$FIXTURE_TOKEN" = synthetic-only'], {
+      env: f.gitEnv,
+    });
+    expect(result.length).toBe(0);
+    expect(existsSync(credentialFile)).toBe(true);
+    expect(existsSync(join(active, ".env.credentials"))).toBe(false);
+    expect(read(join(f.home, ".zshenv"))).not.toContain("synthetic-only");
+    expect(f.output()).not.toContain("synthetic-only");
+  }
+  expect(existsSync(join(oldRevision, ".env.credentials"))).toBe(false);
+});
+
+for (const failure of ["npm", "child", "shell", "catalog", "later-mcp"]) {
+  test(`credential migration preserves shell loads across ${failure} failure and retry`, async () => {
+    const f = fixture(true);
+    f.deps.env = { SHELL: "/bin/zsh", WAGGLEBOT_COMPANY_REPOSITORY_URL: f.remote() };
+    expect(await f.run(["update", "--wagglebot"])).toBe(0);
+    const active = join(f.home, ".wagglebot/company/active");
+    const oldRevision = realpathSync(active);
+    put(join(active, ".env.credentials"), "FIXTURE_TOKEN=synthetic-only\n");
+    // This is the pre-migration loading contract. It does not know the stable credential path.
+    put(
+      join(f.home, ".zshenv"),
+      `# wagglebot:begin\nexport WAGGLEBOT_COMPANY_REPO="${active}"\n[ -r "$WAGGLEBOT_COMPANY_REPO/.env.credentials" ] && . "$WAGGLEBOT_COMPANY_REPO/.env.credentials"\n# wagglebot:end\n`,
+    );
+    const loadShell = () =>
+      execFileSync("bash", ["-c", '. "$HOME/.zshenv"; test "$FIXTURE_TOKEN" = synthetic-only'], {
+        env: { HOME: f.home },
+      });
+    expect(loadShell().length).toBe(0);
+    put(join(f.cwd, "package.json"), JSON.stringify({ dependencies: { wagglebot: "9.8.8" } }));
+    if (failure === "later-mcp") put(join(f.cwd, "company/registry.yaml"), "proxies: [invalid\n");
+    if (failure === "catalog") put(join(f.cwd, "company/catalog.yaml"), "invalid: [\n");
+    f.remote();
+    const exec = f.deps.exec;
+    const runtimeExec = f.deps.runtimeExec;
+    if (!exec) throw new Error("Missing fixture executor");
+    if (failure === "npm")
+      f.deps.exec = (cmd, args, options) =>
+        cmd === "npm"
+          ? Promise.resolve({ code: 1, stdout: "", stderr: "fixture npm failure" })
+          : exec(cmd, args, options);
+    if (failure === "child") f.deps.runtimeExec = async () => 7;
+    if (failure === "shell") mkdirSync(join(f.home, ".bashrc"));
+    expect(await f.run(["update", "--wagglebot"])).toBe(failure === "child" ? 7 : 1);
+    expect(loadShell().length).toBe(0);
+    const shellFailed = !["catalog", "later-mcp"].includes(failure);
+    expect(existsSync(join(oldRevision, ".env.credentials"))).toBe(shellFailed);
+    expect(realpathSync(active) === oldRevision).toBe(shellFailed);
+    f.deps.exec = exec;
+    f.deps.runtimeExec = runtimeExec;
+    if (failure === "shell") rmSync(join(f.home, ".bashrc"), { recursive: true });
+    if (failure === "later-mcp") {
+      put(join(f.cwd, "company/registry.yaml"), "proxies: []\n");
+      f.remote();
+    }
+    if (failure === "catalog") {
+      put(join(f.cwd, "company/catalog.yaml"), "");
+      f.remote();
+    }
+    expect(await f.run(["update", "--wagglebot"])).toBe(0);
+    expect(loadShell().length).toBe(0);
+    expect(existsSync(join(oldRevision, ".env.credentials"))).toBe(false);
+    expect(realpathSync(active)).not.toBe(oldRevision);
+    expect(f.output()).not.toContain("synthetic-only");
+  });
+}
+
+test("a separate stable credential file does not disconnect the legacy shell on npm failure", async () => {
+  const f = fixture(true);
+  f.deps.env = { SHELL: "/bin/zsh", WAGGLEBOT_COMPANY_REPOSITORY_URL: f.remote() };
+  expect(await f.run(["update", "--wagglebot"])).toBe(0);
+  const active = join(f.home, ".wagglebot/company/active");
+  const previous = realpathSync(active);
+  put(join(active, ".env.credentials"), "FIXTURE_TOKEN=legacy-only\n");
+  put(join(f.home, ".wagglebot/.env.credentials"), "FIXTURE_TOKEN=stable-only\n");
+  put(join(f.home, ".zshenv"), `# wagglebot:begin\n. "${active}/.env.credentials"\n# wagglebot:end\n`);
+  const load = (value: string) =>
+    execFileSync("bash", ["-c", '. "$HOME/.zshenv"; test "$FIXTURE_TOKEN" = "$1"', "fixture", value], {
+      env: { HOME: f.home },
+    });
+  expect(load("legacy-only").length).toBe(0);
+  put(join(f.cwd, "package.json"), JSON.stringify({ dependencies: { wagglebot: "9.8.8" } }));
+  f.remote();
+  const exec = f.deps.exec;
+  if (!exec) throw new Error("Missing fixture executor");
+  f.deps.exec = (cmd, args, options) =>
+    cmd === "npm" ? Promise.resolve({ code: 1, stdout: "", stderr: "fixture npm failure" }) : exec(cmd, args, options);
+  expect(await f.run(["update", "--wagglebot"])).toBe(1);
+  expect(load("legacy-only").length).toBe(0);
+  expect(realpathSync(active)).toBe(previous);
+  f.deps.exec = exec;
+  expect(await f.run(["update", "--wagglebot"])).toBe(0);
+  expect(load("stable-only").length).toBe(0);
+  expect(existsSync(join(previous, ".env.credentials"))).toBe(true);
+});
+
+test("cached update repairs a write-only shell receipt before credential settlement", async () => {
+  const f = fixture(true);
+  f.deps.env = { SHELL: "/bin/zsh", WAGGLEBOT_COMPANY_REPOSITORY_URL: f.remote() };
+  expect(await f.run(["update", "--wagglebot"])).toBe(0);
+  const active = join(f.home, ".wagglebot/company/active");
+  const previous = realpathSync(active);
+  put(join(active, ".env.credentials"), "FIXTURE_TOKEN=synthetic-only\n");
+  const receipt = join(f.home, ".wagglebot/company-shell-ready");
+  chmodSync(receipt, 0o200);
+  f.lines.length = 0;
+  expect(await f.run(["update", "--wagglebot"])).toBe(0);
+  expect(realpathSync(active)).not.toBe(previous);
+  expect(lstatSync(receipt).mode & 0o777).toBe(0o600);
+  expect(read(receipt)).toBe(realpathSync(active));
+  expect(existsSync(join(previous, ".env.credentials"))).toBe(false);
+  expect(
+    execFileSync("bash", ["-c", '. "$HOME/.zshenv"; test "$FIXTURE_TOKEN" = synthetic-only'], { env: { HOME: f.home } })
+      .length,
+  ).toBe(0);
+  expect(f.output()).not.toContain("rolled back");
+});
+
+for (const receiptFailure of ["unreadable", "symlink", "rollback-failure"]) {
+  for (const childCode of [0, 7]) {
+    test(`credential settlement reports ${receiptFailure} after child exit ${childCode}`, async () => {
+      const f = fixture(true);
+      f.deps.env = { SHELL: "/bin/zsh", WAGGLEBOT_COMPANY_REPOSITORY_URL: f.remote() };
+      expect(await f.run(["update", "--wagglebot"])).toBe(0);
+      const active = join(f.home, ".wagglebot/company/active");
+      const previous = realpathSync(active);
+      put(join(active, ".env.credentials"), "FIXTURE_TOKEN=synthetic-only\n");
+      const receipt = join(f.home, ".wagglebot/company-shell-ready");
+      const runtimeExec = f.deps.runtimeExec;
+      if (!runtimeExec) throw new Error("Missing fixture runtime executor");
+      f.deps.runtimeExec = async (cmd, args) => {
+        expect(await runtimeExec(cmd, args)).toBe(0);
+        if (receiptFailure === "unreadable") chmodSync(receipt, 0o200);
+        else {
+          unlinkSync(receipt);
+          if (receiptFailure === "symlink") {
+            const target = join(f.home, "receipt-target");
+            put(target, realpathSync(active));
+            symlinkSync(target, receipt);
+          } else {
+            unlinkSync(active);
+            symlinkSync(previous, active, "dir");
+          }
+        }
+        return childCode;
+      };
+      f.lines.length = 0;
+      expect(await f.run(["update", "--wagglebot"])).toBe(childCode || 1);
+      expect(f.output()).toContain("Credential migration failed");
+      expect(f.output()).not.toContain("synthetic-only");
+      expect(f.output().match(/^installed \d+.*failed \d+.*$/gm)).toHaveLength(1);
+      expect(realpathSync(active)).toBe(previous);
+      expect(existsSync(join(previous, ".env.credentials"))).toBe(true);
+      expect(
+        execFileSync("bash", ["-c", '. "$HOME/.zshenv"; test "$FIXTURE_TOKEN" = synthetic-only'], {
+          env: { HOME: f.home },
+        }).length,
+      ).toBe(0);
+    });
+  }
+}
 
 test("failed refresh provisions stale cache through the pinned child and preserves failure in its summary", async () => {
   const f = fixture(true);

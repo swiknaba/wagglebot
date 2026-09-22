@@ -24,18 +24,26 @@ refreshes the private cache, validates the marker and exact package pin, and
 provisions all compatible local targets. Engineers do not keep a visible company
 clone. Project `init` and `update` need no company configuration or identity.
 
+For cached mode, keep personal credentials in `~/.wagglebot/.env.credentials`.
+Copy the active cache's `.env.credentials.example` to that path, then enter the required values.
+Open a new terminal after `update --wagglebot` to load the file.
+Cache refresh preserves this personal file outside its immutable revisions.
+
 ## Administrator flow
 
 ```sh
 wagglebot init --wagglebot mycompany-wagglebot
 cd mycompany-wagglebot
 git init
+npm install
 wagglebot update
 ```
 
 The scaffold writes `wagglebot.yaml`. Inside this marked repository, plain
 `wagglebot update` uses uncommitted working-tree changes. Use this mode to test
 a company change before publication.
+`npm install` installs the exact package pin and its shell script.
+In a working tree, keep personal credentials in the gitignored `.env.credentials` at the repository root.
 
 The catalog is optional. A missing catalog or unknown engineer provisions the
 company layer with a warning. An invalid catalog returns failure after safe

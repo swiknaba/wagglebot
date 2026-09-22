@@ -128,8 +128,8 @@ const SECTIONS: Record<string, Section> = {
   "sync-shell": {
     title: "sync-shell",
     purpose:
-      "Adds a managed block to the shell startup files that loads .env.credentials from the company repository into every new shell.",
-    reads: [".env.credentials  (at shell start, never by wagglebot itself)"],
+      "Loads ~/.wagglebot/.env.credentials in cached mode, or the working-tree .env.credentials, into new shells through a managed block.",
+    reads: ["Personal .env.credentials  (at shell start, never by wagglebot itself)"],
     writes: shellFiles(),
   },
   "write-mcp": {

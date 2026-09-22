@@ -25,6 +25,79 @@ const ADAPTERS = [
   "kiro-cli",
 ];
 
+test("split-pin removal combines repository identities and retains every record until a successful retry", async () => {
+  const file = managed();
+  const initial = { "a/b@v1": ["codex", "junie"], "https://github.com/a/b.git v2": ["cursor"] };
+  saveState(file, { jsonKeys: {}, agentFiles: [], skills: initial });
+  const lock = lockFile({ old: { source: "a/b", updatedAt: "2020-01-01" } });
+  let fail = true;
+  const removals: string[][] = [];
+  const exec: Exec = async (_cmd, args) => {
+    if (args[1] === "remove") {
+      removals.push(args);
+      return { code: fail ? 1 : 0, stdout: "", stderr: "" };
+    }
+    return { code: 0, stdout: "[]", stderr: "" };
+  };
+  const run = () =>
+    runInstallSkills({
+      lists: [],
+      exec,
+      reporter: quiet(),
+      skillsBin: "/fake/skills",
+      skillsAgents: ["codex", "cursor"],
+      managedFile: file,
+      skillLockFile: lock,
+      nodeVersion: NODE,
+    });
+  expect(await run()).toBe(1);
+  expect(removals).toEqual([["/fake/skills", "remove", "old", "-g", "-y", "-a", "codex", "-a", "cursor"]]);
+  expect(loadState(file).skills).toEqual(initial);
+  fail = false;
+  expect(await run()).toBe(0);
+  expect(loadState(file).skills).toEqual({ "a/b@v1": ["junie"] });
+});
+
+for (const hasLock of [false, true]) {
+  test(`removal retains ownership when the listing still contains a selected skill (lock=${hasLock})`, async () => {
+    const file = managed();
+    const lock = lockFile({ old: { source: "a/b", updatedAt: "2020-01-01" } });
+    saveState(file, { jsonKeys: {}, agentFiles: [], skills: { "a/b": ["codex", "cursor"] } });
+    const reporter = quiet();
+    const exec: Exec = async (_cmd, args) => ({
+      code: 0,
+      stderr: "",
+      stdout:
+        args[1] === "ls"
+          ? JSON.stringify([
+              {
+                name: "old",
+                path: "/fixture/.agents/skills/old",
+                scope: "global",
+                agents: ["Codex", "Cursor"],
+                source: "a/b",
+                sourceUrl: null,
+                sourceType: "git",
+              },
+            ])
+          : "Successfully removed 1 skill(s)",
+    });
+    expect(
+      await runInstallSkills({
+        lists: [],
+        exec,
+        reporter,
+        skillsBin: "/bin/skills",
+        skillsAgents: ["codex", "cursor"],
+        managedFile: file,
+        skillLockFile: hasLock ? lock : NO_LOCK,
+        nodeVersion: NODE,
+      }),
+    ).toBe(1);
+    expect(loadState(file).skills).toEqual({ "a/b": ["codex", "cursor"] });
+  });
+}
+
 test.each(["*", "--all", "invalid-adapter"])("overwrite rejects adapter %j before any removal", async (adapter) => {
   const calls: string[][] = [];
   const file = managed();
@@ -72,7 +145,7 @@ test("failed additions retain prior ownership and successful pin changes preserv
   });
 });
 
-test("installs into all ten declared adapters after one overwrite removal per adapter", async () => {
+test("installs into all ten declared adapters after one overwrite removal across their union", async () => {
   const calls: string[][] = [];
   const file = managed();
   saveState(file, { jsonKeys: { config: ["mcp"] }, agentFiles: ["agent.md"], skills: { "old/repo": ADAPTERS } });
@@ -89,22 +162,17 @@ test("installs into all ten declared adapters after one overwrite removal per ad
     overwriteLocal: true,
   });
   expect(code).toBe(0);
-  expect(calls.slice(0, 10)).toEqual(
-    [...ADAPTERS]
-      .sort()
-      .map((agent) => [
-        process.execPath,
-        "/bin/skills",
-        "remove",
-        "--skill",
-        "*",
-        "--global",
-        "--yes",
-        "--agent",
-        agent,
-      ]),
-  );
-  expect(calls[10]).toEqual([
+  expect(calls[0]).toEqual([
+    process.execPath,
+    "/bin/skills",
+    "remove",
+    "--skill",
+    "*",
+    "--global",
+    "--yes",
+    ...[...ADAPTERS].sort().flatMap((agent) => ["--agent", agent]),
+  ]);
+  expect(calls[1]).toEqual([
     process.execPath,
     "/bin/skills",
     "add",
@@ -244,14 +312,14 @@ test("zero-exit partial overwrite clears only successful adapters and continues 
   saveState(file, { jsonKeys: {}, agentFiles: [], skills: { "a/b": ["claude-code", "codex"] } });
   const reporter = quiet();
   const exec: Exec = async (cmd, args) => {
+    if (args[1] === "ls") return { code: 0, stdout: "[]", stderr: "" };
     calls.push([cmd, ...args]);
     if (args[1] === "remove")
       return {
         code: 0,
-        stdout:
-          args.at(-1) === "claude-code"
-            ? "Could not remove skill from Claude Code: EACCES: permission denied\nSuccessfully removed 1 skill(s)\nDone!"
-            : "Successfully removed 1 skill(s)\nDone!",
+        stdout: args.includes("claude-code")
+          ? "Could not remove skill from Claude Code: EACCES: permission denied\nSuccessfully removed 1 skill(s)\nDone!"
+          : "Successfully removed 1 skill(s)\nDone!",
         stderr: "",
       };
     expect(loadState(file).skills).toEqual({ "a/b": ["claude-code"] });
@@ -271,6 +339,19 @@ test("zero-exit partial overwrite clears only successful adapters and continues 
     }),
   ).toBe(1);
   expect(calls).toEqual([
+    [
+      process.execPath,
+      "/bin/skills",
+      "remove",
+      "--skill",
+      "*",
+      "--global",
+      "--yes",
+      "--agent",
+      "claude-code",
+      "--agent",
+      "codex",
+    ],
     [process.execPath, "/bin/skills", "remove", "--skill", "*", "--global", "--yes", "--agent", "claude-code"],
     [process.execPath, "/bin/skills", "remove", "--skill", "*", "--global", "--yes", "--agent", "codex"],
     [process.execPath, "/bin/skills", "add", "new/repo#v1", "-g", "-y", "-a", "claude-code", "-a", "codex"],
@@ -291,6 +372,7 @@ const lockFile = (skills: Record<string, { source: string; updatedAt: string }>)
 // can name the skills a source still provides and let the stale ones keep an old stamp.
 const lockWritingExec = (calls: string[][], file: string, provides: Record<string, string[]>): Exec => {
   return async (cmd, args) => {
+    if (args[1] === "ls") return { code: 0, stdout: "[]", stderr: "" };
     calls.push([cmd, ...args]);
     if (args[1] === "add") {
       const source = (args[2] ?? "").split("#")[0] ?? "";
@@ -315,6 +397,7 @@ const lockWritingExec = (calls: string[][], file: string, provides: Record<strin
 const fakeExec =
   (calls: string[][]): Exec =>
   async (cmd, args) => {
+    if (args[1] === "ls") return { code: 0, stdout: "[]", stderr: "" };
     calls.push([cmd, ...args]);
     if (args[2] === "fail/fail#v1") return { code: 1, stdout: "■ Installation failed", stderr: "" };
     return { code: 0, stdout: "Installed 3 skills", stderr: "" };
@@ -595,6 +678,44 @@ test("keeps every skill when the add stamped none of them", async () => {
   expect(calls).toHaveLength(1);
   expect(r.counts().skipped).toBe(1);
   expect(Object.keys(JSON.parse(readFileSync(lock, "utf8")).skills).sort()).toEqual(["alpha", "beta"]);
+});
+
+test("installation-only phase still removes upstream deletions across the selected removal union", async () => {
+  const file = managed();
+  const lock = lockFile({
+    alpha: { source: "a/b", updatedAt: "2020-01-01" },
+    beta: { source: "a/b", updatedAt: "2020-01-01" },
+  });
+  const calls: string[][] = [];
+  expect(
+    await runInstallSkills({
+      lists: [{ path: "skills.list", text: "a/b@v1" }],
+      exec: lockWritingExec(calls, lock, { "a/b": ["alpha"] }),
+      reporter: quiet(),
+      skillsBin: "/bin/skills",
+      skillsAgents: ["claude-code"],
+      managedFile: file,
+      skillLockFile: lock,
+      nodeVersion: NODE,
+      phase: "install",
+      staleRemovalAgents: ["claude-code", "codex", "cursor"],
+    }),
+  ).toBe(0);
+  expect(Object.keys(JSON.parse(readFileSync(lock, "utf8")).skills)).toEqual(["alpha"]);
+  expect(calls.at(-1)).toEqual([
+    process.execPath,
+    "/bin/skills",
+    "remove",
+    "beta",
+    "-g",
+    "-y",
+    "-a",
+    "claude-code",
+    "-a",
+    "codex",
+    "-a",
+    "cursor",
+  ]);
 });
 
 test("removes every skill of a source that no list names any more", async () => {

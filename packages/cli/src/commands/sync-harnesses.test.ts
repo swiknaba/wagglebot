@@ -31,6 +31,29 @@ const setup = () => {
   return { home, instructionsDir };
 };
 const quiet = () => createReporter(() => {}, false);
+test("normal sync replaces obsolete instructions after overwrite", () => {
+  const { home, instructionsDir } = setup();
+  const run = (overwriteLocal = false) =>
+    runSyncHarnesses({
+      home,
+      harnesses: HARNESSES,
+      instructionDirs: [instructionsDir],
+      reporter: quiet(),
+      overwriteLocal,
+    });
+  expect(run(true)).toBe(0);
+  writeFileSync(join(instructionsDir, "10-team.md"), "## Replacement rules\n");
+  expect(run()).toBe(0);
+  for (const target of HARNESSES.flatMap((h) => h.templateTargets)) {
+    const text = readFileSync(join(home, target), "utf8");
+    expect(text).not.toContain("## Team Instructions");
+    expect(text.match(/<!-- wagglebot:begin -->/g)).toHaveLength(1);
+    expect(text.match(/## Replacement rules/g)).toHaveLength(1);
+  }
+  const reporter = quiet();
+  expect(runSyncHarnesses({ home, harnesses: HARNESSES, instructionDirs: [instructionsDir], reporter })).toBe(0);
+  expect(reporter.counts().updated).toBe(0);
+});
 
 test("writes every template target inside a managed block, chmod 600", () => {
   const { home, instructionsDir } = setup();
@@ -301,7 +324,7 @@ test("overwrite replaces dedicated instructions and hook categories without a ba
     const text = readFileSync(join(home, path), "utf8");
     expect(text).toContain("ASD-STE100");
     expect(text).not.toContain("Personal instructions");
-    expect(text).not.toContain("<!-- wagglebot:");
+    expect(text.match(/<!-- wagglebot:begin -->/g)).toHaveLength(1);
   }
   for (const target of objectHookTargets) {
     const doc = JSON.parse(readFileSync(join(home, target.path), "utf8"));

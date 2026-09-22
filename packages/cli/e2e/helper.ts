@@ -1,5 +1,6 @@
 import { type ExecFileSyncOptions, execFileSync } from "node:child_process";
-import { mkdirSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -67,6 +68,57 @@ export function ensureBuilt(): void {
   if (built) return;
   execFileSync("bun", ["run", "build"], { cwd: cliDir, stdio: "inherit" });
   built = true;
+}
+
+// Install a complete local package with its external dependencies. Bun bundles workspace modules into dist.
+export function installBuiltPackage(cwd: string, env: NodeJS.ProcessEnv, scratch: string): void {
+  const stage = mkdtempSync(join(scratch, "package-"));
+  const metadata = JSON.parse(readFileSync(join(cliDir, "package.json"), "utf8"));
+  for (const path of ["bin", "dist", "templates", "README.md"])
+    cpSync(join(cliDir, path), join(stage, path), { recursive: true });
+  const dependencies = Object.fromEntries(
+    Object.entries(metadata.dependencies as Record<string, string>).filter(
+      ([, version]) => !version.startsWith("workspace:"),
+    ),
+  );
+  writeFileSync(
+    join(stage, "package.json"),
+    JSON.stringify({ ...metadata, dependencies, devDependencies: {}, bundledDependencies: Object.keys(dependencies) }),
+  );
+  const copyDependency = (name: string, parent: string, destination: string): void => {
+    const require = createRequire(join(parent, "package.json"));
+    const source = dirname(require.resolve(`${name}/package.json`));
+    const target = join(destination, "node_modules", name);
+    cpSync(source, target, {
+      recursive: true,
+      dereference: true,
+      filter: (path) => !path.split("/").includes("node_modules", source.split("/").length),
+    });
+    const pkg = JSON.parse(readFileSync(join(source, "package.json"), "utf8"));
+    for (const dependency of Object.keys(pkg.dependencies ?? {})) copyDependency(dependency, source, target);
+  };
+  for (const name of Object.keys(dependencies)) copyDependency(name, cliDir, stage);
+  const packed = JSON.parse(
+    execFileSync("npm", ["pack", "--json", "--ignore-scripts", "--pack-destination", scratch], {
+      cwd: stage,
+      env,
+      encoding: "utf8",
+    }),
+  );
+  execFileSync(
+    "npm",
+    [
+      "install",
+      "--offline",
+      "--ignore-scripts",
+      "--no-audit",
+      "--no-fund",
+      "--no-save",
+      "--package-lock=false",
+      join(scratch, packed[0].filename),
+    ],
+    { cwd, env, encoding: "utf8" },
+  );
 }
 
 export type CliResult = { stdout: string; stderr: string; status: number };

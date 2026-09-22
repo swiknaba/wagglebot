@@ -11,6 +11,23 @@ import { createReporter } from "../report";
 import { missingEnvVars, proxyToClaudeEntry, runWriteMcp } from "./write-mcp";
 
 const quiet = () => createReporter(() => {}, false);
+for (const command of ["server", "personal-server"]) {
+  test(`normal MCP sync preserves unowned collisions (${command}) after company removal`, () => {
+    const home = mkdtempSync(join(tmpdir(), "wgl-personal-mcp-"));
+    const harness = HARNESSES.find((h) => h.name === "cursor");
+    if (!harness) throw new Error("Missing Cursor fixture");
+    const path = join(home, ".cursor/mcp.json");
+    mkdirSync(dirname(path), { recursive: true });
+    const personal = { command, args: [], type: "stdio" };
+    writeFileSync(path, JSON.stringify({ mcpServers: { shared: personal } }));
+    const run = (proxies: ProxyConfig[]) =>
+      runWriteMcp({ home, harnesses: [harness], proxies, env: {}, reporter: quiet() });
+    expect(run([{ namespace: "shared", mode: "stdio_cmd", command: "server" }])).toBe(0);
+    expect(JSON.parse(readFileSync(path, "utf8")).mcpServers.shared).toEqual(personal);
+    expect(run([])).toBe(0);
+    expect(JSON.parse(readFileSync(path, "utf8")).mcpServers.shared).toEqual(personal);
+  });
+}
 const remote: ProxyConfig = {
   namespace: "example",
   mode: "remote_http",

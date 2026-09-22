@@ -1,5 +1,6 @@
 import { chmodSync, existsSync, readFileSync } from "node:fs";
 import { writeFileAtomic } from "../atomic-write";
+import { rejectRepositoryCredentials } from "../company-url";
 import type { Reporter } from "../report";
 
 function loadConfig(configFile: string): Record<string, unknown> {
@@ -14,6 +15,7 @@ function loadConfig(configFile: string): Record<string, unknown> {
 export function runConnect(input: { url: string; configFile: string; reporter: Reporter }): number {
   input.reporter.section("Connect company repository");
   try {
+    rejectRepositoryCredentials(input.url);
     const config = loadConfig(input.configFile);
     const existed = existsSync(input.configFile);
     config.companyRepository = input.url;

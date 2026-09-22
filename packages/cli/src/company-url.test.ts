@@ -5,6 +5,34 @@ const metadata = {
   version: "0.2.1",
   wagglebot: { companyRepository: "git@metadata.example.invalid:platform/company.git" },
 };
+for (const source of ["environment", "saved", "package"]) {
+  test(`rejects HTTP credentials from ${source} before lower-precedence fallback`, () => {
+    const unsafe = "https://user:secret@git.internal/company.git";
+    expect(() =>
+      resolveCompanyRepositoryUrl({
+        env: source === "environment" ? { WAGGLEBOT_COMPANY_REPOSITORY_URL: unsafe } : {},
+        config: source === "saved" ? { companyRepository: unsafe } : {},
+        packageMetadata: {
+          version: "0.2.1",
+          wagglebot: { companyRepository: source === "package" ? unsafe : "git@git.internal:company.git" },
+        },
+      }),
+    ).toThrow("credential");
+  });
+}
+test("accepts SSH usernames and bare SCP hosts but rejects reserved bare SCP hosts", () => {
+  expect(isReservedExampleUrl("company.example:platform/company.git")).toBe(true);
+  expect(isReservedExampleUrl("COMPANY.EXAMPLE.:platform/company.git")).toBe(true);
+  for (const url of [
+    "ssh://git@git.internal/company.git",
+    "git@git.internal:company.git",
+    "git.internal:company.git",
+  ]) {
+    expect(
+      resolveCompanyRepositoryUrl({ env: {}, config: { companyRepository: url }, packageMetadata: metadata }),
+    ).toBe(url);
+  }
+});
 
 test("environment URL wins over saved and package URLs", () => {
   expect(

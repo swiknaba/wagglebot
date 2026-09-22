@@ -312,6 +312,7 @@ const gitExec =
   async (cmd, args, _opts) => {
     calls.push([cmd, ...args]);
     if (cmd === "git" && args.includes("wagglebot.username")) return { code: 0, stdout: "alice\n", stderr: "" };
+    if (args[1] === "ls") return { code: 0, stdout: "[]", stderr: "" };
     return { code: 0, stdout: "", stderr: "" };
   };
 
