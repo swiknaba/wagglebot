@@ -5,7 +5,7 @@
     "wagglebot": "{{WAGGLEBOT_VERSION}}"
   },
   "scripts": {
-    "update:wagglebot": "wagglebot update"
+    "update": "wagglebot update"
   },
   "wagglebot": {
     "organization": []

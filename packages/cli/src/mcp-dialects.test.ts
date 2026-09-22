@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import type { McpDialect } from "./harness";
 import { needsExpansion, proxyToClaudeEntry, renderEntry, renderTomlTables } from "./mcp-dialects";
 import type { ProxyConfig } from "./registry";
 
@@ -23,6 +24,109 @@ const stdioSameName: ProxyConfig = {
 };
 const plainRemote: ProxyConfig = { namespace: "plain", mode: "remote_http", endpoint: "https://plain.example/mcp" };
 const plainStdio: ProxyConfig = { namespace: "plain-cmd", mode: "stdio_cmd", command: "my-mcp", args: ["--x"] };
+
+const newDialects = ["cursor", "devin", "windsurf", "kiro"] as const satisfies readonly McpDialect[];
+for (const dialect of newDialects) {
+  test(`${dialect} renders plain stdio, HTTP, and SSE with its required fields`, () => {
+    expect(entryOf(renderEntry(dialect, plainStdio))).toEqual({
+      ...(dialect === "cursor" ? { type: "stdio" } : {}),
+      command: "my-mcp",
+      args: ["--x"],
+    });
+    for (const mode of ["remote_http", "remote_sse"] as const) {
+      expect(entryOf(renderEntry(dialect, { ...plainRemote, mode }))).toEqual({
+        url: "https://plain.example/mcp",
+        ...(dialect === "devin" ? { transport: mode === "remote_http" ? "http" : "sse" } : {}),
+      });
+    }
+  });
+
+  test(`${dialect} renders safe environment references or skips credentials`, () => {
+    const withEnv: ProxyConfig = { ...plainStdio, env: { TOKEN: "${TOKEN}" } };
+    const custom: ProxyConfig = {
+      ...remote,
+      auth: { scheme: { kind: "header", name: "X-Key", prefix: "Token " }, source: { from: "env", var: "TOKEN" } },
+    };
+    for (const proxy of [withEnv, stdioNpx, remote, sse, custom]) {
+      const rendered = renderEntry(dialect, proxy);
+      if (dialect === "windsurf") expect(reasonOf(rendered)).toContain("does not expand");
+      else expect(rendered.ok).toBe(true);
+    }
+    if (dialect === "windsurf") return;
+    const value = dialect === "kiro" ? "${TOKEN}" : "${env:TOKEN}";
+    expect(entryOf(renderEntry(dialect, withEnv)).env).toEqual({ TOKEN: value });
+    expect(entryOf(renderEntry(dialect, custom)).headers).toEqual({ "X-Key": `Token ${value}` });
+    expect(entryOf(renderEntry(dialect, remote)).headers).toEqual({
+      Authorization: dialect === "kiro" ? "Bearer ${EXAMPLE_TOKEN}" : "Bearer ${env:EXAMPLE_TOKEN}",
+    });
+    expect(entryOf(renderEntry(dialect, stdioNpx))).toMatchObject({
+      command: "npx",
+      args: ["-y", "@example/mcp@1.4.2", "--flag"],
+      env: { GH_TOKEN: dialect === "kiro" ? "${MY_GH_TOKEN}" : "${env:MY_GH_TOKEN}" },
+    });
+  });
+
+  test(`${dialect} skips unsupported credentials without exposing their contents`, () => {
+    for (const source of [
+      { from: "file", path: "/secret" },
+      { from: "literal", value: "do-not-print" },
+    ] as const) {
+      // Bypass the registry validator to verify the renderer's secret boundary.
+      const result = renderEntry(dialect, {
+        ...remote,
+        auth: { scheme: { kind: "bearer" }, source: source as NonNullable<ProxyConfig["auth"]>["source"] },
+      });
+      expect(reasonOf(result)).toContain("credential");
+      expect(JSON.stringify(result)).not.toContain("do-not-print");
+    }
+    for (const proxy of [
+      { ...plainStdio, env: { TOKEN: "do-not-print" } },
+      {
+        ...remote,
+        auth: { scheme: { kind: "env", map: { TOKEN: "$SOURCE" } }, source: { from: "env", var: "TOKEN" } },
+      },
+      { ...plainStdio, auth: remote.auth },
+    ] satisfies ProxyConfig[])
+      expect(renderEntry(dialect, proxy).ok).toBe(false);
+    expect(renderEntry(dialect, plainRemote).ok).toBe(true);
+  });
+
+  test(`${dialect} converts embedded references in URLs, commands, arguments, and header prefixes`, () => {
+    const local: ProxyConfig = { ...plainStdio, command: "${ROOT}/mcp", args: ["--token=${TOKEN}"] };
+    const url: ProxyConfig = { ...plainRemote, endpoint: "https://x/mcp?key=${TOKEN}" };
+    const prefixed: ProxyConfig = {
+      ...remote,
+      auth: {
+        scheme: { kind: "header", name: "X-Key", prefix: "${PREFIX} " },
+        source: { from: "env", var: "TOKEN" },
+      },
+    };
+    if (dialect === "windsurf") {
+      expect(renderEntry(dialect, local).ok).toBe(false);
+      expect(renderEntry(dialect, url).ok).toBe(false);
+      return;
+    }
+    expect(entryOf(renderEntry(dialect, local))).toMatchObject({
+      command: dialect === "kiro" ? "${ROOT}/mcp" : "${env:ROOT}/mcp",
+      args: [dialect === "kiro" ? "--token=${TOKEN}" : "--token=${env:TOKEN}"],
+    });
+    expect(entryOf(renderEntry(dialect, url)).url).toBe(
+      dialect === "kiro" ? "https://x/mcp?key=${TOKEN}" : "https://x/mcp?key=${env:TOKEN}",
+    );
+    expect(entryOf(renderEntry(dialect, prefixed)).headers).toEqual({
+      "X-Key": dialect === "kiro" ? "${PREFIX} ${TOKEN}" : "${env:PREFIX} ${env:TOKEN}",
+    });
+  });
+
+  test(`${dialect} skips malformed variable references and empty credential maps`, () => {
+    for (const proxy of [
+      { ...plainStdio, command: "${env:TOKEN}" },
+      { ...plainRemote, endpoint: "https://x/${TOKEN:-fallback}" },
+      { ...plainStdio, auth: { scheme: { kind: "env", map: {} }, source: { from: "env", var: "TOKEN" } } },
+    ] satisfies ProxyConfig[])
+      expect(renderEntry(dialect, proxy).ok).toBe(false);
+  });
+}
 
 const entryOf = (rendered: ReturnType<typeof renderEntry>): Record<string, unknown> => {
   if (!rendered.ok) throw new Error(`expected an entry, got: ${rendered.reason}`);

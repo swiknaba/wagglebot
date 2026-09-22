@@ -1,6 +1,9 @@
 {
   "name": "wagglebot",
   "version": "0.2.1",
+  "wagglebot": {
+    "companyRepository": "git@company.example:platform/mycompany-wagglebot.git"
+  },
   "description": "One AI agent setup for a whole engineering team.",
   "license": "MIT",
   "type": "module",
@@ -32,7 +35,8 @@
     "@wagglebot/contracts": "workspace:*",
     "@wagglebot/mcp-hub": "workspace:*",
     "@wagglebot/local-brain": "workspace:*",
-    "skills": "1.5.23"
+    "skills": "1.5.23",
+    "smol-toml": "1.8.0"
   },
   "devDependencies": {
     "yaml": "2.8.3"

@@ -24,3 +24,15 @@ test("warn writes a line with the message and does not change counts", () => {
   expect(r.counts()).toEqual(before);
   expect(r.failed()).toBe(false);
 });
+
+test("a named summary includes all items and warnings without changing the default summary", () => {
+  const reporter = createReporter(() => {}, false);
+  reporter.item("Existing failure", "failed");
+  reporter.item("Existing item", "ok");
+  reporter.warn("Existing warning");
+  expect(reporter.summary(true)).toBe(
+    "installed 0, ok 1 [Existing item], updated 0, skipped 0, warned 1 [Existing warning], failed 1 [Existing failure]",
+  );
+  expect(reporter.summary()).toBe("installed 0, updated 0, ok 1, skipped 0, failed 1");
+  expect(reporter.counts()).toEqual({ installed: 0, updated: 0, ok: 1, skipped: 0, failed: 1 });
+});

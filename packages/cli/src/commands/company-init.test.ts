@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createReporter } from "../report";
-import { runInit } from "./init";
+import { runInit } from "./company-init";
 
 const quiet = () => createReporter(() => {}, false);
 
@@ -14,7 +14,8 @@ test("scaffolds the company repository with the version substituted", () => {
   expect(code).toBe(0);
   const pkg = JSON.parse(readFileSync(join(target, "package.json"), "utf8"));
   expect(pkg.dependencies.wagglebot).toBe("1.4.2");
-  expect(pkg.scripts["update:wagglebot"]).toBe("wagglebot update");
+  expect(pkg.scripts.update).toBe("wagglebot update");
+  expect(readFileSync(join(target, "wagglebot.yaml"), "utf8")).toBe("version: 1\nkind: company\n");
   for (const f of [
     "teams/team-payments/catalog.yaml",
     "teams/team-payments/README.md",

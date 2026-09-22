@@ -1,90 +1,73 @@
 # wagglebot
 
-One AI agent setup for a whole engineering team.
+This package provides Phase 1 local provisioning. It configures all supported
+harnesses and preserves personal content outside Wagglebot-owned content.
 
-This package installs the Phase 1 provisioning layer. It installs the
-curated skills, the curated subagents, and one base prompt in every
-agent harness. It also installs MCP server configs from a shared
-registry, and a shell block that loads the engineer's credentials. The
-package also publishes the repository's own instructions to every
-harness. Every mutation lands inside a managed block. Content outside
-that block stays untouched.
+Requires Node 22.20 or newer. It runs on macOS, Linux, and Windows through
+WSL. Native Windows shells, PowerShell, and cmd are unsupported.
 
-Requires Node 22.20 or newer. Runs on macOS, on Linux, and on Windows
-through the Windows Subsystem for Linux (WSL). The native Windows
-shells, PowerShell and cmd, are out of scope. Under WSL, run this CLI
-and the agent harness in the same environment, because wagglebot
-provisions one home directory.
-
-## The Engineer Flow
-
-An engineer runs three commands.
-
-```sh
-git clone <company repo>
-yarn install
-yarn update:wagglebot
-```
-
-The `update` command pulls the company repository, then reinstalls the
-skills, the subagents, the base prompt, and the MCP configs for every
-harness on the workstation.
-
-## Commands
-
-| Command | What it does |
-|---|---|
-| `wagglebot update` | Pulls the company repo, then syncs skills, subagents, the base prompt, and MCP configs. |
-| `wagglebot init [dir]` | Scaffolds a new company repository. |
-| `wagglebot install-skills` | Syncs the curated skills list: installs new skills, removes deleted ones. |
-| `wagglebot install-agents` | Installs the shared subagents: the company `agents/` directory, plus the curated list. |
-| `wagglebot sync-agents` | Syncs the base prompt, plus the company instructions, into every harness. |
-| `wagglebot sync-project` | Publishes this repository's `.agents/instructions/` to every project target. |
-| `wagglebot sync-shell` | Adds a managed block to the shell startup files that loads `.env.credentials`. |
-| `wagglebot write-mcp` | Writes MCP server configs from the registry into every harness. |
-
-Run `wagglebot --help` for the full file-by-file breakdown, or
-`wagglebot <command> --help` for the same text.
-
-## Project Instructions
-
-`wagglebot sync-project` publishes this repository's own instructions
-from `.agents/instructions/*.md`, sorted by name:
-
-```
-.agents/instructions/
-  code-style.md
-  testing.md
-```
-
-It writes four targets: root `AGENTS.md` (Codex, Junie, Cline), root
-`CLAUDE.md` (Claude Code, a managed `@AGENTS.md` import), root
-`GEMINI.md` (Gemini CLI, a managed `@./AGENTS.md` import), and
-`.github/copilot-instructions.md` (GitHub Copilot CLI).
-
-Removing a source file removes stale content only from the blocks that
-wagglebot owns. A file left with only whitespace after that removal is
-deleted. A file that still holds other content keeps that content.
-Every target sits inside the repository, so git is the backup and the
-undo.
-
-The command needs no company repository. Run it from a pinned global
-install:
+## Engineer flow
 
 ```sh
 npm install --global wagglebot@<version>
-wagglebot sync-project
+wagglebot connect <company-git-url>
+wagglebot update --wagglebot
+cd my-project
+wagglebot init
+wagglebot update
 ```
 
-## Workstation Settings
+`connect` is optional when the installed company package contains a real URL.
+The official package contains `git@company.example:platform/mycompany-wagglebot.git`
+as documentation only. A `.example` host is reserved, counts as unset, and is
+never fetched.
 
-Wagglebot stores two settings in the engineer's global git config.
-`wagglebot.username` holds the company Git username, asked once on
-the first run. `wagglebot.harnesses` holds an explicit, comma-separated
-harness list, and overrides detection when set. Without it, wagglebot
-provisions every harness whose home directory already exists.
+The company update uses a private cache under `~/.wagglebot/company/`.
+Engineers run it after the company announces a reviewed change. Project `init`
+and `update` do not need company configuration.
 
-## Specs
+## Administrator flow
 
-The design and the Phase 1 specification live at
-[github.com/swiknaba/wagglebot](https://github.com/swiknaba/wagglebot).
+```sh
+wagglebot init --wagglebot mycompany-wagglebot
+cd mycompany-wagglebot
+git init
+npm install
+wagglebot update
+```
+
+Inside a marked company repository, plain `update` uses the current working
+tree, including uncommitted changes. Use this mode to test a change before publication.
+
+## Commands
+
+| Command | Purpose |
+|---|---|
+| `wagglebot connect <git-url>` | Store a company repository URL without credentials. |
+| `wagglebot init` | Initialize a Git project and publish its first instructions. |
+| `wagglebot update` | Update project outputs, or provision a marked company working tree. |
+| `wagglebot init --wagglebot [directory]` | Scaffold a marked company repository. |
+| `wagglebot update --wagglebot` | Refresh the company cache and provision the exact package pin. |
+| `wagglebot install-skills` | Install curated skills from company layers. |
+| `wagglebot install-agents` | Install compatible custom agents. |
+| `wagglebot sync-harnesses` | Synchronize global instructions and compatible hooks. |
+| `wagglebot sync-shell` | Synchronize the credential-loading shell block. |
+| `wagglebot write-mcp` | Write compatible MCP configurations. |
+
+Run `wagglebot --help` for public command help. Compatibility aliases remain
+available for one release but do not appear in primary help. See the
+[migration guide](https://github.com/swiknaba/wagglebot/blob/main/docs/phase-1-command-migration.md) for their mappings.
+
+## Safety
+
+Wagglebot stores a repository URL only. Git uses existing SSH or HTTPS
+authentication. It never stores credentials. MCP entries use safe environment
+variable references or are skipped. Cached shells load `~/.wagglebot/.env.credentials` outside immutable revisions.
+Working-tree shells load the gitignored `.env.credentials` at the company root.
+
+Default company updates preserve personal content. `--overwrite-local` replaces
+only documented instruction, skill, custom-agent, hook, and MCP categories. It
+creates no backup and asks for no confirmation. Project mode rejects it.
+
+Read the [onboarding guide](https://github.com/swiknaba/wagglebot/blob/main/docs/phase-1-onboarding.md) and the
+[harness reference](https://github.com/swiknaba/wagglebot/blob/main/docs/harnesses.md) before a deployment.

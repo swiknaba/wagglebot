@@ -6,8 +6,10 @@ import type { AuthScheme, CredentialSource, ProxyConfig } from "./registry";
 // written (F23).
 export type Rendered = { ok: true; entry: Record<string, unknown> } | { ok: false; reason: string };
 
+const variable = (name: string, style: "plain" | "env") => (style === "env" ? `\${env:${name}}` : `\${${name}}`);
+
 const expansion = (source: CredentialSource): string | undefined =>
-  source.from === "env" ? `\${${source.var}}` : undefined;
+  source.from === "env" ? variable(source.var, "plain") : undefined;
 
 const headersFor = (scheme: AuthScheme, source: CredentialSource): Record<string, string> | undefined => {
   const value = expansion(source);
@@ -36,6 +38,13 @@ const stdioCommand = (p: ProxyConfig): { command: string; args: string[] } =>
 
 // A ${VAR} can sit inside a longer string, for example "--token=${SECRET}".
 const VAR_IN_TEXT = /\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g;
+const variableFields = (p: ProxyConfig): string[] => [
+  ...Object.values(p.env ?? {}),
+  p.endpoint ?? "",
+  p.command ?? "",
+  ...(p.args ?? []),
+  p.auth?.scheme.kind === "header" ? (p.auth.scheme.prefix ?? "") : "",
+];
 
 // Every environment variable name this proxy needs: the credential source, the env map, the
 // endpoint, the command, and the args. One scanner serves the dialects and the writer, so both
@@ -44,7 +53,7 @@ const VAR_IN_TEXT = /\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g;
 export function envVarNames(p: ProxyConfig): string[] {
   const names = new Set<string>();
   if (p.auth?.source.from === "env" && p.auth.scheme.kind !== "none") names.add(p.auth.source.var);
-  for (const text of [...Object.values(p.env ?? {}), p.endpoint ?? "", p.command ?? "", ...(p.args ?? [])]) {
+  for (const text of variableFields(p)) {
     for (const match of text.matchAll(VAR_IN_TEXT)) if (match[1] !== undefined) names.add(match[1]);
   }
   return [...names];
@@ -182,7 +191,65 @@ function junieEntry(p: ProxyConfig): Rendered {
   return { ok: true, entry: stdioCommand(p) };
 }
 
+// These dialects use URL fields for both remote transports. Only Devin requires a transport field.
+function additionalEntry(dialect: "cursor" | "devin" | "windsurf" | "kiro", p: ProxyConfig): Rendered {
+  const remote = p.mode === "remote_http" || p.mode === "remote_sse";
+  const auth = p.auth;
+  if (auth !== undefined && auth.scheme.kind !== "none") {
+    if (auth.source.from !== "env" || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(auth.source.var)) {
+      return {
+        ok: false,
+        reason: "The credential requires a valid environment variable reference. This entry was skipped.",
+      };
+    }
+    if ((auth.scheme.kind === "env") === remote) {
+      return { ok: false, reason: "This transport cannot use the credential scheme. This entry was skipped." };
+    }
+    if (auth.scheme.kind === "env" && Object.keys(auth.scheme.map).length === 0) {
+      return { ok: false, reason: "The credential has no environment destination. This entry was skipped." };
+    }
+  }
+  if (Object.values(p.env ?? {}).some((value) => !/^\$\{[A-Za-z_][A-Za-z0-9_]*\}$/.test(value))) {
+    return { ok: false, reason: "An environment value lacks a safe variable reference. This entry was skipped." };
+  }
+  if (dialect === "windsurf") {
+    const skip = noExpansion("Cascade", "mcp_config.json", p);
+    if (skip !== undefined) return skip;
+  }
+  if (variableFields(p).some((text) => text.replace(VAR_IN_TEXT, "").includes("${"))) {
+    return { ok: false, reason: "A variable reference has unsupported syntax. This entry was skipped." };
+  }
+  const style = dialect === "kiro" ? "plain" : "env";
+  const convert = (text: string) => text.replace(VAR_IN_TEXT, (_match, name: string) => variable(name, style));
+  if (remote) {
+    const headers = auth === undefined ? undefined : headersFor(auth.scheme, auth.source);
+    return {
+      ok: true,
+      entry: {
+        url: convert(p.endpoint ?? ""),
+        ...(dialect === "devin" ? { transport: p.mode === "remote_http" ? "http" : "sse" } : {}),
+        ...(headers === undefined
+          ? {}
+          : { headers: Object.fromEntries(Object.entries(headers).map(([key, value]) => [key, convert(value)])) }),
+      },
+    };
+  }
+  const command = stdioCommand(p);
+  const env = Object.fromEntries(Object.entries(stdioEnv(p)).map(([key, value]) => [key, convert(value)]));
+  return {
+    ok: true,
+    entry: {
+      ...(dialect === "cursor" ? { type: "stdio" } : {}),
+      command: convert(command.command),
+      args: command.args.map(convert),
+      ...(Object.keys(env).length === 0 ? {} : { env }),
+    },
+  };
+}
+
 export function renderEntry(dialect: McpDialect, p: ProxyConfig): Rendered {
+  if (dialect === "cursor" || dialect === "devin" || dialect === "windsurf" || dialect === "kiro")
+    return additionalEntry(dialect, p);
   if (dialect === "codex") return codexEntry(p);
   if (dialect === "gemini") return geminiEntry(p);
   if (dialect === "copilot") return copilotEntry(p);

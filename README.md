@@ -1,152 +1,68 @@
 # Wagglebot
 
-One AI agent setup for a whole engineering team.
+Wagglebot gives each engineering team one local AI-agent setup.
 
-> **Status.** Phase 1 is complete. Phase 2 is in progress: the local Repository
-> Brain, D26 authentication, authenticated registry, and Sequel migration
-> service are implemented. The MCP hub has its configuration, credential,
-> trust, and registry-refresh foundations, but no runnable server yet. The
-> shared-memory worker, unified context engine, and Context Bridge are not
-> built. See the [implementation sequence](docs/superpowers/plans/2026-09-12-phase-2-implementation-sequence.md)
-> for the current boundary.
+> **Status.** Phase 1 is complete. It provisions nine local harnesses from a
+> company repository without a Wagglebot service. Phase 2 is in progress. See
+> the [Phase 1 onboarding](docs/phase-1-onboarding.md) and the
+> [implementation sequence](docs/superpowers/plans/2026-09-12-phase-2-implementation-sequence.md).
 
-## Why
+## Phase 1
 
-Each team that builds AI agents writes the same infrastructure again:
+Phase 1 installs curated skills, custom agents, global instructions, compatible
+hooks, shell credential loading, and MCP configurations. It also publishes
+project instructions and creates committed project memory and changelog files.
 
-* An MCP layer that aggregates many tool servers.
-* Durable memory that outlives one session.
-* A curated skill set and one base prompt for each engineer.
+An engineer does not keep a visible company clone. `wagglebot connect` records
+the company URL. `wagglebot update --wagglebot` refreshes the private cache and
+uses the exact package pin from the validated company revision.
 
-Teams build this inside one company repository. Vendor services become
-hardcoded. Nobody can reuse the result.
+Administrators scaffold with `wagglebot init --wagglebot mycompany-wagglebot`,
+then run `cd mycompany-wagglebot`, `git init`, `npm install`, and `wagglebot update`.
 
-Wagglebot separates the reusable parts. You supply the configuration.
-You keep your internals.
+Use these guides:
 
-## How It Works
+* [Engineer and administrator onboarding](docs/phase-1-onboarding.md)
+* [Command migration](docs/phase-1-command-migration.md)
+* [Harness reference](docs/harnesses.md)
 
-Wagglebot uses two layers.
+Phase 1 runs on macOS, Linux, and Windows through WSL. Native Windows shells,
+PowerShell, and cmd are unsupported.
 
-**Phase 1 — local, zero services.** Wagglebot is a pinned npm package
-inside one company repository (like React, or Backstage). Three
-commands — `git clone <company repo>`, `yarn install`,
-`yarn update:wagglebot` — install on every workstation:
+## Later phases
 
-* The curated skills and subagents.
-* The base prompt, in every agent harness.
-* The MCP server configs, from one curated registry, in every
-  harness ([harness reference](docs/harnesses.md)).
-* Your credentials stay on your machine in one gitignored file, and
-  load into every new shell.
+Phase 2 adds the shared memory layer, D26 authentication, an authenticated
+registry, and the MCP hub. Phase 3 adds collaboration between machines. Phase 4
+adds document ingestion.
 
-`wagglebot sync-project` publishes the repository's own instructions.
-It reads `.agents/instructions/*.md` and writes root `AGENTS.md`, root
-`CLAUDE.md`, root `GEMINI.md`, and `.github/copilot-instructions.md`.
-The command runs from any Git repository, without the company
-repository. Every target sits inside the repository, so git is the
-undo.
-
-An engineer clones, installs, runs the update, and works. Nothing
-listens on a port, and git access is the whole permission system. A
-wagglebot upgrade is a one-line version bump in the company
-`package.json`, reviewed like any pull request.
-
-**Phase 2 — shared, deployed one time for the team (in progress):**
-
-* Durable memory for the whole team.
-* The registry served per team, and the MCP hub as an upgrade.
-
-**Phase 3 — collaboration:** agents on different machines discover each
-other, exchange findings, and hand off tasks, scoped by system and
-branch.
-
-The shared services hold no engineer credentials or tool-server credentials
-and never call a tool server. D26 session tokens authorize calls to those
-services. Upstream credentials remain on the engineer workstation, where the
-local MCP hub will use them.
-
-## What You Get
-
-| Component | Purpose |
-|---|---|
-| Provisioning | One command installs the curated skills, the subagents, and the base prompt in each harness. |
-| MCP configs | One curated registry writes each harness config. The hub (Phase 2) upgrades that to one endpoint. |
-| Memory | The agent writes facts about one repository to a local file, in git (Phase 1). Facts that cross a repository go to the shared store (Phase 2). |
-| Collaboration | Two agents on the same system and branch exchange findings and hand off tasks. (Phase 3) |
-
-## Design Principles
-
-* **Vendor-neutral.** No SaaS integration is hardcoded. Each upstream
-  comes from your catalog.
-* **Runtime-agnostic.** Any agent runtime connects over HTTP and MCP.
-* **Deployment-agnostic.** Implemented services ship individual Dockerfiles.
-  A complete composed Phase 2 stack is planned but not available yet.
-* **Local-first.** Phase 1 and the Repository Brain require no shared stack.
-  The planned shared-memory worker runs CPU embeddings without a cloud model.
-* **Credentials stay local.** Engineer credentials and tool-server
-  credentials stay on each workstation. Shared channel secrets stay in
-  the shared deployment.
-* **Trusted coworkers.** Identity serves routing, context, and
-  attribution. Git and your identity provider control code access.
-
-## Platform Support
-
-Wagglebot runs on macOS, on Linux, and on Windows through the Windows
-Subsystem for Linux (WSL). Wagglebot does not support the native
-Windows shells, PowerShell and cmd.
-
-Under WSL, install and run wagglebot inside the WSL distribution.
-Three points apply:
-
-* Run the agent harness inside WSL too. Wagglebot provisions one home
-  directory, the Linux one. A harness that you install on the Windows
-  side reads `C:\Users\<user>\` and finds nothing there.
-* Keep the company repository under your Linux home directory. The
-  `/mnt/c` mount is slow, and it discards the `chmod 600` mode that
-  protects each managed file.
-* The shell block lands in `~/.bashrc` on a distribution that ships
-  bash alone, and in `~/.zshenv` when you use zsh.
+Shared services do not store engineer or tool-server credentials. Those values
+remain on the engineer workstation.
 
 ## Documentation
 
-| Spec | Content |
+| Document | Content |
 |---|---|
-| [Design](docs/superpowers/specs/2026-08-28-wagglebot-design.md) | Goals, decisions, architecture, and the phase index. |
-| [Phase 1 — provisioning](docs/superpowers/specs/2026-08-28-phase-1-provisioning.md) | Workstation setup plus local project instruction sync. |
-| [Phase 2 — shared layer](docs/superpowers/specs/2026-08-28-phase-2-shared-layer.md) | The memory worker, required Sequel migrations, database deployment, the hub, and auth. |
-| [Phase 3 — collaboration](docs/superpowers/specs/2026-08-28-phase-3-collaboration.md) | Cross-machine agent collaboration. |
-| [Phase 4 — ingestion](docs/superpowers/specs/2026-08-28-phase-4-document-ingestion.md) | User ingestion workers, isolated knowledge bases, and source metadata. |
-| [Admin dashboard](docs/superpowers/specs/2026-09-13-admin-dashboard.md) | Developer UI, task controls, and database metrics. |
-| [Service contracts](docs/superpowers/specs/2026-08-28-service-contracts.md) | Behavior contracts for each service, and the pitfall register. |
-| [Harness reference](docs/harnesses.md) | Every file wagglebot writes per harness, and the MCP config format of each. |
-| [Deployment configuration](deploy/README.md) | Implemented service containers and their environment blocks. |
+| [Current Phase 1 design](docs/superpowers/specs/2026-09-21-phase-1-polish-design.md) | Approved local provisioning behavior and test contract. |
+| [Original design](docs/superpowers/specs/2026-08-28-wagglebot-design.md) | Goals, decisions, architecture, and phase index. |
+| [Phase 2 shared layer](docs/superpowers/specs/2026-08-28-phase-2-shared-layer.md) | Memory worker, deployment, hub, and authentication. |
+| [Phase 3 collaboration](docs/superpowers/specs/2026-08-28-phase-3-collaboration.md) | Cross-machine agent collaboration. |
+| [Phase 4 ingestion](docs/superpowers/specs/2026-08-28-phase-4-document-ingestion.md) | User ingestion workers and source metadata. |
+| [Harness reference](docs/harnesses.md) | Every global path, hook, agent directory, and MCP target. |
 
-## Releasing
+## Test app
 
-* The package is published on [npm](https://www.npmjs.com/package/wagglebot).
-* GitHub releases serve as the changelog.
-* Run `bin/release` to do both.
+`test-app/` is the complete company fixture and drift gate. CI runs two offline
+company updates and verifies every compatible output. No test starts a harness,
+service, or LLM.
 
-## Test App
-
-`test-app/` is a company repository. `wagglebot init` scaffolds it. It
-serves as the reference output of the CLI.
-
-An end-to-end test in CI runs the full provisioning flow against a
-sandboxed home directory. The flow covers the base prompt sync, the
-hooks, and the shell block. `test-app/` serves as the drift gate for
-the scaffold output.
-
-Regenerate `test-app/` after any change to the scaffold templates or
-the package version:
+Regenerate the fixture after scaffold or package changes:
 
 ```sh
 bun run regen:test-app
+git diff --exit-code -- test-app
 ```
 
-Commit the result. The end-to-end test fails, and names the drifted
-file, when `test-app/` falls behind the real scaffold output.
+Commit the regenerated fixture when the change is intentional.
 
 ## License
 

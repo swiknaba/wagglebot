@@ -1,31 +1,67 @@
 #!/usr/bin/env node
-// Regenerates test-app/ from the real, built wagglebot CLI. Run this after any
-// scaffold-template or version change, then commit the result. The e2e drift
-// gate (packages/cli/e2e/scaffold.test.ts) fails when test-app/ falls behind
-// what `wagglebot init` produces.
+// Regenerate the offline company fixture from the real CLI scaffold.
 import { execFileSync } from "node:child_process";
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
 
-const repoRoot = join(import.meta.dirname, "..");
+const repoRoot = resolve(import.meta.dirname, "..");
 const cliDir = join(repoRoot, "packages", "cli");
 const testAppDir = join(repoRoot, "test-app");
 
-execFileSync("bun", ["run", "build"], { cwd: cliDir, stdio: "inherit" });
+// These deterministic fixture additions replace sources that require a network.
+// E2E tests copy the source directories into temporary tagged Git repositories.
+function prepareFixture(target) {
+  if (!existsSync(join(target, "wagglebot.yaml"))) throw new Error("The company scaffold marker is missing.");
+  const files = {
+    "company/skills.list": "# The E2E test supplies a tagged local source from fixtures/skills.\n",
+    "company/agents.list": "# Company agents live in company/agents.\n",
+    "teams/team-payments/skills.list": "# This team uses the company skill.\n",
+    "teams/team-payments/agents.list": "# The E2E test supplies a tagged local source from fixtures/agents.\n",
+    "company/instructions/00-example.md": "# Company\n\nCompany fixture instructions.\n",
+    "teams/team-payments/instructions/00-example.md": "# Payments\n\nPayments fixture instructions.\n",
+    "company/agents/review.md": "---\nname: company-review\ndescription: Review company changes.\n---\n\nCompany fixture agent.\n",
+    "teams/team-payments/agents/review.md": "---\nname: payments-review\ndescription: Review payment changes.\n---\n\nPayments fixture agent.\n",
+    "fixtures/skills/SKILL.md": "---\nname: offline-review\ndescription: Review the offline fixture.\n---\n\nUse the pinned fixture skill.\n",
+    "fixtures/agents/review.md": "---\nname: offline-review\ndescription: Review the offline fixture.\n---\n\nUse the pinned fixture agent.\n",
+    "company/registry.yaml": "# The test writes configuration but never starts this command.\nproxies:\n  - namespace: fixture-company\n    mode: stdio_cmd\n    command: fixture-company-server\n",
+    "teams/team-payments/registry.yaml": "# The test writes configuration but never starts this command.\nproxies:\n  - namespace: fixture-payments\n    mode: stdio_cmd\n    command: fixture-payments-server\n",
+  };
+  for (const [file, text] of Object.entries(files)) {
+    mkdirSync(dirname(join(target, file)), { recursive: true });
+    writeFileSync(join(target, file), text);
+  }
+}
 
-rmSync(testAppDir, { recursive: true, force: true });
-mkdirSync(testAppDir, { recursive: true });
-
-execFileSync("node", [join(cliDir, "bin", "wagglebot.js"), "init", "test-app"], {
-  cwd: repoRoot,
-  stdio: "inherit",
-});
-
-// The scaffold pins the published registry version, which is correct for real users.
-// The committed reference app must install the CLI from this repo instead, so tests
-// exercise the current branch. scaffold.test.ts applies the same rewrite before it
-// diffs a fresh scaffold against test-app/ — keep the two in sync.
-const pkgPath = join(testAppDir, "package.json");
-const pkg = JSON.parse(readFileSync(pkgPath, "utf8"));
-pkg.dependencies.wagglebot = "file:../packages/cli";
-writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`);
+if (process.argv[2] === "--prepare-fixture" && process.argv.length === 4) {
+  prepareFixture(resolve(process.argv[3]));
+} else if (process.argv.length === 2) {
+  execFileSync("bun", ["run", "build"], { cwd: cliDir, stdio: "inherit" });
+  const scratch = mkdtempSync(join(tmpdir(), "wagglebot-regen-"));
+  const env = {
+    PATH: process.env.PATH,
+    TMPDIR: process.env.TMPDIR,
+    HOME: scratch,
+    XDG_CONFIG_HOME: join(scratch, ".config"),
+    GIT_CONFIG_GLOBAL: join(scratch, ".gitconfig"),
+    GIT_CONFIG_NOSYSTEM: "1",
+    GIT_ALLOW_PROTOCOL: "file",
+    GIT_TERMINAL_PROMPT: "0",
+    SHELL: "/bin/zsh",
+    DISABLE_TELEMETRY: "1",
+    DO_NOT_TRACK: "1",
+  };
+  try {
+    rmSync(testAppDir, { recursive: true, force: true });
+    execFileSync("node", [join(cliDir, "bin", "wagglebot.js"), "init", "--wagglebot", "test-app"], {
+      cwd: repoRoot,
+      env,
+      stdio: "inherit",
+    });
+    prepareFixture(testAppDir);
+  } finally {
+    rmSync(scratch, { recursive: true, force: true });
+  }
+} else {
+  throw new Error("Use no arguments, or --prepare-fixture <company-scaffold>.");
+}

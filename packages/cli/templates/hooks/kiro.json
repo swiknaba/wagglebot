@@ -1,0 +1,14 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Wagglebot prose and changelog",
+      "trigger": "PostFileSave",
+      "matcher": "\\.md$",
+      "action": {
+        "type": "command",
+        "command": "printf '%s\\n' 'wagglebot:prose-changelog - Apply ASD-STE100 Issue 9 to prose. After durable repository changes, update .agents/changelog.md before the final response.'"
+      }
+    }
+  ]
+}

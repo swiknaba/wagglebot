@@ -1,7 +1,8 @@
 import { expect, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { startBackupSet } from "../backup";
 import type { Harness } from "../harness";
 import { HARNESSES } from "../harness";
 import type { ProxyConfig } from "../registry";
@@ -10,6 +11,23 @@ import { createReporter } from "../report";
 import { missingEnvVars, proxyToClaudeEntry, runWriteMcp } from "./write-mcp";
 
 const quiet = () => createReporter(() => {}, false);
+for (const command of ["server", "personal-server"]) {
+  test(`normal MCP sync preserves unowned collisions (${command}) after company removal`, () => {
+    const home = mkdtempSync(join(tmpdir(), "wgl-personal-mcp-"));
+    const harness = HARNESSES.find((h) => h.name === "cursor");
+    if (!harness) throw new Error("Missing Cursor fixture");
+    const path = join(home, ".cursor/mcp.json");
+    mkdirSync(dirname(path), { recursive: true });
+    const personal = { command, args: [], type: "stdio" };
+    writeFileSync(path, JSON.stringify({ mcpServers: { shared: personal } }));
+    const run = (proxies: ProxyConfig[]) =>
+      runWriteMcp({ home, harnesses: [harness], proxies, env: {}, reporter: quiet() });
+    expect(run([{ namespace: "shared", mode: "stdio_cmd", command: "server" }])).toBe(0);
+    expect(JSON.parse(readFileSync(path, "utf8")).mcpServers.shared).toEqual(personal);
+    expect(run([])).toBe(0);
+    expect(JSON.parse(readFileSync(path, "utf8")).mcpServers.shared).toEqual(personal);
+  });
+}
 const remote: ProxyConfig = {
   namespace: "example",
   mode: "remote_http",
@@ -69,9 +87,237 @@ test("second identical run reports ok", () => {
   const r = createReporter(() => {}, false);
   runWriteMcp({ home, harnesses: HARNESSES, proxies: [remote], env: {}, reporter: r });
   expect(r.counts().updated).toBe(0);
-  // One ok per harness that can write the bearer fixture: claude-code, codex, and gemini.
-  // Copilot, Cline, and Junie expand no ${VAR}, so they leave the entry out and create no file.
-  expect(r.counts().ok).toBe(3);
+  // Six targets support safe bearer references. Cascade skips this entry.
+  expect(r.counts().ok).toBe(6);
+});
+
+for (const name of ["cursor", "devin", "kiro"]) {
+  test(`${name} writes each target, warns about missing variables, and skips only unsafe entries`, () => {
+    const home = mkdtempSync(join(tmpdir(), "wgl-new-mcp-"));
+    const harness = HARNESSES.find((h) => h.name === name);
+    if (!harness) throw new Error("fixture");
+    const lines: string[] = [];
+    const unsupported: ProxyConfig = {
+      ...remote,
+      namespace: "unsupported",
+      auth: {
+        scheme: { kind: "bearer" },
+        source: { from: "literal", value: "do-not-print" },
+      } as unknown as ProxyConfig["auth"],
+    };
+    const plain: ProxyConfig = { namespace: "plain", mode: "stdio_cmd", command: "server" };
+    for (const env of [{}, { EXAMPLE_TOKEN: "current-secret-do-not-print" }]) {
+      expect(
+        runWriteMcp({
+          home,
+          harnesses: [harness],
+          proxies: [unsupported, remote, plain],
+          env,
+          reporter: createReporter((line) => lines.push(line), false),
+        }),
+      ).toBe(0);
+      for (const target of harness.mcpTargets) {
+        const text = readFileSync(join(home, target.path), "utf8");
+        const doc = JSON.parse(text);
+        expect(doc.mcpServers.plain.command).toBe("server");
+        expect(doc.mcpServers.unsupported).toBeUndefined();
+        if (target.dialect === "windsurf") expect(doc.mcpServers.example).toBeUndefined();
+        else
+          expect(doc.mcpServers.example.headers.Authorization).toBe(
+            name === "kiro" ? "Bearer ${EXAMPLE_TOKEN}" : "Bearer ${env:EXAMPLE_TOKEN}",
+          );
+        expect(text).not.toContain("do-not-print");
+      }
+    }
+    expect(lines.join("\n")).toContain("EXAMPLE_TOKEN");
+    expect(lines.join("\n")).toContain("not set in this shell");
+    expect(lines.join("\n")).toContain("unsupported");
+    expect(lines.join("\n")).not.toContain("do-not-print");
+  });
+}
+
+test("a failed target does not prevent the next target in the same harness", () => {
+  const home = mkdtempSync(join(tmpdir(), "wgl-targets-"));
+  const devin = HARNESSES.find((h) => h.name === "devin");
+  if (!devin) throw new Error("fixture");
+  mkdirSync(join(home, ".config/devin"), { recursive: true });
+  writeFileSync(join(home, ".config/devin/mcp_config.json"), "{broken");
+  const plain: ProxyConfig = { namespace: "plain", mode: "stdio_cmd", command: "server" };
+  expect(runWriteMcp({ home, harnesses: [devin], proxies: [plain], env: {}, reporter: quiet() })).toBe(1);
+  expect(JSON.parse(readFileSync(join(home, ".codeium/windsurf/mcp_config.json"), "utf8")).mcpServers.plain).toEqual({
+    command: "server",
+    args: [],
+  });
+});
+
+test("an unchanged overwrite adopts entries for later state-owned removal", () => {
+  const home = mkdtempSync(join(tmpdir(), "wgl-adopt-"));
+  const cursor = HARNESSES.find((h) => h.name === "cursor");
+  if (!cursor) throw new Error("fixture");
+  const path = join(home, ".cursor/mcp.json");
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, JSON.stringify({ mcpServers: { plain: { type: "stdio", command: "server", args: [] } } }));
+  const plain: ProxyConfig = { namespace: "plain", mode: "stdio_cmd", command: "server" };
+  expect(
+    runWriteMcp({ home, harnesses: [cursor], proxies: [plain], env: {}, reporter: quiet(), overwrite: true }),
+  ).toBe(0);
+  expect(runWriteMcp({ home, harnesses: [cursor], proxies: [], env: {}, reporter: quiet() })).toBe(0);
+  expect(JSON.parse(readFileSync(path, "utf8")).mcpServers).toEqual({});
+});
+
+test("missingEnvVars includes a variable in a custom header prefix", () => {
+  const proxy: ProxyConfig = {
+    ...remote,
+    auth: {
+      scheme: { kind: "header", name: "X-Key", prefix: "${PREFIX} " },
+      source: { from: "env", var: "TOKEN" },
+    },
+  };
+  expect(missingEnvVars([proxy], { TOKEN: "secret" })).toEqual(["PREFIX"]);
+});
+
+test("JSON overwrite replaces MCP entries in every target and preserves other settings without backups", () => {
+  const home = mkdtempSync(join(tmpdir(), "wgl-overwrite-"));
+  const harnesses = HARNESSES.filter((h) => h.mcpTargets.every((t) => t.format === "json"));
+  for (const harness of harnesses)
+    for (const target of harness.mcpTargets) {
+      mkdirSync(dirname(join(home, target.path)), { recursive: true });
+      writeFileSync(
+        join(home, target.path),
+        JSON.stringify({ theme: "dark", hooks: { custom: [1] }, mcpServers: { foreign: { command: "old" } } }),
+      );
+    }
+  const backups = startBackupSet(join(home, "explicit-backups"));
+  const plain: ProxyConfig = { namespace: "plain", mode: "stdio_cmd", command: "server" };
+  for (const proxies of [[plain], []]) {
+    expect(runWriteMcp({ home, harnesses, proxies, env: {}, reporter: quiet(), overwrite: true, backups })).toBe(0);
+    for (const harness of harnesses)
+      for (const target of harness.mcpTargets) {
+        const doc = JSON.parse(readFileSync(join(home, target.path), "utf8"));
+        expect(doc.theme).toBe("dark");
+        expect(doc.hooks).toEqual({ custom: [1] });
+        expect(Object.keys(doc.mcpServers)).toEqual(proxies.length ? ["plain"] : []);
+      }
+  }
+  expect(existsSync(backups.dir)).toBe(false);
+  expect(existsSync(join(home, ".wagglebot/backups"))).toBe(false);
+});
+
+test("Codex overwrite removes all MCP tables and preserves unrelated TOML and multiline strings", () => {
+  const home = mkdtempSync(join(tmpdir(), "wgl-overwrite-toml-"));
+  const path = join(home, ".codex/config.toml");
+  mkdirSync(dirname(path), { recursive: true });
+  const before = [
+    'model = "test"',
+    'instructions = """',
+    "[mcp_servers.decoy]",
+    "keep this text",
+    '"""',
+    "[mcp_servers.personal]",
+    'command = "old"',
+    "[mcp_servers.personal.env]",
+    'TOKEN = "old"',
+    '[ "mcp_servers" . "quoted.name" ] # comment',
+    'command = "old"',
+    "['mcp_servers'.'single']",
+    'command = "old"',
+    "[profiles.work]",
+    'model = "work"',
+    "[[mcp_servers.array]]",
+    'command = "old"',
+    "[mcp_servers]",
+    'another = { command = "old" }',
+    "[features]",
+    "enabled = true",
+    "",
+  ].join("\n");
+  writeFileSync(path, before);
+  const backups = startBackupSet(join(home, "explicit-backups"));
+  const run = (proxies: ProxyConfig[], overwrite: boolean) =>
+    runWriteMcp({
+      home,
+      harnesses: [codexHarness()],
+      proxies,
+      env: {},
+      reporter: quiet(),
+      overwrite,
+      backups,
+    });
+  expect(run([remote], true)).toBe(0);
+  const text = readFileSync(path, "utf8");
+  expect(text).toContain('instructions = """\n[mcp_servers.decoy]\nkeep this text\n"""');
+  expect(text).toContain('[profiles.work]\nmodel = "work"');
+  expect(text).toContain("[features]\nenabled = true");
+  expect(text).not.toContain('command = "old"');
+  expect(text).toContain("[mcp_servers.example]");
+  expect(Bun.TOML.parse(text)).toMatchObject({
+    model: "test",
+    profiles: { work: { model: "work" } },
+    mcp_servers: { example: { url: remote.endpoint } },
+  });
+  expect(run([remote], true)).toBe(0);
+  expect(readFileSync(path, "utf8")).toBe(text);
+  expect(run([], true)).toBe(0);
+  expect(Bun.TOML.parse(readFileSync(path, "utf8"))).not.toHaveProperty("mcp_servers");
+  expect(existsSync(backups.dir)).toBe(false);
+});
+
+test("Codex overwrite preserves marker text in strings and removes escaped category keys", () => {
+  const home = mkdtempSync(join(tmpdir(), "wgl-toml-strings-"));
+  const path = join(home, ".codex/config.toml");
+  mkdirSync(dirname(path), { recursive: true });
+  const preamble = [
+    'instructions = """',
+    "# wagglebot:begin",
+    "[mcp_servers.fake]",
+    "# wagglebot:end",
+    '"""',
+    "nested = [",
+    '["mcp_servers"],',
+    '["value"]',
+    "]",
+    "literal = '''",
+    "[mcp_servers.also_fake]",
+    "'''",
+    "",
+  ].join("\n");
+  writeFileSync(path, `${preamble}["\\U0000006dcp_servers".foreign]\ncommand = "old"\n[features]\nenabled = true\n`);
+  const run = () =>
+    runWriteMcp({ home, harnesses: [codexHarness()], proxies: [remote], env: {}, reporter: quiet(), overwrite: true });
+  expect(run()).toBe(0);
+  const text = readFileSync(path, "utf8");
+  expect(text.startsWith(preamble)).toBe(true);
+  const parsed = Bun.TOML.parse(text) as Record<string, unknown>;
+  expect(Object.keys(parsed.mcp_servers as object)).toEqual(["example"]);
+  expect(parsed.features).toEqual({ enabled: true });
+  expect(run()).toBe(0);
+  expect(readFileSync(path, "utf8")).toBe(text);
+});
+
+test("Codex overwrite clears root inline and dotted MCP tables but preserves nested foreign settings", () => {
+  for (const category of [
+    'mcp_servers = { foreign = { command = "old" } }',
+    'mcp_servers.foreign.args = [\n"old"\n]',
+  ]) {
+    const home = mkdtempSync(join(tmpdir(), "wgl-toml-inline-"));
+    const path = join(home, ".codex/config.toml");
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(path, `${category}\nmodel = "test"\n[unrelated]\nmcp_servers = { keep = true }\n`);
+    expect(
+      runWriteMcp({
+        home,
+        harnesses: [codexHarness()],
+        proxies: [remote],
+        env: {},
+        reporter: quiet(),
+        overwrite: true,
+      }),
+    ).toBe(0);
+    const parsed = Bun.TOML.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
+    expect(Object.keys(parsed.mcp_servers as object)).toEqual(["example"]);
+    expect(parsed.model).toBe("test");
+    expect(parsed.unrelated).toEqual({ mcp_servers: { keep: true } });
+  }
 });
 
 test("an empty registry creates no file", () => {
@@ -80,6 +326,65 @@ test("an empty registry creates no file", () => {
   runWriteMcp({ home, harnesses: HARNESSES, proxies: [], env: {}, reporter: r });
   expect(existsSync(join(home, ".claude.json"))).toBe(false);
   expect(r.counts().skipped).toBeGreaterThan(0);
+});
+
+test("Codex overwrite preserves malformed TOML and continues the next target without backups", () => {
+  for (const proxies of [[], [remote]]) {
+    const home = mkdtempSync(join(tmpdir(), "wgl-toml-invalid-"));
+    const path = join(home, ".codex/config.toml");
+    const nextPath = join(home, "next.json");
+    mkdirSync(dirname(path), { recursive: true });
+    const before = '[mcp_servers.foreign]\ncommand = "old"\n[unrelated] invalid\nkeep = true\n';
+    writeFileSync(path, before);
+    writeFileSync(nextPath, '{"mcpServers":{"foreign":{}},"keep":true}');
+    const harness: Harness = {
+      ...codexHarness(),
+      mcpTargets: [
+        ...codexHarness().mcpTargets,
+        { format: "json", path: "next.json", parentKey: "mcpServers", dialect: "cursor" },
+      ],
+    };
+    const backups = startBackupSet(join(home, "backups"));
+    const lines: string[] = [];
+    const reporter = createReporter((line) => lines.push(line), false);
+    expect(runWriteMcp({ home, harnesses: [harness], proxies, env: {}, reporter, overwrite: true, backups })).toBe(1);
+    expect(readFileSync(path, "utf8")).toBe(before);
+    expect(reporter.counts().failed).toBe(1);
+    expect(lines.join("\n")).toContain(".codex/config.toml");
+    expect(lines.join("\n")).toContain("invalid TOML");
+    const next = JSON.parse(readFileSync(nextPath, "utf8"));
+    expect(Object.keys(next.mcpServers)).toEqual(proxies.length ? ["example"] : []);
+    expect(next.keep).toBe(true);
+    expect(existsSync(backups.dir)).toBe(false);
+  }
+});
+
+test("Codex overwrite preserves unrelated literal and bare keys without decoding literal backslashes", () => {
+  const home = mkdtempSync(join(tmpdir(), "wgl-toml-literal-"));
+  const path = join(home, ".codex/config.toml");
+  mkdirSync(dirname(path), { recursive: true });
+  const before = String.raw`'\UFFFFFFFF' = true
+bare-key = "keep"
+['table-\UFFFFFFFF']
+keep = true
+`;
+  writeFileSync(path, before);
+  const backups = startBackupSet(join(home, "backups"));
+  expect(
+    runWriteMcp({
+      home,
+      harnesses: [codexHarness()],
+      proxies: [remote],
+      env: {},
+      reporter: quiet(),
+      overwrite: true,
+      backups,
+    }),
+  ).toBe(0);
+  const after = readFileSync(path, "utf8");
+  expect(after.startsWith(before)).toBe(true);
+  expect(after).toContain("[mcp_servers.example]");
+  expect(existsSync(backups.dir)).toBe(false);
 });
 
 test("reports every ${VAR} that is not set in the shell", () => {
@@ -93,10 +398,11 @@ test("reports every ${VAR} that is not set in the shell", () => {
 test("a file credential source is reported once, not once per harness", () => {
   const home = mkdtempSync(join(tmpdir(), "wgl-"));
   const claude = HARNESSES.find((h) => h.name === "claude-code");
-  if (claude?.mcpTarget === undefined) throw new Error("fixture");
+  const claudeTarget = claude?.mcpTargets[0];
+  if (claude === undefined || claudeTarget === undefined) throw new Error("fixture");
   const twice: Harness[] = [
     claude,
-    { ...claude, name: "second", mcpTarget: { ...claude.mcpTarget, path: ".second.json" } },
+    { ...claude, name: "second", mcpTargets: [{ ...claudeTarget, path: ".second.json" }] },
   ];
   const fileSourced: ProxyConfig = {
     namespace: "vault",
@@ -112,7 +418,7 @@ test("a file credential source is reported once, not once per harness", () => {
 
 const codexHarness = (): Harness => {
   const codex = HARNESSES.find((h) => h.name === "codex");
-  if (codex?.mcpTarget === undefined) throw new Error("fixture");
+  if (codex === undefined || codex.mcpTargets[0] === undefined) throw new Error("fixture");
   return codex;
 };
 
@@ -175,9 +481,9 @@ test("a namespace the TOML file already declares outside the block is failed and
 test("a dialect skip is reported once per harness, and names the harness", () => {
   const home = mkdtempSync(join(tmpdir(), "wgl-toml-"));
   const codex = codexHarness();
-  const target = codex.mcpTarget;
+  const target = codex.mcpTargets[0];
   if (target === undefined || target.format !== "toml") throw new Error("fixture");
-  const twice: Harness[] = [codex, { ...codex, name: "codex-2", mcpTarget: { ...target, path: ".codex/two.toml" } }];
+  const twice: Harness[] = [codex, { ...codex, name: "codex-2", mcpTargets: [{ ...target, path: ".codex/two.toml" }] }];
   const sse: ProxyConfig = { ...remote, mode: "remote_sse" };
   const lines: string[] = [];
   runWriteMcp({
@@ -215,7 +521,7 @@ test("a harness that can write no entry says so, instead of blaming the registry
 test("a JSON dialect that expands no ${VAR} skips the credentialed proxy and writes the rest", () => {
   const home = mkdtempSync(join(tmpdir(), "wgl-copilot-"));
   const copilot = HARNESSES.find((h) => h.name === "copilot");
-  if (copilot?.mcpTarget === undefined) throw new Error("fixture");
+  if (copilot === undefined || copilot.mcpTargets[0] === undefined) throw new Error("fixture");
   const plain: ProxyConfig = { namespace: "docs", mode: "remote_http", endpoint: "https://docs.example/mcp" };
   const lines: string[] = [];
   const r = createReporter((l) => lines.push(l), false);
@@ -232,7 +538,7 @@ test("a JSON dialect that expands no ${VAR} skips the credentialed proxy and wri
 test("a JSON target that can write no entry says so too", () => {
   const home = mkdtempSync(join(tmpdir(), "wgl-copilot-"));
   const copilot = HARNESSES.find((h) => h.name === "copilot");
-  if (copilot?.mcpTarget === undefined) throw new Error("fixture");
+  if (copilot === undefined || copilot.mcpTargets[0] === undefined) throw new Error("fixture");
   const lines: string[] = [];
   runWriteMcp({
     home,
@@ -250,7 +556,7 @@ test("a JSON target that can write no entry says so too", () => {
 
 const geminiHarness = (): Harness => {
   const gemini = HARNESSES.find((h) => h.name === "gemini");
-  if (gemini?.mcpTarget === undefined) throw new Error("fixture");
+  if (gemini === undefined || gemini.mcpTargets[0] === undefined) throw new Error("fixture");
   return gemini;
 };
 

@@ -1,5 +1,5 @@
 import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { basename, join } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import type { BackupSet } from "../backup";
 import { startBackupSet } from "../backup";
 import type { Exec } from "../exec";
@@ -7,7 +7,7 @@ import type { Harness } from "../harness";
 import { type ListEntry, parseList } from "../lists";
 import { resolvePaths } from "../paths";
 import type { Reporter } from "../report";
-import { loadState, saveState } from "../state";
+import { clearManagedAgentFiles, loadState, saveState } from "../state";
 
 // Where to clone an agent list entry from, and the filename prefix that marks its files.
 //   owner/repo[@ref]      -> https://github.com/owner/repo.git, prefix owner__repo
@@ -36,6 +36,33 @@ const subagentFiles = (dir: string): string[] =>
     .filter((f) => lstatSync(join(dir, f)).isFile())
     .sort();
 
+// Validate every component before a category clear. Symlinks can escape the home directory.
+function agentDirectory(home: string, directory: string): string {
+  const parts = directory.split(sep);
+  const target = resolve(home, directory);
+  const child = relative(resolve(home), target);
+  if (
+    directory.trim() === "" ||
+    isAbsolute(directory) ||
+    basename(directory) !== "agents" ||
+    parts.some((part) => part === "" || part === "." || part === "..") ||
+    child === "" ||
+    child === ".." ||
+    child.startsWith(`..${sep}`) ||
+    isAbsolute(child)
+  )
+    throw new Error(`Invalid dedicated agent directory: ${JSON.stringify(directory)}`);
+  let current = resolve(home);
+  for (const part of parts) {
+    current = join(current, part);
+    const stat = lstatSync(current, { throwIfNoEntry: false });
+    if (stat !== undefined && (!stat.isDirectory() || stat.isSymbolicLink())) {
+      throw new Error(`Agent directory is not a regular directory: ${current}`);
+    }
+  }
+  return target;
+}
+
 export async function runInstallAgents(deps: {
   home: string;
   harnesses: Harness[];
@@ -45,33 +72,58 @@ export async function runInstallAgents(deps: {
   reporter: Reporter;
   organization?: string[];
   backups?: BackupSet;
+  overwriteLocal?: boolean;
 }): Promise<number> {
   const { home, exec, reporter } = deps;
   const paths = resolvePaths(home);
   const state = loadState(paths.managedFile);
-  const backups = deps.backups ?? startBackupSet(paths.backupsDir);
+  const backups = deps.overwriteLocal ? undefined : (deps.backups ?? startBackupSet(paths.backupsDir));
   reporter.section("Custom agents");
 
   const parsed = deps.listTexts.map((l) => ({ ...l, ...parseList(l.text, { organization: deps.organization }) }));
   for (const l of parsed) for (const w of l.warnings) reporter.warn(`${l.path}: ${w}`);
   const entries = parsed.flatMap((l) => l.entries);
-  const targets = deps.harnesses.filter((h) => h.subagentDir !== undefined);
-  const without = deps.harnesses.filter((h) => h.subagentDir === undefined).map((h) => h.name);
+  let targets: string[];
+  try {
+    targets = [
+      ...new Set(deps.harnesses.flatMap((harness) => harness.subagentDirs.map((dir) => agentDirectory(home, dir)))),
+    ];
+  } catch (error) {
+    reporter.item("subagents", "failed", error instanceof Error ? error.message : String(error));
+    return 1;
+  }
+  const without = deps.harnesses.filter((h) => h.subagentDirs.length === 0).map((h) => h.name);
   if (without.length > 0) {
-    reporter.item("subagents", "skipped", `no Markdown subagent directory: ${without.join(", ")}`);
+    reporter.item("subagents", "skipped", `Custom agents are unsupported: ${without.join(", ")}`);
+  }
+  if (targets.length === 0) return 0;
+
+  if (deps.overwriteLocal) {
+    for (const dir of targets) {
+      rmSync(dir, { recursive: true, force: true });
+      clearManagedAgentFiles(state, [dir]);
+      saveState(paths.managedFile, state);
+      mkdirSync(dir, { recursive: true });
+    }
   }
 
-  const produced: string[] = [];
+  const produced: string[] = state.agentFiles.filter((file) => !targets.includes(dirname(file)));
   const failedPrefixes: string[] = [];
 
   const installFile = (dest: string, content: string): void => {
+    const stat = lstatSync(dest, { throwIfNoEntry: false });
+    if (stat !== undefined && !stat.isFile()) {
+      reporter.item(dest, "failed", "The agent target is not a regular file");
+      if (state.agentFiles.includes(dest)) produced.push(dest);
+      return;
+    }
     produced.push(dest);
     const fresh = !existsSync(dest);
     if (!fresh && readFileSync(dest, "utf8") === content) {
       reporter.item(dest, "ok", "already ok");
       return;
     }
-    if (!fresh) backups.backup(dest);
+    if (!fresh) backups?.backup(dest);
     writeFileSync(dest, content);
     reporter.item(dest, fresh ? "installed" : "updated");
   };
@@ -104,8 +156,7 @@ export async function runInstallAgents(deps: {
       continue;
     }
     const files = subagentFiles(cacheDir);
-    for (const harness of targets) {
-      const dir = join(home, harness.subagentDir ?? "");
+    for (const dir of targets) {
       mkdirSync(dir, { recursive: true });
       for (const file of files) {
         const dest = join(dir, `${prefix}${file}`);
@@ -116,10 +167,13 @@ export async function runInstallAgents(deps: {
   }
 
   for (const { prefix, dir: agentsDir } of deps.agentDirs) {
+    if (prefix.includes("/") || prefix.includes("\\") || prefix.includes("\0")) {
+      reporter.item(agentsDir, "failed", "The agent prefix contains a path separator or a null character");
+      continue;
+    }
     if (!existsSync(agentsDir)) continue;
     const files = subagentFiles(agentsDir);
-    for (const harness of targets) {
-      const dir = join(home, harness.subagentDir ?? "");
+    for (const dir of targets) {
       mkdirSync(dir, { recursive: true });
       for (const file of files) {
         const dest = join(dir, `${prefix}${file}`);
@@ -138,7 +192,7 @@ export async function runInstallAgents(deps: {
   }
 
   for (const stale of state.agentFiles.filter((f) => !produced.includes(f) && existsSync(f))) {
-    backups.backup(stale);
+    backups?.backup(stale);
     rmSync(stale);
     reporter.item(stale, "updated", "removed — no longer listed");
   }
