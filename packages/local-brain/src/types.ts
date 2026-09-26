@@ -40,6 +40,22 @@ export type LocalMemoryConcept = {
   chunks: LocalMemoryChunk[];
 };
 
+export type LocalMemoryReservedFile = {
+  path: LocalMemoryPath;
+  text: string;
+  contentHash: string;
+};
+
+export type LocalMemoryBundle = {
+  path: ".agents/memory";
+  concepts: LocalMemoryConcept[];
+  indexes: LocalMemoryReservedFile[];
+  logs: LocalMemoryReservedFile[];
+  bundleHash: string;
+  totalBytes: number;
+  indexState: LocalMemoryIndexState;
+};
+
 export type LocalMemoryHit = {
   id: string;
   path: ".agents/memory.md";

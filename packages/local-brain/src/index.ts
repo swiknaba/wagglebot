@@ -4,6 +4,9 @@ export { tokenize } from "./bm25/tokenize";
 export { CodeGraphProvider } from "./codegraph/provider";
 export { GitProvider } from "./git/provider";
 export { createLocalBrain, type LocalBrain } from "./local-brain";
+export { LEGACY_MEMORY_PATH, loadMemoryBundle } from "./memory/bundle";
+export { renderMemoryIndexes } from "./memory/indexes";
+export { ensureLocalMemoryBundle, INITIAL_COMPONENT_PATH, repairMemoryIndexes } from "./memory/lifecycle";
 export {
   type LocalMemoryDocument,
   MemoryParseError,
@@ -31,6 +34,7 @@ export type {
   GitWhyInput,
   GitWhyResult,
   LocalBrainStatus,
+  LocalMemoryBundle,
   LocalMemoryChunk,
   LocalMemoryConcept,
   LocalMemoryHit,
@@ -38,6 +42,7 @@ export type {
   LocalMemoryPath,
   LocalMemoryProposal,
   LocalMemoryProposalInput,
+  LocalMemoryReservedFile,
   LocalMemorySaveResult,
   LocalMemorySection,
   MemoryEvidence,
