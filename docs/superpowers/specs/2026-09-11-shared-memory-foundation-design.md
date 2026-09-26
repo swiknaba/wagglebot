@@ -49,7 +49,7 @@ canonical record store, or direct agent endpoint.
 
 ## Non-Goals
 
-- Component memory. It stays in `.agents/memory.md` under D29.
+- Component memory. It stays in the `.agents/memory/` OKF bundle under D29.
 - Uploading code, CodeGraph data, Git diffs, or repository working trees.
 - Mining transcripts, agent conversations, or an entire checkout.
 - Confluence or arbitrary document ingestion. That remains Phase 4.
@@ -363,8 +363,9 @@ propose_memory
   → outbox worker indexes through MemPalace
 ```
 
-The worker rejects a component proposal with an instruction to update
-`.agents/memory.md`. It rejects domain or organization proposals from agents.
+The worker rejects a component proposal with an instruction to add or update an
+OKF concept under `.agents/memory/`. It rejects domain or organization
+proposals from agents.
 
 ### Explicit human memory
 

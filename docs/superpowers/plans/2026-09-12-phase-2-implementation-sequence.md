@@ -7,13 +7,18 @@
 > below is superseded. The local-first boundary and milestone dependencies stay
 > in force.
 
+> **Local-memory amendment (2026-09-26):** The unshipped single-file memory
+> implementation is a historical checkpoint. Task 1A and the
+> [OKF local-memory design](../specs/2026-09-26-okf-local-memory-design.md)
+> replace it before the Unified Context Engine begins.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Deliver Wagglebot Phase 2 as a local-first repository brain plus authenticated, governed shared services and bounded context transfer, while preserving the Phase 1 provisioning contract and keeping source code, component memory, and workstation credentials local.
 
 **Architecture:** Phase 2 is six testable milestones connected by explicit dependency gates. Local repository intelligence is built first; SSH authentication then supplies shared-service identity; the authenticated registry and local MCP hub provide governed tool access; shared memory stores only system/domain/organization knowledge; the unified context engine fuses bounded local and shared evidence; Context Bridge adds explicit, expiring local chat-to-chat transfer. This document orchestrates the approved subsystem plans and does not replace their file-level TDD steps.
 
-**Tech Stack:** TypeScript 5.9.2, Bun, Zod 4.6.1, Biome 2.2.0, CodeGraph 1.6.0, native Git, OpenSSH SSHSIG, `jose` 6.2.12, PostgreSQL with pgvector, `pg` 8.23.0, a TypeScript/Bun one-shot migration job, MemPalace 3.9.0, `@modelcontextprotocol/sdk` 1.30.0, and gitleaks 8.30.1.
+**Tech Stack:** TypeScript 5.9.2, Bun, Zod 4.6.1, Biome 2.2.0, OKF v0.2, YAML 2.8.3, CodeGraph 1.6.0, native Git, OpenSSH SSHSIG, `jose` 6.2.12, PostgreSQL with pgvector, `pg` 8.23.0, a TypeScript/Bun one-shot migration job, MemPalace 3.9.0, `@modelcontextprotocol/sdk` 1.30.0, and gitleaks 8.30.1.
 
 **Spec:** `docs/superpowers/specs/2026-09-11-phase-2-memory-roadmap.md`; public wire contracts are authoritative in `docs/api-reference.md`.
 
@@ -28,8 +33,8 @@
   a committed schema-only reference, and scoped backup/restore. Keep the runner
   in TypeScript/Bun, retain the normalized `memory_*` record/outbox tables, and
   keep embeddings behind MemPalace.
-- Keep code, Git history, CodeGraph data, `.agents/memory.md`, Context Bridge packets, tool credentials, authentication session tokens, and MCP trust approvals on the workstation.
-- Keep component memory only in the committed `.agents/memory.md` file. Shared storage accepts only system, domain, and organization scopes.
+- Keep code, Git history, CodeGraph data, the `.agents/memory/` OKF bundle, Context Bridge packets, tool credentials, authentication session tokens, and MCP trust approvals on the workstation.
+- Keep component memory only in committed OKF concept files under `.agents/memory/`. Shared storage accepts only system, domain, and organization scopes.
 - Never persist, upload, infer from, or mine chat transcripts. Retrieval never becomes durable memory without an explicit proposal and save or remember operation.
 - Every shared-memory write and local durable-memory save must pass the two-layer secret scan before persistence.
 - Scopes control relevance, routing, and write authorization; they are not a new read-access model between trusted coworkers.
@@ -70,12 +75,14 @@ Phase 2 deliberately separates authorities:
 When two documents differ, resolve them in this order:
 
 1. `docs/api-reference.md` for public Phase 2 wire contracts.
-2. The current 2026-08-28 shared-layer, C3 service-contract, and Phase 4
+2. `docs/superpowers/specs/2026-09-26-okf-local-memory-design.md` for local
+   component-memory format and behavior.
+3. The current 2026-08-28 shared-layer, C3 service-contract, and Phase 4
    ingestion specifications for shared-memory storage and migrations.
-3. `docs/superpowers/plans/2026-09-16-sequel-shared-memory-foundation.md` for
+4. `docs/superpowers/plans/2026-09-16-sequel-shared-memory-foundation.md` for
    shared-memory implementation sequence.
-4. The non-historical subsystem plans and designs for their own areas.
-5. Numbered decisions D1-D37 in the original design.
+5. The non-historical subsystem plans and designs for their own areas.
+6. Numbered decisions D1-D37 in the original design.
 
 Ludwig's `a99148e` update is the storage architecture decision: a separate
 Ruby/Sequel migration container owns one `wagglebot_memories` table, while the
@@ -94,7 +101,7 @@ Status updated on 2026-09-16 from branch `DEV-001`:
 | Shared contract/scanner groundwork | Commit `c37c31f` adds contract and scanner fixtures | Committed groundwork |
 | Phase 2 subsystem designs and detailed plans | Current plans plus historical plans marked superseded | Active work follows the current plan for each subsystem |
 | Shared Memory Foundation Task 1 | Memory/principal schemas, workspace registration, memory-worker package metadata, tests, and lockfile updates | Implemented contract checkpoint |
-| Local Repository Brain runtime | Commits `4cc72e3` through `0a5f4c6` implement `packages/local-brain`, CLI commands, and seven low-level local MCP tools | Complete |
+| Local Repository Brain runtime | Commits `4cc72e3` through `0a5f4c6` implement BM25, path policy, CodeGraph, Git, CLI, and seven low-level MCP tools; their single-file memory layer is unshipped and superseded | OKF replacement required |
 | SSH authentication | `services/auth` and `packages/auth-protocol` verify SSH signatures and issue/verify sessions | Implemented; full-stack verification remains part of the release gate |
 | Shared database/admin design updates | Ludwig commit `a81a37f` on this branch | Database foundation active; dashboard deferred until after Phase 3 |
 | Authenticated registry | `services/registry` serves validated authenticated registry snapshots | Implemented |
@@ -110,27 +117,24 @@ The current Shared Memory Task 1 work has passed its focused contract tests and 
 ```text
 Phase 1 (complete)
   |
-  +--> Milestone 1: Local Repository Brain -----------+
-  |                                                    |
-  +--> Milestone 2: SSH Authentication --+             |
-                                         |             |
-                                         +--> Registry +--> Local MCP Hub --+
-                                         |                                  |
-                                         +--> Shared Memory Foundation ------+--> Unified Context Engine
-                                                                                         |
-                                                                                         +--> Context Bridge
+  +--> Local Brain foundations --> OKF component memory ------------------+
+  |                                                                      |
+  +--> SSH Authentication --> Registry --> Local MCP Hub ----------------+--> Unified Context Engine
+          |                                                              |             |
+          +--------------------> Shared Memory Foundation ----------------+             +--> Context Bridge
 ```
 
 The execution order is therefore:
 
 1. Stabilize the already-started Shared Memory Task 1 contract checkpoint.
 2. Build the Local Repository Brain.
-3. Build SSH authentication.
-4. Build the authenticated registry, then the local MCP hub.
-5. Resume the Shared Memory Foundation at Task 2.
-6. Build the Unified Context Engine.
-7. Build Context Bridge.
-8. Run the complete Phase 2 release gate.
+3. Replace the unshipped single-file component memory with OKF local memory.
+4. Build SSH authentication.
+5. Build the authenticated registry, then the local MCP hub.
+6. Resume the Shared Memory Foundation at Task 2.
+7. Build the Unified Context Engine.
+8. Build Context Bridge.
+9. Run the complete Phase 2 release gate.
 
 ---
 
@@ -166,13 +170,18 @@ The execution order is therefore:
 
 ### Task 1: Deliver Milestone 1 — Local Repository Brain
 
+> **Historical checkpoint:** The completed single-file memory steps below are
+> superseded by Task 1A. Retain their tested BM25, path-policy, secret-scan,
+> CodeGraph, Git, CLI, and MCP foundations; do not preserve
+> `.agents/memory.md` compatibility.
+
 **Detailed plan:** `docs/superpowers/plans/2026-09-11-local-repository-brain.md`
 
 **Design:** `docs/superpowers/specs/2026-09-11-local-repository-brain-design.md`
 
 **Prerequisites:** Phase 1 component/catalog files, Git, and CodeGraph 1.6.0. No authentication or shared service is required.
 
-**Interfaces:**
+**Historical interfaces:**
 
 - Consumes: repository path, current checkout, `.agents/memory.md`, native Git, Phase 1 catalog identity, and the existing secret scanner.
 - Produces: `@wagglebot/local-brain`, deterministic BM25, project identity/path policy, local memory proposal/save, CodeGraph and Git providers, CLI brain commands, status, and seven low-level local MCP tools.
@@ -187,7 +196,52 @@ The execution order is therefore:
 - [x] Execute Task 8: expose the seven low-level local MCP operations and run the detailed milestone gate.
 - [x] Review every commit and the aggregate milestone diff for accidental Phase 1 behavior changes.
 
-**Gate:** A repository answers local memory, code relationship, and Git-rationale questions with the network disabled; `.agents/memory.md` proposals remain ephemeral until explicitly saved; the CodeGraph index survives restart and updates incrementally; no source or transcript data leaves the workstation.
+**Historical gate:** A repository answers local memory, code relationship, and
+Git-rationale questions with the network disabled; proposals remain ephemeral
+until explicitly saved; the CodeGraph index survives restart and updates
+incrementally; no source or transcript data leaves the workstation. Task 1A
+replaces the memory format before this becomes the release gate.
+
+---
+
+### Task 1A: Replace Component Memory with OKF v0.2
+
+**Design:** `docs/superpowers/specs/2026-09-26-okf-local-memory-design.md`
+
+**Prerequisites:** The completed Milestone 1 foundations. No legacy consumer,
+migration, or compatibility path exists because the single-file format never
+shipped.
+
+**Interfaces:**
+
+- Consumes: repository path, `.agents/memory/` concept files, the existing
+  secret scanner, YAML 2.8.3, atomic file writes, and in-process BM25.
+- Produces: an OKF v0.2 bundle with one file per concept, deterministic
+  progressive indexes, aggregate bundle hashing, exact-path search evidence,
+  updated CLI/MCP contracts, and consistent lifecycle documentation.
+
+- [ ] Replace the single-file parser and types with a permissive OKF concept
+  parser and bounded recursive bundle loader; reject `.agents/memory.md`.
+- [ ] Generate deterministic root/category indexes from `type`, `title`, and
+  `description`; never use a model or index generated files as search content.
+- [ ] Rework propose/save for one concept file, stable source IDs and
+  footnotes, exact-path replacement, bundle-hash concurrency, secret scanning,
+  atomic concept writes, and explicit stale-index warnings.
+- [ ] Change `brain init`, `brain remember`, `brain status`, templates, help,
+  and agent/onboarding instructions to use only `.agents/memory/`.
+- [ ] Change low-level MCP and unified-context evidence contracts to return
+  exact concept paths and `bundleHash`; update API reference and fixtures.
+- [ ] Update D29, the Phase 1 provisioning contract, active memory/context
+  designs and plans, README, and the persisted-state inventory so no active
+  document names the removed file as authoritative.
+- [ ] Run focused red/green tests followed by `bun run check`,
+  `bun run typecheck`, `bun test`, `bun run build`, and `git diff --check`.
+
+**Gate:** A new repository initializes a conformant OKF v0.2 bundle; each saved
+memory is one concept; indexes support progressive human/agent discovery;
+search returns exact concept provenance; no legacy file is read or written;
+and the local brain remains offline, secret-scanned, bounded, and independently
+degradable.
 
 ---
 

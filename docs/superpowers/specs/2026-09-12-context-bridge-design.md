@@ -41,7 +41,8 @@ Cross-user sharing is a later authorization feature and is outside this design.
 
 - Automatic context transfer between arbitrary chats.
 - Raw transcript, prompt, hidden reasoning, or session-log storage.
-- A second memory database or a replacement for `.agents/memory.md`.
+- A second memory database or a replacement for the `.agents/memory/` OKF
+  bundle.
 - Cross-user, cross-workstation, team, or organization sharing.
 - Automatic task-state, diary, handoff, or workflow persistence.
 - Automatic source-code or diff capture.

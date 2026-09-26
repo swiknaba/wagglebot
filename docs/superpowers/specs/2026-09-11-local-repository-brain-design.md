@@ -2,6 +2,12 @@
 
 **Status:** Approved architecture
 
+> **Partially superseded:** The single-file component-memory format, paths,
+> interfaces, CLI examples, and acceptance criteria below are historical.
+> [OKF Local Component Memory Design](2026-09-26-okf-local-memory-design.md)
+> replaces them before the first supported release. CodeGraph, Git, BM25, path
+> policy, privacy, and provider-degradation decisions remain active.
+
 > **Parent:** [Phase 2 Memory Roadmap](2026-09-11-phase-2-memory-roadmap.md)  
 > **Inputs:** Phase 2 Memory Roadmap and the colleague's approved Wagglebot
 > architecture decisions  

@@ -1,5 +1,14 @@
 # Local Repository Brain Implementation Plan
 
+> **Partially historical:** Tasks 3, 7, and 8 were implemented against an
+> unshipped single `.agents/memory.md` file. Do not reuse those path or wire
+> contracts. The [OKF local-memory design](../specs/2026-09-26-okf-local-memory-design.md)
+> and Task 1A in the
+> [Phase 2 implementation sequence](2026-09-12-phase-2-implementation-sequence.md)
+> replace the component-memory portions. The BM25, path-policy, CodeGraph, Git,
+> and provider-composition tasks remain valid historical implementation
+> evidence.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add human-readable component memory with explicit proposal/promotion, a persistent local CodeGraph index, Git evidence retrieval, and low-level MCP operations without sending repository data to shared services.
@@ -12,7 +21,8 @@
 
 ## Global Constraints
 
-- Keep `.agents/memory.md` as the only durable component-memory file.
+- The completed Task 3 used `.agents/memory.md`; Task 1A must remove that
+  unshipped format and use only the `.agents/memory/` OKF bundle.
 - Keep proposals ephemeral. Do not create a proposal cache, session file, or
   transcript store.
 - Accept only a finished title, summary, section, and evidence from the caller;

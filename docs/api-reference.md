@@ -130,7 +130,7 @@ type ProjectIdentity = {
 };
 
 type EvidenceRef =
-  | { kind: "local_memory"; path: ".agents/memory.md"; startLine: number; endLine: number; contentHash: string }
+  | { kind: "local_memory"; path: `.agents/memory/${string}.md`; startLine: number; endLine: number; contentHash: string }
   | { kind: "code"; path: string; startLine: number; endLine: number; symbol?: string; graphState: "ready" | "pending" | "stale" }
   | { kind: "git"; commit: string; path?: string; startLine?: number; endLine?: number }
   | { kind: "shared_memory"; memoryId: string; repository?: string; path?: string; commitSha?: string; heading?: string };
@@ -744,12 +744,14 @@ type MemoryEvidence = {
 };
 type LocalMemoryProposal = {
   proposalId: string;
-  baseContentHash: string;
+  baseBundleHash: string;
+  path: `.agents/memory/${string}.md`;
   section: "Architecture" | "Conventions" | "Commands" | "Decisions" | "Warnings" | "Learnings";
   title: string;
   summary: string;
   evidence: MemoryEvidence[];
   action: "add" | "replace" | "no_change" | "needs_resolution";
+  concept: string;
   patch: string;
   warnings: string[];
 };
@@ -791,7 +793,14 @@ type CodeGraphResult = {
 };
 type LocalBrainStatus = {
   project: ProjectIdentity;
-  memory: { state: "missing" | "ready" | "error"; contentHash?: string; observedAt: string };
+  memory: {
+    state: "missing" | "ready" | "invalid" | "error";
+    path: ".agents/memory/";
+    bundleHash?: string;
+    conceptCount: number;
+    indexes: "current" | "stale" | "missing";
+    observedAt: string;
+  };
   codeGraph: { state: "missing" | "indexing" | "ready" | "pending" | "error"; pendingFiles: string[]; observedAt: string };
   git: { state: "ready" | "error"; head?: string; branch?: string; workingTree?: "clean" | "dirty"; shallow: boolean };
   observedAt: string;
@@ -800,9 +809,9 @@ type LocalBrainStatus = {
 
 | Tool | Strict input | Success result |
 |---|---|---|
-| `local_memory_search` | `{ projectPath, query: 1..2,000 code points, limit?: 1..20 }` | `{ schemaVersion: 1, hits: [{ id, headingPath, content, score, path, startLine, endLine, contentHash }], fileHash }` |
-| `brain_memory_propose` | `{ projectPath, section, title: 1..80, summary: 1..1,000, evidence: 1..20 MemoryEvidence[], replace?: { title, contentHash } }` | `{ schemaVersion: 1, proposal: LocalMemoryProposal }` |
-| `brain_memory_save` | `{ projectPath, proposal: LocalMemoryProposal }` | `{ schemaVersion: 1, path: ".agents/memory.md", action, previousContentHash, newContentHash, patch }` |
+| `local_memory_search` | `{ projectPath, query: 1..2,000 code points, limit?: 1..20 }` | `{ schemaVersion: 1, hits: [{ id, headingPath, content, score, path, startLine, endLine, contentHash }], bundleHash }` |
+| `brain_memory_propose` | `{ projectPath, section, title: 1..80, summary: 1..1,000, evidence: 1..20 MemoryEvidence[], replace?: { path, contentHash } }` | `{ schemaVersion: 1, proposal: LocalMemoryProposal }` |
+| `brain_memory_save` | `{ projectPath, proposal: LocalMemoryProposal }` | `{ schemaVersion: 1, path, action, previousBundleHash, newBundleHash, patch, warnings }` |
 | `codegraph_explore` | `{ projectPath, query: 1..500, maxNodes?: 1..100, includeCode?: boolean }` | `{ schemaVersion: 1, result: CodeGraphResult }` |
 | `git_history` | `{ projectPath, path?: repository-relative, limit?: 1..100 }` | `{ schemaVersion: 1, commits: [{ commit, subject, body?, authorDate, authors, changedPaths }], limitations }` |
 | `git_why` | `{ projectPath, path: repository-relative, startLine?, endLine?, query?, maxCommits?: 1..200 }` | `{ schemaVersion: 1, result: GitWhyResult }` |
@@ -811,15 +820,19 @@ type LocalBrainStatus = {
 No tool accepts a transcript, prompt, hidden reasoning, session file, or
 absolute evidence path. Retrieval never writes durable memory.
 
-`.agents/memory.md` is capped at 256 KiB and each indexed chunk at 4,000 code
-points. Total Git output is capped at 1 MiB; at most five commits carry diff
+The complete `.agents/memory/` bundle is capped at 256 KiB and each indexed
+concept chunk at 4,000 code points. Generated `index.md` files are navigation
+aids, not search candidates. Total Git output is capped at 1 MiB; at most five commits carry diff
 hunks, each hunk is capped at 200 lines and 32 KiB, and a Git subprocess times
 out after ten seconds. CodeGraph keeps at most eight project handles.
 
 There is no requests-per-minute limit. Retrieval and status tools are read-only.
-`brain_memory_propose` is deterministic and does not write. A save is atomic
-but deliberately not replayable: repeating it after the file changed returns
-`memory_changed`, preventing a duplicate entry. Errors are MCP tool errors with
+`brain_memory_propose` is deterministic and does not write. A save writes one
+concept atomically and then atomically regenerates the affected category and
+root indexes. It is deliberately not replayable: repeating it after the bundle
+changed returns `memory_changed`, preventing a duplicate concept. A durable
+concept with a failed index refresh returns an `indexes_stale` warning and can
+be repaired by a later save or `brain init`. Errors are MCP tool errors with
 `project_not_found`, `path_outside_repository`, `path_forbidden`,
 `local_memory_invalid`, `local_memory_too_large`, `memory_changed`,
 `proposal_invalid`, `proposal_conflict`, `secret_rejected`,
@@ -1025,7 +1038,7 @@ prose, absolute path, or evidence content.
 | `wagglebot_schema_migrations` | database migration service | PostgreSQL | Sequel migration history |
 | `registry.trust.json` | local hub | workstation file, `0600` | approved privileged registry fingerprints |
 | discovery cache | local hub | process memory | downstream schemas; rebuildable, never canonical |
-| `.agents/memory.md` | repository/local brain | Git working tree | authoritative component memory; human-readable and reviewed like source |
+| `.agents/memory/` | repository/local brain | Git working tree | authoritative OKF component concepts plus derived indexes and an optional preserved `log.md`; human-readable and reviewed like source |
 | `.codegraph/codegraph.db` | CodeGraph/local brain | ignored workstation SQLite | generated current-checkout graph; rebuildable and never uploaded |
 | context cursor | context engine | process memory | IDs/hashes only; four-hour sliding expiry |
 | Context Bridge vault packets | context engine | workstation files, `0700`/`0600` | bounded expiring explicit packets, never transcripts |
@@ -1061,8 +1074,9 @@ operation.
 - Hub registry refresh validates, applies local trust approvals, resolves local
   credentials, and swaps the complete candidate. Removed namespaces drain and
   invalidate cached schemas.
-- Local memory save compares `baseContentHash`, writes a temporary file, and
-  atomically renames it; it never stages or commits the file.
+- Local memory save compares `baseBundleHash`, writes one concept through a
+  temporary sibling and atomic rename, then regenerates the affected derived
+  indexes atomically; it never stages or commits files.
 - CodeGraph updates its ignored SQLite representation incrementally from the
   current checkout; Git/source remains authoritative.
 - Context Bridge packets use opaque handles, atomic writes, TTL cleanup, and

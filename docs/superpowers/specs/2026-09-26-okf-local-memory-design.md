@@ -7,6 +7,7 @@
 > [Phase 2 Memory Roadmap](2026-09-11-phase-2-memory-roadmap.md), and D29 in
 > [Wagglebot Design](2026-08-28-wagglebot-design.md).  
 > **Standard:** [Open Knowledge Format v0.2](https://github.com/GoogleCloudPlatform/open-knowledge-format/blob/main/SPEC.md)
+> **Reference bundle:** [Acme Retail](https://github.com/GoogleCloudPlatform/open-knowledge-format/tree/main/bundles/acme_retail)
 
 ## Decision
 
@@ -54,7 +55,7 @@ organization memory remains in the shared-memory service.
 ├── instructions/
 └── memory/
     ├── index.md
-    ├── purpose.md
+    ├── component.md
     ├── architecture/
     │   ├── index.md
     │   └── module-boundaries.md
@@ -67,15 +68,57 @@ organization memory remains in the shared-memory service.
     └── learnings/
 ```
 
-The directory names retain the existing proposal categories. `Purpose` maps to
-the root `purpose.md`; every other category maps to its lowercase directory.
-Directories are created only when they contain a concept, so the committed
-bundle never relies on empty directories.
+The directory names retain the existing proposal categories and follow the
+reference bundles' pattern of grouping concepts by semantic type. The root
+`component.md` is a `Component Overview`; every proposed memory goes into the
+lowercase directory for its category. Directories are created only when they
+contain a concept, so the committed bundle never relies on empty directories.
 
-The root `index.md` declares `okf_version: "0.2"` and links to `purpose.md` and
-each populated category. A category `index.md` lists its concepts with their
-frontmatter descriptions. Index files are deterministic derived views. Search
-scans concept documents directly and does not treat indexes as knowledge.
+The root `index.md` declares `okf_version: "0.2"` and links to `component.md`
+and each populated category's `index.md`. Each index groups direct children by
+`type`, sorts them by case-insensitive `title`, and includes `description`,
+matching the canonical reference indexer. Known category directories use fixed
+descriptions; Wagglebot never calls a model to summarize a directory. Index
+files are deterministic derived views. Search scans concept documents directly
+and does not treat indexes as knowledge.
+
+The root is a compact table of contents:
+
+```markdown
+---
+okf_version: "0.2"
+---
+
+# Component Memory
+
+- [Component overview](component.md): Repository purpose, boundaries, and ownership.
+- [Architecture](architecture/index.md): Durable structural constraints and boundaries.
+- [Warnings](warnings/index.md): Traps, hazards, and costly failure modes.
+```
+
+A category index is plain Markdown with no frontmatter:
+
+```markdown
+# Warnings
+
+Traps, hazards, and costly failure modes.
+
+## Warning
+
+- [Retries can duplicate a charge](retries-can-duplicate-a-charge.md): A timed-out charge must be reconciled before another write.
+```
+
+If a human-authored concept omits the optional `title`, the index uses its file
+stem as the link label. If it omits `description`, the index omits the colon and
+description. Concept identity is the bundle-relative path without `.md`; title
+changes therefore do not change identity unless a caller explicitly renames the
+file.
+
+Wagglebot does not create or update `log.md`. OKF makes it optional, and Git
+already provides chronological, attributed history for this repository-scoped
+bundle. If a human adds a conformant root `log.md`, the provider preserves it,
+counts it toward the bundle-size limit, and excludes it from search, indexes,
+and the authoritative `bundleHash`.
 
 ## Concept Documents
 
@@ -86,11 +129,8 @@ Every non-reserved Markdown file is a conformant OKF concept:
 type: Warning
 title: Retries can duplicate a charge
 description: A timed-out charge must be reconciled before another write.
-tags: [component-memory, warning]
+tags: [warning]
 status: stable
-generated:
-  by: wagglebot/0.2.1
-  at: 2026-09-26T10:30:00Z
 sources:
   - id: evidence-1
     resource: ../../../src/payments/charge.ts#L81
@@ -98,37 +138,51 @@ sources:
     kind: file
 ---
 
-# Retries can duplicate a charge
+# Warning
 
-A timed-out charge must be reconciled before another write.
+A timed-out charge must be reconciled before another write.[^evidence-1]
 
-## Evidence
-
-- `src/payments/charge.ts:81`
+[^evidence-1]: `src/payments/charge.ts:81`
 ```
 
-Wagglebot-generated concepts use these fields:
+Wagglebot-generated proposal concepts use these fields:
 
-- `type`: the singular category name (`Purpose`, `Architecture`, `Convention`,
-  `Command`, `Decision`, `Warning`, or `Learning`);
+- `type`: the proposal section mapped to its singular concept type
+  (`Architecture → Architecture`, `Conventions → Convention`,
+  `Commands → Command`, `Decisions → Decision`, `Warnings → Warning`, and
+  `Learnings → Learning`); the initializer separately writes
+  `type: Component Overview` in `component.md`;
 - `title`: the proposal title;
 - `description`: the proposal summary;
-- `tags`: `component-memory` and the lowercase category;
+- `tags`: the lowercase concept type;
 - `status`: `stable`, because a concept is written only after an explicit save;
-- `generated`: the CLI producer/version and save time;
 - `sources`: one entry per proposal evidence item.
 
 `sources[].kind` is an allowed OKF extension that preserves Wagglebot's existing
 evidence classification. Repository file and ADR references become relative
 paths from the concept document. Commit, issue, test, and maintainer references
-remain portable scope descriptors. Each source also appears in the human-
-readable `## Evidence` section.
+remain portable scope descriptors. Stable `evidence-N` IDs join sources to
+Markdown footnotes in the body, following OKF's claim-attribution convention.
+
+Wagglebot does not write `generated` or `verified`. The local-brain process
+serializes content supplied by a caller but does not know whether a human,
+agent, or deterministic process authored or verified the claim. Inventing an
+actor would make OKF trust metadata misleading. A human or agent that knows the
+actor may add conformant `generated`, `verified`, `stale_after`, cross-links,
+or producer extensions manually; Wagglebot preserves those fields when it
+round-trips a concept. Preservation applies to field values, not byte-for-byte
+YAML formatting or comments.
+
+The generated body uses one semantic H1 matching the concept type (`#
+Decision`, `# Warning`, and so on), followed by the concise claim and its keyed
+evidence footnotes. This mirrors the reference bundles' use of structured,
+domain-specific headings rather than repeating the display title as body text.
 
 Human-authored concepts need only the OKF-required non-empty `type`. The parser
 accepts unknown types, unknown frontmatter keys, missing optional fields, and
 broken links as required by OKF. A concept is invalid only when its Markdown is
 not UTF-8 text, its YAML frontmatter is malformed, or `type` is missing or
-empty. Reserved `index.md` files are parsed separately.
+empty. Reserved `index.md` and `log.md` files are parsed separately.
 
 The complete bundle remains capped at 256 KiB, preserving the existing local
 memory bound. Search chunks remain capped at 4,000 Unicode code points.
@@ -140,9 +194,9 @@ following symbolic links. It rejects a resolved path outside the bundle,
 malformed concept frontmatter, duplicate concept paths, invalid reserved files,
 or a bundle over 256 KiB.
 
-Each concept produces chunks from its title, description, heading ancestry,
-and body. A long body is split at paragraph or sentence boundaries. Every
-chunk records:
+Each concept produces chunks from its type, title, description, tags, heading
+ancestry, and body. A long body is split at paragraph or sentence boundaries.
+Every chunk records:
 
 ```typescript
 type LocalMemoryChunk = {
@@ -163,9 +217,10 @@ The chunk ID hashes the concept path, heading path, and ordinal. BM25 indexes
 heading matches remain the deterministic tie-break. Results return the exact
 concept path and lines; generated indexes are never search hits.
 
-`LocalMemoryBundle.contentHash` hashes the sorted `(relative path, file hash)`
-pairs for every concept and index. This is the optimistic-concurrency token for
-a proposal.
+`LocalMemoryBundle.bundleHash` hashes the sorted `(relative path, file hash)`
+pairs for authoritative concept files only. Derived indexes are excluded, so
+repairing a stale index does not invalidate an otherwise current proposal. This
+is the optimistic-concurrency token for a proposal.
 
 ## Proposal and Save
 
@@ -181,9 +236,9 @@ type LocalMemorySection =
   | "Learnings";
 ```
 
-`brain_memory_propose` validates and secret-scans the finished title, summary,
-and evidence, then derives a lowercase ASCII kebab-case filename from the
-title. An empty slug is invalid. The target is
+`brain_memory_propose` validates and secret-scans the finished title, concise
+single-paragraph summary, and evidence, then derives a lowercase ASCII
+kebab-case filename from the title. An empty slug is invalid. The target is
 `.agents/memory/<section>/<slug>.md`.
 
 - No target file and no same-title concept: `add`.
@@ -204,20 +259,24 @@ indexes. Indexes are derived: if index regeneration fails after the concept is
 durable, the save result reports an `indexes_stale` warning rather than
 claiming the whole patch was applied. A later save or `brain init` repairs
 indexes from concept frontmatter. Search and status remain read-only and use
-concept documents as the authority. The command never stages or commits files.
+concept documents as the authority. Replacement preserves unknown frontmatter
+keys and optional OKF trust/freshness fields while replacing the title,
+description, type, status, sources, tags, and body named by the proposal. The
+command never stages or commits files.
 
 ## Initialization and CLI
 
 `wagglebot brain init` creates `.agents/memory/index.md` and
-`.agents/memory/purpose.md` only when the bundle does not exist. The initial
-purpose concept is `status: draft` and contains prompts for the component owner
-to replace. Existing bundles are validated and their indexes repaired without
-overwriting concepts.
+`.agents/memory/component.md` only when the bundle does not exist. The initial
+`Component Overview` concept is `status: draft` and contains prompts for the
+component owner to replace. Existing bundles are validated and their indexes
+repaired without overwriting concepts.
 
 `wagglebot brain remember` retains preview-by-default and writes only with
 `--save`. `wagglebot brain status` reports the bundle path, concept count,
-aggregate content hash, and invalid/ready/missing state. Help and agent
-instructions name `.agents/memory/` as the only component-memory location.
+aggregate bundle hash, invalid/ready/missing/error state, and whether generated
+indexes are current, stale, or missing. Help and agent instructions name
+`.agents/memory/` as the only component-memory location.
 
 ## MCP Contract Changes
 

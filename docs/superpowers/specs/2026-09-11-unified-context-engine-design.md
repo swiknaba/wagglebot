@@ -211,7 +211,7 @@ Every item has at least one navigable evidence reference:
 
 ```typescript
 type EvidenceRef =
-  | { kind: "local_memory"; path: ".agents/memory.md"; startLine: number; endLine: number; contentHash: string }
+  | { kind: "local_memory"; path: `.agents/memory/${string}.md`; startLine: number; endLine: number; contentHash: string }
   | { kind: "code"; path: string; startLine: number; endLine: number; symbol?: string; graphState: string }
   | { kind: "git"; commit: string; path?: string; startLine?: number; endLine?: number }
   | { kind: "shared_memory"; memoryId: string; repository?: string; path?: string; commitSha?: string; heading?: string };
@@ -220,7 +220,7 @@ type EvidenceRef =
 The formatter renders compact handles:
 
 ```text
-local-memory://.agents/memory.md#L32
+local-memory://.agents/memory/warnings/retry-writes.md#L12
 code://src/auth/token-service.ts#L81
 git://3e11fc9?path=src/auth/token-service.ts
 memory://018f5f5e-...

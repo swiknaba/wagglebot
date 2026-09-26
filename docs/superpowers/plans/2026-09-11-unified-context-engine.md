@@ -165,12 +165,17 @@ Expected: FAIL with missing module.
 
 ```typescript
 export const EvidenceRefSchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("local_memory"), path: z.literal(".agents/memory.md"), startLine: z.number().int().positive(), endLine: z.number().int().positive(), contentHash: Sha256Schema }).strict(),
+  z.object({ kind: z.literal("local_memory"), path: LocalMemoryConceptPathSchema, startLine: z.number().int().positive(), endLine: z.number().int().positive(), contentHash: Sha256Schema }).strict(),
   z.object({ kind: z.literal("code"), path: RelativePathSchema, startLine: z.number().int().positive(), endLine: z.number().int().positive(), symbol: z.string().optional(), graphState: z.enum(["ready", "pending", "stale"]) }).strict(),
   z.object({ kind: z.literal("git"), commit: GitShaSchema, path: RelativePathSchema.optional(), startLine: z.number().int().positive().optional(), endLine: z.number().int().positive().optional() }).strict(),
   z.object({ kind: z.literal("shared_memory"), memoryId: z.string().uuid(), repository: z.string().optional(), path: RelativePathSchema.optional(), commitSha: GitShaSchema.optional(), heading: z.string().optional() }).strict(),
 ]);
 ```
+
+Define `LocalMemoryConceptPathSchema` as a bounded repository-relative Markdown
+path below `.agents/memory/`. Reject reserved `index.md` and `log.md` paths so
+context evidence always names an authoritative concept rather than a derived
+navigation or history document.
 
 Use `.min(1)` for provenance and `.finite()` for scores. Refine line ranges so
 end is at least start. Define the mode hard maxima from the spec in one exported
@@ -872,7 +877,7 @@ test("base instructions teach the four invariant context rules", () => {
   expect(text).toContain("Use L1 only");
   expect(text).toContain("context cursor");
   expect(text).toContain("current source");
-  expect(text).toContain("`.agents/memory.md`");
+  expect(text).toContain("`.agents/memory/`");
   expect(text).toContain("Never save transcripts");
   expect(text).toContain("`brain_memory_propose`");
   expect(text).toContain("explicitly says to remember");
@@ -1012,7 +1017,7 @@ Phase 2 memory is complete only when:
 - RRF uses only channel rank and fixed weight; raw scores do not affect cross-channel ordering.
 - Explicit conflicts remain visible and current/reviewed sources receive the documented resolution.
 - A local provider and the shared provider can each fail independently while healthy evidence remains usable.
-- Another component never receives repository-local `.agents/memory.md` content.
+- Another component never receives repository-local `.agents/memory/` concept content.
 - Captured shared requests contain only query/task text, catalog scopes, result limit, and correlation ID.
 - No test capture or log contains code, graph output, Git content, local memory, shared memory text, credentials, DSNs, or absolute paths.
 - The 50-question evaluation meets every release threshold.

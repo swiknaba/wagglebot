@@ -66,12 +66,14 @@ An engineer writes portable Markdown files here:
   instructions/
     code-style.md
     testing.md
-  memory.md
+  memory/
+    index.md
+    component.md
   subagents/
 ```
 
 Only `.agents/instructions/*.md` is an instruction source. Wagglebot
-must not merge `.agents/memory.md`, component subagents, or other files
+must not merge the `.agents/memory/` OKF bundle, component subagents, or other files
 into an instruction document.
 
 `wagglebot sync-project` finds the Git root from the current directory.
@@ -613,23 +615,24 @@ Write few facts. A large memory is a haystack.
 
 WHERE MEMORY LIVES
 
-Component memory is one file in the repository you work in:
+Component memory is an Open Knowledge Format bundle in the repository:
 
-    .agents/memory.md
+    .agents/memory/
 
-Read it at the start of a session, before you plan. Edit it when you
-learn a durable fact about this repository. The file is committed, so a
-pull request reviews every change, and git keeps the history.
+Read `index.md`, then only the linked concepts relevant to the task. Store
+each durable fact or concept in its own Markdown file. The bundle is
+committed, so a pull request reviews every change, and git keeps the history.
 
 A fact that crosses a repository boundary has no home yet. The shared
 memory store arrives with the wagglebot shared layer. Until then, tell
 your engineer the fact in the session, and let them place it. Do not
-invent a memory tool. Do not write outside `.agents/memory.md`.
+invent a memory tool. Do not write component memory outside
+`.agents/memory/`.
 
 BEFORE YOU WRITE
 
-1. Read `.agents/memory.md` first.
-2. If the fact exists, update it. Do not add a duplicate.
+1. Read `.agents/memory/index.md` first.
+2. Search the concept files. If the fact exists, update it. Do not add a duplicate.
 3. If the fact contradicts an existing one, say so to your engineer.
 
 WHEN TO WRITE
@@ -639,10 +642,12 @@ you time. Do not write during exploration.
 
 WHEN YOUR ENGINEER TELLS YOU TO REMEMBER SOMETHING
 
-Write it to `.agents/memory.md`.
+Write or update exactly one OKF concept under `.agents/memory/`.
 
 * Do not judge the importance. They asked, so write it.
 * When they tell you a fact is wrong, remove it.
+* Keep a non-empty `type` in YAML frontmatter.
+* Regenerate the affected category index and root `index.md`.
 ```
 
 NOTE: The superpowers skill set already works this way for larger
@@ -727,45 +732,50 @@ adapters.
 NOTE: The base template is the portable layer and reaches every
 harness. Hooks are a per-harness reinforcement, not a replacement.
 
-## Component Memory Is A Local File (D29)
+## Component Memory Is A Local OKF Bundle (D29)
 
-Not every memory belongs on a server. A fact about one repository
-belongs **in** that repository:
+Not every memory belongs on a server. Facts about one repository belong
+**in** that repository as one Markdown concept each:
 
 ```
-.agents/memory.md
+.agents/memory/
+├── index.md
+├── component.md
+└── <category>/<concept>.md
 ```
 
 The directory name matters (D29). `.agents/` follows the emerging
 dotagents convention, and it pairs with the `AGENTS.md` standard. An
-agent that never heard of Wagglebot can still recognize it. Agents read
+agent that never heard of Wagglebot can still recognize it. The bundle
+conforms to OKF v0.2, so concepts remain usable without Wagglebot. Agents read
 and write `.agents/`. `sync-project` reads
 `.agents/instructions/*.md`. Other Wagglebot tooling reads
 `.wagglebot/` (`catalog.yaml`, `public.md`).
 
-Git already distributes that file to everyone who clones the
-repository. A pull request reviews each change, and the history is
-free. A server adds nothing. One deliberate divergence from the draft
-convention: `memory.md` is **committed**, never gitignored, because
-the pull-request review is the feature.
+Git already distributes the bundle to everyone who clones the repository. A
+pull request reviews each concept change, and the history is free. A server
+adds nothing. The bundle is **committed**, never gitignored, because
+pull-request review is the feature. Generated root and category `index.md`
+files provide progressive discovery; Git provides history, so no `log.md` is
+required.
 
 The shared store therefore holds only what crosses a repository
 boundary:
 
 | Scope | Where it lives |
 |---|---|
-| `component` | `.agents/memory.md`, in the repository |
+| `component` | `.agents/memory/` OKF bundle, in the repository |
 | `system`, `domain`, `org` | The shared memory worker |
 
-A search reads the local file first, then the three shared scopes.
+A search reads the local concepts first, then the three shared scopes.
 
 This also makes the common case reviewable. A pull request that says
 "the agent wants to remember this" beats a silent write into a vector
 store.
 
-NOTE: The superpowers skill set already works this way. It writes specs
-and plans into `docs/superpowers/specs/`, in git. Component memory
-follows the same pattern.
+NOTE: The superpowers skill set already writes independently reviewable specs
+and plans into `docs/superpowers/specs/`, in Git. Component memory follows the
+same pattern at concept granularity.
 
 ## Success Criteria
 
@@ -800,10 +810,10 @@ follows the same pattern.
 10. `sync-agents` merges the hook fragments into each supported harness
    config and preserves the other keys. A second run reports the hooks
    as already installed.
-11. **Local component memory.** An agent records a repository fact in
-    `.agents/memory.md` (D29). The file appears in `git status`, so
-    a human reviews it. A later `memory_search` finds it without a
-    server call.
+11. **Local component memory.** An agent records a repository fact as one OKF
+    concept under `.agents/memory/` (D29). The concept and regenerated indexes
+    appear in `git status`, so a human reviews them. A later `memory_search`
+    finds the concept without a server call.
 12. `wagglebot update` on a machine with only Claude Code creates no
     directory for any other harness.
 13. **Local project instructions.** A repository stores two source

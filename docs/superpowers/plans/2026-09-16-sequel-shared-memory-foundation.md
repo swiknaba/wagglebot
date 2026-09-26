@@ -20,7 +20,9 @@
 - The Phase 2 schema has exactly `wagglebot_memories`, `wagglebot_memory_schema_metadata`, and `wagglebot_schema_migrations`; no MemPalace, outbox, or normalized memory tables.
 - The worker embeds with `@xenova/transformers`, model `all-MiniLM-L6-v2`, dimension `384`, cosine distance, on CPU. Metadata mismatch aborts worker startup.
 - Parameterize all SQL. Do not log DSNs, memory text, queries, credentials, provenance content, or embeddings.
-- Component memory remains `.agents/memory.md`; it must not enter shared storage. Phase 4 requires `knowledge_base_id` for all reads and writes.
+- Component memory remains an OKF bundle under `.agents/memory/`; it must not
+  enter shared storage. Phase 4 requires `knowledge_base_id` for all reads and
+  writes.
 
 ---
 
