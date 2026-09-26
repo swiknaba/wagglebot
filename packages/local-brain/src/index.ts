@@ -4,7 +4,12 @@ export { tokenize } from "./bm25/tokenize";
 export { CodeGraphProvider } from "./codegraph/provider";
 export { GitProvider } from "./git/provider";
 export { createLocalBrain, type LocalBrain } from "./local-brain";
-export { type LocalMemoryDocument, MemoryParseError, parseMemory } from "./memory/parse";
+export {
+  type LocalMemoryDocument,
+  MemoryParseError,
+  parseConcept,
+  parseMemory,
+} from "./memory/parse";
 export { MarkdownMemoryProvider } from "./memory/provider";
 export { writeMemoryAtomically } from "./memory/write";
 export type { GitExecutor, LocalBrainErrorCode, ResolvedProject } from "./path-policy";
@@ -27,7 +32,10 @@ export type {
   GitWhyResult,
   LocalBrainStatus,
   LocalMemoryChunk,
+  LocalMemoryConcept,
   LocalMemoryHit,
+  LocalMemoryIndexState,
+  LocalMemoryPath,
   LocalMemoryProposal,
   LocalMemoryProposalInput,
   LocalMemorySaveResult,

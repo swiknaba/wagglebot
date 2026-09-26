@@ -4,6 +4,9 @@ export type { ProjectIdentity } from "@wagglebot/contracts";
 
 export type LocalMemorySection = "Architecture" | "Conventions" | "Commands" | "Decisions" | "Warnings" | "Learnings";
 
+export type LocalMemoryPath = `.agents/memory/${string}.md`;
+export type LocalMemoryIndexState = "current" | "stale" | "missing";
+
 export type MemoryEvidence = {
   kind: "file" | "commit" | "adr" | "issue" | "test" | "maintainer_confirmation";
   ref: string;
@@ -11,6 +14,11 @@ export type MemoryEvidence = {
 
 export type LocalMemoryChunk = {
   id: string;
+  path: LocalMemoryPath;
+  type: string;
+  title: string;
+  description?: string;
+  tags: string[];
   headingPath: string[];
   content: string;
   startLine: number;
@@ -18,8 +26,28 @@ export type LocalMemoryChunk = {
   contentHash: string;
 };
 
-export type LocalMemoryHit = LocalMemoryChunk & {
+export type LocalMemoryConcept = {
+  path: LocalMemoryPath;
+  relativePath: string;
+  text: string;
+  contentHash: string;
+  frontmatter: Record<string, unknown>;
+  type: string;
+  title: string;
+  description?: string;
+  tags: string[];
+  body: string;
+  chunks: LocalMemoryChunk[];
+};
+
+export type LocalMemoryHit = {
+  id: string;
   path: ".agents/memory.md";
+  headingPath: string[];
+  content: string;
+  startLine: number;
+  endLine: number;
+  contentHash: string;
   score: number;
 };
 
