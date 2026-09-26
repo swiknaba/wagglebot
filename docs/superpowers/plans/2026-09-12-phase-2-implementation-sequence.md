@@ -128,7 +128,9 @@ The execution order is therefore:
 
 1. Stabilize the already-started Shared Memory Task 1 contract checkpoint.
 2. Build the Local Repository Brain.
-3. Replace the unshipped single-file component memory with OKF local memory.
+3. Replace the Repository Brain's unshipped single-file consumer with OKF local
+   memory while retaining Phase 1 v0.3.0's shipped project scaffolding and
+   agent-ownership workflow.
 4. Build SSH authentication.
 5. Build the authenticated registry, then the local MCP hub.
 6. Resume the Shared Memory Foundation at Task 2.
@@ -208,9 +210,10 @@ replaces the memory format before this becomes the release gate.
 
 **Design:** `docs/superpowers/specs/2026-09-26-okf-local-memory-design.md`
 
-**Prerequisites:** The completed Milestone 1 foundations. No legacy consumer,
-migration, or compatibility path exists because the single-file format never
-shipped.
+**Prerequisites:** The completed Milestone 1 foundations and Phase 1 v0.3.0
+project lifecycle. No supported Repository Brain consumer or live memory data
+requires a migration or compatibility path. The shipped `init`/`update`
+scaffolding and agent-editing idea is preserved in the OKF representation.
 
 **Interfaces:**
 
@@ -224,11 +227,17 @@ shipped.
   parser and bounded recursive bundle loader; reject `.agents/memory.md`.
 - [ ] Generate deterministic root/category indexes from `type`, `title`, and
   `description`; never use a model or index generated files as search content.
+- [ ] Make project `init`, project `update`, the hidden `sync-project` alias,
+  and `brain init` share one idempotent OKF bundle lifecycle. Preserve existing
+  concepts and `.agents/changelog.md`; reject the removed file before changing
+  project instruction targets.
 - [ ] Rework propose/save for one concept file, stable source IDs and
   footnotes, exact-path replacement, bundle-hash concurrency, secret scanning,
   atomic concept writes, and explicit stale-index warnings.
-- [ ] Change `brain init`, `brain remember`, `brain status`, templates, help,
-  and agent/onboarding instructions to use only `.agents/memory/`.
+- [ ] Change `brain remember`, `brain status`, templates, help, and
+  agent/onboarding instructions to use only `.agents/memory/`; teach
+  progressive index-first reading, direct one-concept-per-file edits, explicit
+  remember/correct behavior, and Git review.
 - [ ] Change low-level MCP and unified-context evidence contracts to return
   exact concept paths and `bundleHash`; update API reference and fixtures.
 - [ ] Update D29, the Phase 1 provisioning contract, active memory/context

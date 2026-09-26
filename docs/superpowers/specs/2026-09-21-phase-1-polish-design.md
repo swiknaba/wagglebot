@@ -2,6 +2,13 @@
 
 > This design replaces the incomplete Phase 1 completion claim. Phase 1 is
 > complete only when the behavior and tests in this document are implemented.
+>
+> **Memory amendment:** The project lifecycle and Git-review behavior below
+> remain authoritative, but the single `.agents/memory.md` representation is
+> superseded by the
+> [OKF Local Component Memory Design](2026-09-26-okf-local-memory-design.md).
+> Project `init` and `update` now scaffold and validate `.agents/memory/` using
+> the same lifecycle as `brain init`.
 
 ## Goal
 
@@ -323,12 +330,15 @@ Project `init` creates this structure when items are missing:
 ```text
 .agents/
   instructions/
-  memory.md
+  memory/
+    index.md
+    component.md
   changelog.md
 ```
 
-Project `update` also creates a missing `memory.md` or `changelog.md`. It does
-this even when `.agents/instructions/` contains no Markdown files.
+Project `update` also creates a missing OKF memory bundle or `changelog.md`.
+It does this even when `.agents/instructions/` contains no Markdown files.
+Existing concepts are preserved and only derived indexes are repaired.
 
 Project instructions come only from sorted
 `.agents/instructions/*.md`. The adapter table publishes equivalent content to
@@ -336,18 +346,20 @@ every supported project target. Project update preserves content outside
 Wagglebot-owned blocks. It must not merge memory, changelog, custom agents, or
 other `.agents` files into an instruction target.
 
-Wagglebot never overwrites an existing memory or changelog file. Git provides
-review, distribution, history, and recovery for both files. The files must not
-be added to `.gitignore`.
+Wagglebot never overwrites existing memory concepts or the changelog. Git
+provides review, distribution, history, and recovery for both. They must not be
+added to `.gitignore`.
 
 `catalog-info.yaml` is not created automatically. The repository onboarding
 skill collects the correct owner and system before it writes that file.
 
 ## Memory contract
 
-`.agents/memory.md` contains durable facts about the repository. An agent reads
-it directly. The base instructions tell agents to update it only with facts
-that will help later work.
+`.agents/memory/` is an OKF v0.2 bundle containing one durable repository fact
+or concept per Markdown file. An agent reads the root index, opens only relevant
+concepts, and updates the matching concept directly. The base instructions keep
+Ludwig's original ownership rule: agents maintain committed memory and Git
+review is the feature.
 
 Phase 1 has no memory service, search server, embedding model, or memory MCP
 server. Those features belong to later phases.

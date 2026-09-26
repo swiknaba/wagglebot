@@ -5,7 +5,9 @@
 > **Supersedes:** The single-file component-memory portions of
 > [Local Repository Brain Design](2026-09-11-local-repository-brain-design.md),
 > [Phase 2 Memory Roadmap](2026-09-11-phase-2-memory-roadmap.md), and D29 in
-> [Wagglebot Design](2026-08-28-wagglebot-design.md).  
+> [Wagglebot Design](2026-08-28-wagglebot-design.md), plus the single-file
+> project-memory portions of
+> [Phase 1 Polish](2026-09-21-phase-1-polish-design.md).
 > **Standard:** [Open Knowledge Format v0.2](https://github.com/GoogleCloudPlatform/open-knowledge-format/blob/main/SPEC.md)
 > **Reference bundle:** [Acme Retail](https://github.com/GoogleCloudPlatform/open-knowledge-format/tree/main/bundles/acme_retail)
 
@@ -16,8 +18,15 @@ bundle under `.agents/memory/`. Each durable memory or concept is one Markdown
 file with YAML frontmatter. The bundle is committed and reviewed with the code
 it describes.
 
-`.agents/memory.md` is removed. Wagglebot has not shipped a usable consumer of
-that format, so this first supported version has no legacy reader, migration
+Phase 1 v0.3.0 shipped Ludwig's project lifecycle idea: `wagglebot init` and
+`wagglebot update` create committed component memory, and generated agent
+instructions teach agents to maintain it. This design keeps that behavior and
+changes only its representation from one `.agents/memory.md` file to the OKF
+bundle.
+
+The Repository Brain has not shipped a supported consumer of the single-file
+format, and the project has no live memory data that needs conversion.
+`.agents/memory.md` is therefore removed without a legacy reader, migration
 command, dual-write path, or compatibility alias.
 
 The change affects local component memory only. Shared system, domain, and
@@ -36,10 +45,14 @@ organization memory remains in the shared-memory service.
 5. Keep retrieval local and deterministic through in-process BM25.
 6. Preserve repository-relative evidence without storing prompts, transcripts,
    session state, or hidden reasoning.
+7. Preserve the Phase 1 lifecycle: project initialization and update create the
+   committed memory structure, never overwrite human concepts, and teach every
+   provisioned agent how to read and edit it through ordinary files and Git.
 
 ## Non-Goals
 
-- Supporting or migrating `.agents/memory.md`.
+- Supporting or migrating `.agents/memory.md`; no live data needs migration in
+  this first supported version.
 - Defining a new knowledge standard or adding Wagglebot-only required
   frontmatter.
 - Adding a local database, vector index, file watcher, or background service.
@@ -53,6 +66,7 @@ organization memory remains in the shared-memory service.
 ```text
 .agents/
 ├── instructions/
+├── changelog.md
 └── memory/
     ├── index.md
     ├── component.md
@@ -266,17 +280,60 @@ command never stages or commits files.
 
 ## Initialization and CLI
 
-`wagglebot brain init` creates `.agents/memory/index.md` and
+A shared `ensureLocalMemoryBundle(root)` lifecycle operation is the only code
+path that initializes or repairs component memory. `wagglebot init`,
+`wagglebot update`, the hidden `sync-project` alias, and `wagglebot brain init`
+all call it so Phase 1 scaffolding and the Repository Brain cannot drift.
+
+The lifecycle operation creates `.agents/memory/index.md` and
 `.agents/memory/component.md` only when the bundle does not exist. The initial
 `Component Overview` concept is `status: draft` and contains prompts for the
-component owner to replace. Existing bundles are validated and their indexes
-repaired without overwriting concepts.
+component owner to replace. Existing bundles are validated and their generated
+indexes are repaired without overwriting, renaming, or deleting concept files.
+It creates no example category concept.
+
+Project `init` creates missing `.agents/instructions/`, the OKF memory bundle,
+and `.agents/changelog.md`, then performs the first project update. Project
+`update` creates missing bundle and changelog scaffolding even when there are no
+instruction source files. Both commands preserve existing concept and changelog
+content. The changelog remains a separate human-authored file and is neither an
+OKF concept nor a search candidate.
+
+If `.agents/memory.md` is present, lifecycle commands fail with
+`local_memory_invalid` and guidance to remove it and initialize the OKF bundle.
+They never infer a conversion, copy its contents, or delete it. This legacy
+preflight happens before project instruction targets are mutated.
 
 `wagglebot brain remember` retains preview-by-default and writes only with
 `--save`. `wagglebot brain status` reports the bundle path, concept count,
 aggregate bundle hash, invalid/ready/missing/error state, and whether generated
 indexes are current, stale, or missing. Help and agent instructions name
 `.agents/memory/` as the only component-memory location.
+
+## Agent Editing Contract
+
+Agents and humans may edit the OKF Markdown files directly; the Repository
+Brain is an optional convenience, not the owner of the content. Provisioned
+base instructions and the repository-onboarding skill teach this workflow:
+
+1. Read `.agents/memory/index.md` first and open only the relevant linked
+   concepts.
+2. Keep one durable repository fact or concept per non-reserved Markdown file
+   in the matching semantic directory.
+3. Update the existing concept instead of creating a duplicate; surface a
+   contradiction before replacing reviewed knowledge.
+4. When the engineer explicitly says to remember something, write or update
+   the concept without judging importance. When told it is wrong, remove or
+   correct that concept.
+5. Never store transcripts, session summaries, guesses, secrets, or facts that
+   source code already states more clearly.
+6. Run `wagglebot update` after direct edits to validate the bundle and repair
+   derived indexes, then commit the concept and index changes for pull-request
+   review.
+
+The generated instructions do not tell agents to read the entire corpus at
+session start. Progressive indexes exist specifically to keep large memories
+human-readable and context-efficient.
 
 ## MCP Contract Changes
 
@@ -329,10 +386,11 @@ YAML parser output. A memory failure remains independent from CodeGraph and Git.
 ## Documentation and Plan Impact
 
 Implementation updates the current source of truth rather than preserving the
-unshipped single-file design. Required documentation changes include D29, the
-Phase 1 provisioning contract, Phase 2 memory roadmap and sequence, local-brain
-design and plan, unified-context design and plan, API reference, README,
-onboarding skill, base agent template, CLI help, and fixtures.
+single-file design. Required documentation changes include D29, the Phase 1
+provisioning and polish contracts, Phase 2 memory roadmap and sequence,
+local-brain design and plan, unified-context design and plan, API reference,
+README, onboarding skill, base agent template, CLI help, project lifecycle
+commands and tests, and fixtures.
 
 The original local-brain implementation remains useful for BM25, proposal
 validation, secret scanning, atomic writes, provider composition, and MCP/CLI
@@ -343,14 +401,20 @@ documentation are replaced.
 
 1. `brain init` creates a conformant OKF v0.2 bundle and no
    `.agents/memory.md`.
-2. Every saved memory is one concept file with parseable YAML frontmatter and a
+2. Project `init`, project `update`, and `brain init` use the same idempotent
+   bundle lifecycle; they preserve existing concepts and the separate agent
+   changelog byte for byte while repairing only derived indexes.
+3. Every saved memory is one concept file with parseable YAML frontmatter and a
    non-empty `type`.
-3. Root and category indexes deterministically reflect all concepts.
-4. Search returns exact concept paths, lines, and content from multiple files.
-5. Add, duplicate, conflict, replace, tamper, concurrent-change, secret, size,
+4. Root and category indexes deterministically reflect all concepts.
+5. Search returns exact concept paths, lines, and content from multiple files.
+6. Add, duplicate, conflict, replace, tamper, concurrent-change, secret, size,
    malformed-YAML, and symlink cases have regression coverage.
-6. `.agents/memory.md` is rejected rather than migrated or read.
-7. CLI, MCP, context evidence, templates, skills, fixtures, specifications, and
+7. `.agents/memory.md` is rejected rather than migrated or read, before project
+   instruction targets are changed.
+8. CLI, MCP, context evidence, templates, skills, fixtures, specifications, and
    plans consistently describe the bundle.
-8. Focused tests, repository tests, formatting, type checking, and build all
+9. Agent guidance uses progressive discovery and one-concept-per-file direct
+   editing while preserving Git and pull-request review.
+10. Focused tests, repository tests, formatting, type checking, and build all
    pass, with no unrelated tracked changes.
