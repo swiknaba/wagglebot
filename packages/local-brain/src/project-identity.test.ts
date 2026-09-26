@@ -19,7 +19,18 @@ const fixtureRepo = (): string => {
   execFileSync("git", ["add", "README.md"], { cwd: repo });
   execFileSync(
     "git",
-    ["-c", "user.name=Fixture", "-c", "user.email=fixture@example.test", "commit", "--quiet", "-m", "fixture"],
+    [
+      "-c",
+      "commit.gpgsign=false",
+      "-c",
+      "user.name=Fixture",
+      "-c",
+      "user.email=fixture@example.test",
+      "commit",
+      "--quiet",
+      "-m",
+      "fixture",
+    ],
     {
       cwd: repo,
     },

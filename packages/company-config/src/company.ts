@@ -1,5 +1,6 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { parseDocument } from "yaml";
 
 export type Layer = {
   name: string;
@@ -17,10 +18,10 @@ export type CompanyRepo = {
   organization: string[];
   company: Layer;
   teams: Layer[];
-  catalogText: string;
-  catalogPath: string;
+  catalog?: CompanyCatalog;
   layersFor: (teamNames: string[]) => Layer[];
 };
+export type CompanyCatalog = { text: string; path: string };
 const readOptional = (path: string): string | undefined => (existsSync(path) ? readFileSync(path, "utf8") : undefined);
 type CompanyPackage = { dependencies?: Record<string, string>; wagglebot?: { organization?: unknown } };
 const readPackageJson = (root: string): CompanyPackage | undefined => {
@@ -36,15 +37,42 @@ const readPackage = (root: string): { pin?: string; organization: string[] } => 
   }
   return { pin: pkg.dependencies?.wagglebot, organization: raw ?? [] };
 };
-const pinOf = (root: string): string | undefined => readPackageJson(root)?.dependencies?.wagglebot;
+const markerPath = (root: string): string => join(root, "wagglebot.yaml");
+export function readCompanyMarker(root: string): { version: 1; kind: "company" } | undefined {
+  const path = markerPath(root);
+  if (!existsSync(path)) return undefined;
+  let marker: unknown;
+  try {
+    const document = parseDocument(readFileSync(path, "utf8"));
+    if (document.errors.length > 0) throw document.errors[0];
+    marker = document.toJS();
+  } catch (error) {
+    const detail = error instanceof Error ? `: ${error.message}` : "";
+    throw new Error(`${path} is not a valid company marker${detail}`);
+  }
+  if (
+    typeof marker !== "object" ||
+    marker === null ||
+    Array.isArray(marker) ||
+    Object.keys(marker).length !== 2 ||
+    (marker as Record<string, unknown>).version !== 1 ||
+    (marker as Record<string, unknown>).kind !== "company"
+  ) {
+    throw new Error(`${path} must contain only version: 1 and kind: company`);
+  }
+  return { version: 1, kind: "company" };
+}
+export function isCompanyRoot(root: string): boolean {
+  return readCompanyMarker(root) !== undefined;
+}
 export function findCompanyRoot(cwd: string): string {
   let dir = cwd;
   while (true) {
-    if (pinOf(dir) !== undefined) return dir;
+    if (isCompanyRoot(dir)) return dir;
     const parent = dirname(dir);
     if (parent === dir) {
       throw new Error(
-        `no company repository found above ${cwd}. Run this command inside the repository scaffolded by "wagglebot init" — its package.json pins the "wagglebot" dependency.`,
+        `no company repository found above ${cwd}. Run this command inside a repository that has a valid wagglebot.yaml marker.`,
       );
     }
     dir = parent;
@@ -61,6 +89,8 @@ const readLayer = (name: string, dir: string): Layer => ({
   instructionsDir: join(dir, "instructions"),
 });
 export function loadCompanyRepo(root: string): CompanyRepo {
+  if (readCompanyMarker(root) === undefined)
+    throw new Error(`${markerPath(root)} is required for a company repository`);
   const { pin, organization } = readPackage(root);
   if (pin === undefined) throw new Error(`${root}/package.json does not pin the "wagglebot" dependency`);
   const company = readLayer("company", join(root, "company"));
@@ -73,17 +103,19 @@ export function loadCompanyRepo(root: string): CompanyRepo {
         .map((name) => readLayer(name, join(teamsDir, name)))
     : [];
   const catalogs = [company, ...teams].filter((layer) => layer.catalogText !== undefined);
-  if (catalogs.length === 0) {
-    throw new Error(`${root} has no catalog.yaml — add teams/<team>/catalog.yaml for each team`);
-  }
   return {
     root,
     pin,
     organization,
     company,
     teams,
-    catalogText: catalogs.map((layer) => layer.catalogText ?? "").join("\n---\n"),
-    catalogPath: catalogs.map((layer) => join(layer.dir, "catalog.yaml")).join(", "),
+    catalog:
+      catalogs.length === 0
+        ? undefined
+        : {
+            text: catalogs.map((layer) => layer.catalogText ?? "").join("\n---\n"),
+            path: catalogs.map((layer) => join(layer.dir, "catalog.yaml")).join(", "),
+          },
     layersFor: (teamNames) => [company, ...teams.filter((team) => teamNames.includes(team.name))],
   };
 }

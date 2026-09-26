@@ -20,6 +20,7 @@ async function fixture() {
     mkdir(join(root, "teams", "beta"), { recursive: true }),
   ]);
   await Promise.all([
+    writeFile(join(root, "wagglebot.yaml"), "version: 1\nkind: company\n"),
     writeFile(join(root, "package.json"), JSON.stringify({ dependencies: { wagglebot: "1.0.0" } })),
     writeFile(
       join(root, "company", "catalog.yaml"),

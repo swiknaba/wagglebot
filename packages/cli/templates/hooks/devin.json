@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "^(write|edit|apply_patch|notebook_edit)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "printf '%s\\n' '{\"hookSpecificOutput\":{\"hookEventName\":\"PostToolUse\",\"additionalContext\":\"wagglebot:prose-changelog - Apply ASD-STE100 Issue 9 to prose. After durable repository changes, update .agents/changelog.md before the final response.\"}}'"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -5,6 +5,7 @@ import { RegistrySource } from "./source";
 
 function root() {
   const dir = mkdtempSync(join("/tmp", "waggle-source-"));
+  writeFileSync(join(dir, "wagglebot.yaml"), "version: 1\nkind: company\n");
   writeFileSync(join(dir, "package.json"), JSON.stringify({ dependencies: { wagglebot: "1.0.0" } }));
   mkdirSync(join(dir, "company"));
   writeFileSync(join(dir, "company", "catalog.yaml"), "kind: User\nmetadata: {name: alice}\n");

@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "hooks": {
+    "postToolUse": [
+      {
+        "type": "command",
+        "bash": "printf '%s\\n' '{\"additionalContext\":\"wagglebot:prose-changelog - Apply ASD-STE100 Issue 9 to prose. After durable repository changes, update .agents/changelog.md before the final response.\"}'"
+      }
+    ]
+  }
+}

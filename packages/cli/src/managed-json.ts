@@ -12,6 +12,16 @@ const print = (doc: JsonObject): string => `${JSON.stringify(doc, null, 2)}\n`;
 const isObject = (v: unknown): v is JsonObject => typeof v === "object" && v !== null && !Array.isArray(v);
 const normalized = (text: string): string => (text.trim() === "" ? "" : print(parseObject(text)));
 
+export function replaceJsonCategory(
+  existingText: string,
+  key: string,
+  value: unknown,
+): { next: string; changed: boolean } {
+  const doc = parseObject(existingText);
+  const next = print({ ...doc, [key]: value });
+  return { next, changed: next !== normalized(existingText) };
+}
+
 // Removes every // and /* */ comment from JSON text. A marker inside a string literal is data,
 // so the scan tracks the quote state and the backslash escape.
 const stripJsonComments = (text: string): string => {
@@ -80,40 +90,61 @@ export function mergeManagedSection(
   return { next, changed: next !== normalized(existingText), ownedNow: Object.keys(entries) };
 }
 
-// A hook element is wagglebot-owned when any of its nested `hooks[].command` strings contain the
-// marker. Foreign fields (matcher, description, etc.) are never inspected — a foreign entry whose
-// matcher happens to contain "wagglebot:" must not be mistaken for an owned one (F22).
+// Only executable command fields establish ownership. Names and matchers can contain foreign markers.
 const carriesMarker = (element: unknown): boolean => {
-  if (!isObject(element) || !Array.isArray(element.hooks)) return false;
-  return element.hooks.some((h) => isObject(h) && typeof h.command === "string" && h.command.includes("wagglebot:"));
+  if (!isObject(element)) return false;
+  return (
+    [element.command, element.bash, element.powershell].some(
+      (command) => typeof command === "string" && command.includes("wagglebot:"),
+    ) ||
+    (isObject(element.action) && carriesMarker(element.action)) ||
+    (Array.isArray(element.hooks) && element.hooks.some(carriesMarker))
+  );
 };
 
-// Merges hook fragment entries into a settings object. Owns only array elements whose command
-// contains "wagglebot:". A foreign element keeps its position. An owned element is replaced in
-// place by the next fragment entry. A fragment entry without a slot is appended. An owned
-// element without a fragment entry left is stale and dropped (F22).
-export function mergeHooks(
-  existingText: string,
-  fragment: { hooks: Record<string, unknown[]> },
-): { next: string; changed: boolean } {
-  const doc = parseObject(existingText);
-  const hooks = isObject(doc.hooks) ? { ...(doc.hooks as JsonObject) } : {};
-  for (const [event, fragmentEntries] of Object.entries(fragment.hooks)) {
-    const current = Array.isArray(hooks[event]) ? (hooks[event] as unknown[]) : [];
-    const pending = [...fragmentEntries];
-    const merged: unknown[] = [];
-    for (const element of current) {
-      if (!carriesMarker(element)) {
-        merged.push(element);
-        continue;
-      }
-      const replacement = pending.shift();
-      if (replacement !== undefined) merged.push(replacement);
+const mergeHookEntries = (current: unknown[], entries: unknown[]): unknown[] => {
+  const pending = [...entries];
+  const merged: unknown[] = [];
+  for (const element of current) {
+    if (!carriesMarker(element)) {
+      merged.push(element);
+      continue;
     }
-    merged.push(...pending);
-    hooks[event] = merged;
+    if (isObject(element) && Array.isArray(element.hooks)) {
+      const foreign = element.hooks.filter((hook) => !carriesMarker(hook));
+      if (foreign.length > 0) merged.push({ ...element, hooks: foreign });
+    }
+    const replacement = pending.shift();
+    if (replacement !== undefined) merged.push(replacement);
   }
-  doc.hooks = hooks;
+  return [...merged, ...pending];
+};
+
+export type HookFragment = { version?: number | string; hooks: Record<string, unknown[]> | unknown[] };
+
+// Preserve foreign entries and replace owned entries in place. Kiro uses an array instead of an event map.
+export function mergeHooks(existingText: string, fragment: HookFragment): { next: string; changed: boolean } {
+  const doc = parseObject(existingText);
+  if (Array.isArray(fragment.hooks)) {
+    if (doc.hooks !== undefined && !Array.isArray(doc.hooks)) {
+      throw new Error("managed json: hooks must be an array");
+    }
+    doc.hooks = mergeHookEntries((doc.hooks ?? []) as unknown[], fragment.hooks);
+  } else {
+    if (!isObject(fragment.hooks)) throw new Error("managed json: the hook fragment must contain hooks");
+    if (doc.hooks !== undefined && !isObject(doc.hooks)) {
+      throw new Error("managed json: hooks must be an object");
+    }
+    const hooks = { ...((doc.hooks ?? {}) as JsonObject) };
+    for (const [event, entries] of Object.entries(fragment.hooks)) {
+      if (!Array.isArray(entries) || (hooks[event] !== undefined && !Array.isArray(hooks[event]))) {
+        throw new Error(`managed json: hooks.${event} must be an array`);
+      }
+      hooks[event] = mergeHookEntries((hooks[event] ?? []) as unknown[], entries);
+    }
+    doc.hooks = hooks;
+  }
+  if (fragment.version !== undefined) doc.version = fragment.version;
   const next = print(doc);
   return { next, changed: next !== normalized(existingText) };
 }

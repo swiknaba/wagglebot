@@ -1,5 +1,10 @@
 # Phase 1 — Local Provisioning
 
+> **Superseded workflow sections.** The engineer workflow, company selection,
+> harness detection, and public command names below are historical. Use the
+> [2026-09-21 Phase 1 design](2026-09-21-phase-1-polish-design.md) and its
+> [onboarding guide](../../phase-1-onboarding.md) for current behavior.
+
 > Companion to the [wagglebot design spec](2026-08-28-wagglebot-design.md).
 > One team shares one curated agent environment: the same skills and the
 > same base instructions, on every workstation and in every agent

@@ -1,14 +1,1 @@
-# Curated skill packages, one per line. The skills CLI installs each entry into every
-# selected harness.
-#
-# "owner/repo" resolves against github.com. Pin each entry: owner/repo@<tag>. The skills
-# CLI checks out a tag or a branch, never a commit hash. Pin every repository that the
-# company does not control.
-#
-# For a different git host, use a full URL, then a space and the ref:
-#   https://git.my-company.local/platform/skills.git v1.2.0
-#
-# A team adds its own entries in teams/<team>/skills.list.
-obra/superpowers@v6.3.0
-ayghri/i-have-adhd@main    # this repository has no tag yet; replace with a tag when one exists
-swiknaba/wagglebot@v0.2.1   # first-party skills for the wagglebot toolset; bump this pin together with the wagglebot pin in package.json
+# The E2E test supplies a tagged local source from fixtures/skills.

@@ -19,9 +19,14 @@ prepares the repository for the Phase 2 shared layer.
 | `.agents/memory.md` | Facts about this repository (D29) | Yes |
 | `.agents/subagents/*.md` | Subagents for this repository only (D31) | Yes |
 
-## Step 1: Declare The Component
+## Step 1: Get Catalog Values
 
-Put `catalog-info.yaml` at the repository root. A repository that prefers a
+Ask the engineer for the component owner and system. Get both values before you write `catalog-info.yaml`.
+Do not derive either value from the directory or Git remote.
+
+## Step 2: Declare The Component
+
+Write `catalog-info.yaml` at the repository root. A repository that prefers a
 hidden directory uses `.wagglebot/catalog.yaml` with the identical schema.
 
 ```yaml
@@ -56,7 +61,7 @@ nor a microservice team (P33). Two results follow:
 Add the missing Group or System to the company catalog first. Then merge the
 `catalog-info.yaml` file.
 
-## Step 2: Write The Project Instructions
+## Step 3: Write The Project Instructions
 
 Repository instructions belong to the repository. Write portable Markdown in
 `.agents/instructions/`, one file for each topic:
@@ -74,7 +79,7 @@ harness target.
 
 | Harness | Project target |
 |---|---|
-| Codex, Junie, and Cline | A managed block in root `AGENTS.md` |
+| Codex, Junie, Cline, Cursor, Devin, and Kiro | A managed block in root `AGENTS.md` |
 | Claude Code | A managed `@AGENTS.md` import in root `CLAUDE.md` |
 | Gemini CLI | A managed `@./AGENTS.md` import in root `GEMINI.md` |
 | GitHub Copilot CLI | A managed block in `.github/copilot-instructions.md` |
@@ -86,7 +91,7 @@ block. Commit the generated files together with the source files.
 Edit the files under `.agents/instructions/` only. A later `sync-project` run
 overwrites each managed block.
 
-## Step 3: Commit The Memory File
+## Step 4: Commit The Memory File
 
 An agent records a fact about this repository in `.agents/memory.md`. That
 file is **committed**, never gitignored (D29). Three results follow:
@@ -99,7 +104,7 @@ A fact that crosses a repository boundary belongs to a `system`, `domain`, or
 `org` scope in the shared store instead. A fact about this repository stays
 here.
 
-## Step 4: Add A Component Subagent
+## Step 5: Add A Component Subagent
 
 A subagent that serves this repository only lives in `.agents/subagents/`
 (D31). Git distributes it, so it needs no entry in any `agents.list`. Write

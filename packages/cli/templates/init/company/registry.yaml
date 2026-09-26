@@ -1,7 +1,8 @@
 # MCP servers for every team. This file never contains a secret.
 # A team adds its own servers in teams/<team>/registry.yaml. A team entry with the same namespace wins.
 # For a credential, an entry names an environment variable. The value lives
-# in the gitignored .env.credentials file on each workstation.
+# in the personal .env.credentials file on each workstation.
+# Cached mode uses ~/.wagglebot/.env.credentials. Working trees use the gitignored root file.
 proxies:
   - namespace: project-brain
     mode: stdio_cmd

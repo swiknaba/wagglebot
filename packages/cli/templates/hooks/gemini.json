@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "AfterTool": [
+      {
+        "matcher": "write_file|replace",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "printf '%s\\n' '{\"hookSpecificOutput\":{\"hookEventName\":\"AfterTool\",\"additionalContext\":\"wagglebot:prose-changelog - Apply ASD-STE100 Issue 9 to prose. After durable repository changes, update .agents/changelog.md before the final response.\"}}'"
+          }
+        ]
+      }
+    ]
+  }
+}

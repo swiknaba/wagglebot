@@ -43,6 +43,13 @@ If a subagent-driven-development skill is available, invoke it before you execut
 If a dispatching-parallel-agents skill is available, invoke it when two or more tasks are independent.
 Re-read this section when you start a plan and when you complete a plan phase.
 
+## Requirements Interviews
+
+Before a substantial feature or behavior change without an approved specification, offer a requirements interview.
+If the user accepts, use the `brainstorming` skill.
+Ask one question at a time and check for missing requirements.
+Do not offer an interview for small fixes, routine tasks, or work with an approved specification.
+
 ## Baseline
 
 You are a coding and technical-writing agent.
@@ -168,14 +175,8 @@ Write it to `.agents/memory.md`.
 * Do not judge the importance. They asked, so write it.
 * When they tell you a fact is wrong, remove it.
 
-## Local Repository Brain
+## Agent Changelog
 
-The component memory file is `.agents/memory.md`. Keep it in Markdown and
-write only durable facts with repository-relative evidence. CodeGraph data is
-generated in `.codegraph/` and stays local and ignored. Use `git_why` as
-evidence for history questions, not as a replacement for source review.
+Before the final response, record concise dated bullets after durable repository changes in `.agents/changelog.md`.
 
-An explicit developer request to remember or save a fact may propose and save
-it in one flow. An agent suggestion at task end or before compaction may call
-only `brain_memory_propose` until the developer promotes it. Never save
-transcript excerpts, secrets, speculation, or current task state.
+Do not record research, failed attempts, or sessions that make no change.

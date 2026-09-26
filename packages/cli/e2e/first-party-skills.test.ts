@@ -25,3 +25,12 @@ test("writing-a-custom-agent asks where the agent belongs before any code", () =
   const text = readFileSync(join(skillsDir, "writing-a-custom-agent", "SKILL.md"), "utf8");
   expect(text).toContain("this repository only, or for the whole team");
 });
+
+test("onboarding asks for owner and system before it directs an agent to write catalog-info.yaml", () => {
+  const text = readFileSync(join(skillsDir, "onboarding-a-repository", "SKILL.md"), "utf8");
+  const ask = text.indexOf("Ask the engineer for the component owner and system.");
+  const write = text.indexOf("Write `catalog-info.yaml`");
+  expect(ask).toBeGreaterThanOrEqual(0);
+  expect(write).toBeGreaterThan(ask);
+  expect(text).toContain("Do not derive either value from the directory or Git remote.");
+});

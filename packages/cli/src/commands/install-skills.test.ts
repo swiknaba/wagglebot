@@ -3,14 +3,362 @@ import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Exec } from "../exec";
+import { HARNESSES } from "../harness";
 import { parseList } from "../lists";
 import { createReporter } from "../report";
-import { loadState } from "../state";
+import { loadState, saveState } from "../state";
 import { nodeSatisfies, runInstallSkills, toSkillsSource } from "./install-skills";
 
 const quiet = () => createReporter(() => {}, false);
 const managed = () => join(mkdtempSync(join(tmpdir(), "wgl-sk-")), "managed.json");
 const NODE = "v24.0.0";
+const ADAPTERS = [
+  "claude-code",
+  "codex",
+  "junie",
+  "gemini-cli",
+  "github-copilot",
+  "cline",
+  "cursor",
+  "devin",
+  "windsurf",
+  "kiro-cli",
+];
+
+test("split-pin removal combines repository identities and retains every record until a successful retry", async () => {
+  const file = managed();
+  const initial = { "a/b@v1": ["codex", "junie"], "https://github.com/a/b.git v2": ["cursor"] };
+  saveState(file, { jsonKeys: {}, agentFiles: [], skills: initial });
+  const lock = lockFile({ old: { source: "a/b", updatedAt: "2020-01-01" } });
+  let fail = true;
+  const removals: string[][] = [];
+  const exec: Exec = async (_cmd, args) => {
+    if (args[1] === "remove") {
+      removals.push(args);
+      return { code: fail ? 1 : 0, stdout: "", stderr: "" };
+    }
+    return { code: 0, stdout: "[]", stderr: "" };
+  };
+  const run = () =>
+    runInstallSkills({
+      lists: [],
+      exec,
+      reporter: quiet(),
+      skillsBin: "/fake/skills",
+      skillsAgents: ["codex", "cursor"],
+      managedFile: file,
+      skillLockFile: lock,
+      nodeVersion: NODE,
+    });
+  expect(await run()).toBe(1);
+  expect(removals).toEqual([["/fake/skills", "remove", "old", "-g", "-y", "-a", "codex", "-a", "cursor"]]);
+  expect(loadState(file).skills).toEqual(initial);
+  fail = false;
+  expect(await run()).toBe(0);
+  expect(loadState(file).skills).toEqual({ "a/b@v1": ["junie"] });
+});
+
+for (const hasLock of [false, true]) {
+  test(`removal retains ownership when the listing still contains a selected skill (lock=${hasLock})`, async () => {
+    const file = managed();
+    const lock = lockFile({ old: { source: "a/b", updatedAt: "2020-01-01" } });
+    saveState(file, { jsonKeys: {}, agentFiles: [], skills: { "a/b": ["codex", "cursor"] } });
+    const reporter = quiet();
+    const exec: Exec = async (_cmd, args) => ({
+      code: 0,
+      stderr: "",
+      stdout:
+        args[1] === "ls"
+          ? JSON.stringify([
+              {
+                name: "old",
+                path: "/fixture/.agents/skills/old",
+                scope: "global",
+                agents: ["Codex", "Cursor"],
+                source: "a/b",
+                sourceUrl: null,
+                sourceType: "git",
+              },
+            ])
+          : "Successfully removed 1 skill(s)",
+    });
+    expect(
+      await runInstallSkills({
+        lists: [],
+        exec,
+        reporter,
+        skillsBin: "/bin/skills",
+        skillsAgents: ["codex", "cursor"],
+        managedFile: file,
+        skillLockFile: hasLock ? lock : NO_LOCK,
+        nodeVersion: NODE,
+      }),
+    ).toBe(1);
+    expect(loadState(file).skills).toEqual({ "a/b": ["codex", "cursor"] });
+  });
+}
+
+test.each(["*", "--all", "invalid-adapter"])("overwrite rejects adapter %j before any removal", async (adapter) => {
+  const calls: string[][] = [];
+  const file = managed();
+  saveState(file, { jsonKeys: {}, agentFiles: [], skills: { "a/b": ["claude-code"] } });
+  expect(
+    await runInstallSkills({
+      lists: [],
+      exec: fakeExec(calls),
+      reporter: quiet(),
+      skillsBin: "/bin/skills",
+      skillsAgents: ["claude-code", adapter],
+      managedFile: file,
+      skillLockFile: NO_LOCK,
+      nodeVersion: NODE,
+      overwriteLocal: true,
+    }),
+  ).toBe(1);
+  expect(calls).toEqual([]);
+  expect(loadState(file).skills).toEqual({ "a/b": ["claude-code"] });
+});
+
+test("failed additions retain prior ownership and successful pin changes preserve unselected adapters", async () => {
+  const file = managed();
+  saveState(file, {
+    jsonKeys: {},
+    agentFiles: [],
+    skills: { "fail/fail@v1": ["claude-code"], "a/b@v1": ["claude-code", "codex"] },
+  });
+  expect(
+    await runInstallSkills({
+      lists: [{ path: "skills.list", text: "fail/fail@v1\na/b@v2" }],
+      exec: fakeExec([]),
+      reporter: quiet(),
+      skillsBin: "/bin/skills",
+      skillsAgents: ["claude-code"],
+      managedFile: file,
+      skillLockFile: NO_LOCK,
+      nodeVersion: NODE,
+    }),
+  ).toBe(1);
+  expect(loadState(file).skills).toEqual({
+    "fail/fail@v1": ["claude-code"],
+    "a/b@v1": ["codex"],
+    "a/b@v2": ["claude-code"],
+  });
+});
+
+test("installs into all ten declared adapters after one overwrite removal across their union", async () => {
+  const calls: string[][] = [];
+  const file = managed();
+  saveState(file, { jsonKeys: { config: ["mcp"] }, agentFiles: ["agent.md"], skills: { "old/repo": ADAPTERS } });
+  expect(HARNESSES.flatMap((h) => h.skillsAgents)).toEqual(ADAPTERS);
+  const code = await runInstallSkills({
+    lists: [{ path: "skills.list", text: "new/repo@v1" }],
+    exec: fakeExec(calls),
+    reporter: quiet(),
+    skillsBin: "/bin/skills",
+    skillsAgents: HARNESSES.flatMap((h) => h.skillsAgents),
+    managedFile: file,
+    skillLockFile: NO_LOCK,
+    nodeVersion: NODE,
+    overwriteLocal: true,
+  });
+  expect(code).toBe(0);
+  expect(calls[0]).toEqual([
+    process.execPath,
+    "/bin/skills",
+    "remove",
+    "--skill",
+    "*",
+    "--global",
+    "--yes",
+    ...[...ADAPTERS].sort().flatMap((agent) => ["--agent", agent]),
+  ]);
+  expect(calls[1]).toEqual([
+    process.execPath,
+    "/bin/skills",
+    "add",
+    "new/repo#v1",
+    "-g",
+    "-y",
+    ...[...ADAPTERS].sort().flatMap((agent) => ["-a", agent]),
+  ]);
+  expect(loadState(file)).toEqual({
+    jsonKeys: { config: ["mcp"] },
+    agentFiles: ["agent.md"],
+    skills: { "new/repo@v1": [...ADAPTERS].sort() },
+  });
+});
+
+test("empty overwrite clears only selected adapters and resets their state", async () => {
+  const file = managed();
+  const calls: string[][] = [];
+  saveState(file, { jsonKeys: {}, agentFiles: [], skills: { "a/b": ["claude-code", "codex"] } });
+  expect(
+    await runInstallSkills({
+      lists: [],
+      exec: fakeExec(calls),
+      reporter: quiet(),
+      skillsBin: "/bin/skills",
+      skillsAgents: ["claude-code", "claude-code"],
+      managedFile: file,
+      skillLockFile: NO_LOCK,
+      nodeVersion: NODE,
+      overwriteLocal: true,
+    }),
+  ).toBe(0);
+  expect(calls).toEqual([
+    [process.execPath, "/bin/skills", "remove", "--skill", "*", "--global", "--yes", "--agent", "claude-code"],
+  ]);
+  expect(loadState(file).skills).toEqual({ "a/b": ["codex"] });
+});
+
+test("an empty effective list removes state-owned skills and preserves personal skills", async () => {
+  const file = managed();
+  const lock = lockFile({
+    managed: { source: "a/b", updatedAt: "2020-01-01" },
+    personal: { source: "my/skills", updatedAt: "2020-01-01" },
+  });
+  const calls: string[][] = [];
+  saveState(file, { jsonKeys: {}, agentFiles: [], skills: { "a/b": ["claude-code"] } });
+  expect(
+    await runInstallSkills({
+      lists: [],
+      exec: lockWritingExec(calls, lock, {}),
+      reporter: quiet(),
+      skillsBin: "/bin/skills",
+      skillsAgents: ["claude-code"],
+      managedFile: file,
+      skillLockFile: lock,
+      nodeVersion: NODE,
+    }),
+  ).toBe(0);
+  expect(calls).toEqual([[process.execPath, "/bin/skills", "remove", "managed", "-g", "-y", "-a", "claude-code"]]);
+  expect(Object.keys(JSON.parse(readFileSync(lock, "utf8")).skills)).toEqual(["personal"]);
+  expect(loadState(file).skills).toEqual({});
+});
+
+test("failed removal retains state for retry and does not stop independent installs", async () => {
+  for (const overwriteLocal of [false, true]) {
+    const file = managed();
+    const calls: string[][] = [];
+    const lock = lockFile({ old: { source: "a/b", updatedAt: "2020-01-01" } });
+    saveState(file, { jsonKeys: {}, agentFiles: [], skills: { "a/b": ["claude-code"] } });
+    const exec: Exec = async (cmd, args) => {
+      calls.push([cmd, ...args]);
+      return { code: args[1] === "remove" ? 1 : 0, stdout: "", stderr: "" };
+    };
+    expect(
+      await runInstallSkills({
+        lists: [{ path: "skills.list", text: "new/repo@v1" }],
+        exec,
+        reporter: quiet(),
+        skillsBin: "/bin/skills",
+        skillsAgents: ["claude-code"],
+        managedFile: file,
+        skillLockFile: lock,
+        nodeVersion: NODE,
+        overwriteLocal,
+      }),
+    ).toBe(1);
+    expect(loadState(file).skills).toEqual({ "a/b": ["claude-code"], "new/repo@v1": ["claude-code"] });
+    expect(calls.some((call) => call.includes("add"))).toBe(true);
+  }
+});
+
+const REMOVAL_FAILURES = [
+  { stream: "stdout", output: "Could not remove skill from Claude Code: EACCES: permission denied" },
+  { stream: "stderr", output: "Could not remove skill from Claude Code: EACCES: permission denied" },
+  { stream: "stdout", output: "\u001b[31mFailed to remove 1 skill(s)\u001b[39m" },
+  { stream: "stderr", output: "\u001b[31mFailed to remove 1 skill(s)\u001b[39m" },
+  { stream: "stdout", output: "Could not scan directory /home/.claude/skills: EACCES: permission denied" },
+  { stream: "stderr", output: "Could not scan directory /home/.claude/skills: EACCES: permission denied" },
+];
+
+test.each(REMOVAL_FAILURES)(
+  "zero-exit removal preserves ownership when $stream reports $output",
+  async ({ stream, output }) => {
+    for (const overwriteLocal of [false, true]) {
+      const file = managed();
+      const lock = lockFile({ old: { source: "a/b", updatedAt: "2020-01-01" } });
+      saveState(file, { jsonKeys: {}, agentFiles: [], skills: { "a/b": ["claude-code"] } });
+      const reporter = quiet();
+      const exec: Exec = async (_cmd, args) => ({
+        code: 0,
+        stdout: "Successfully removed 1 skill(s)\nDone!",
+        stderr: "",
+        ...(args[1] === "remove" ? { [stream]: `Successfully removed 1 skill(s)\n${output}\nDone!` } : {}),
+      });
+      expect(
+        await runInstallSkills({
+          lists: [{ path: "skills.list", text: "new/repo@v1" }],
+          exec,
+          reporter,
+          skillsBin: "/bin/skills",
+          skillsAgents: ["claude-code"],
+          managedFile: file,
+          skillLockFile: lock,
+          nodeVersion: NODE,
+          overwriteLocal,
+        }),
+      ).toBe(1);
+      expect(loadState(file).skills).toEqual({ "a/b": ["claude-code"], "new/repo@v1": ["claude-code"] });
+      expect(reporter.counts()).toMatchObject({ failed: 1, installed: 1, updated: 0 });
+    }
+  },
+);
+
+test("zero-exit partial overwrite clears only successful adapters and continues installation", async () => {
+  const file = managed();
+  const calls: string[][] = [];
+  saveState(file, { jsonKeys: {}, agentFiles: [], skills: { "a/b": ["claude-code", "codex"] } });
+  const reporter = quiet();
+  const exec: Exec = async (cmd, args) => {
+    if (args[1] === "ls") return { code: 0, stdout: "[]", stderr: "" };
+    calls.push([cmd, ...args]);
+    if (args[1] === "remove")
+      return {
+        code: 0,
+        stdout: args.includes("claude-code")
+          ? "Could not remove skill from Claude Code: EACCES: permission denied\nSuccessfully removed 1 skill(s)\nDone!"
+          : "Successfully removed 1 skill(s)\nDone!",
+        stderr: "",
+      };
+    expect(loadState(file).skills).toEqual({ "a/b": ["claude-code"] });
+    return { code: 0, stdout: "Installed 1 skill", stderr: "" };
+  };
+  expect(
+    await runInstallSkills({
+      lists: [{ path: "skills.list", text: "new/repo@v1" }],
+      exec,
+      reporter,
+      skillsBin: "/bin/skills",
+      skillsAgents: ["claude-code", "codex"],
+      managedFile: file,
+      skillLockFile: NO_LOCK,
+      nodeVersion: NODE,
+      overwriteLocal: true,
+    }),
+  ).toBe(1);
+  expect(calls).toEqual([
+    [
+      process.execPath,
+      "/bin/skills",
+      "remove",
+      "--skill",
+      "*",
+      "--global",
+      "--yes",
+      "--agent",
+      "claude-code",
+      "--agent",
+      "codex",
+    ],
+    [process.execPath, "/bin/skills", "remove", "--skill", "*", "--global", "--yes", "--agent", "claude-code"],
+    [process.execPath, "/bin/skills", "remove", "--skill", "*", "--global", "--yes", "--agent", "codex"],
+    [process.execPath, "/bin/skills", "add", "new/repo#v1", "-g", "-y", "-a", "claude-code", "-a", "codex"],
+  ]);
+  expect(loadState(file).skills).toEqual({ "a/b": ["claude-code"], "new/repo@v1": ["claude-code", "codex"] });
+  expect(reporter.counts()).toMatchObject({ failed: 1, updated: 1, installed: 1 });
+});
 // No lock file: skillsOfSource then reports nothing for every source, so no test that does not
 // write one can install a new skill or remove a stale one.
 const NO_LOCK = join(mkdtempSync(join(tmpdir(), "wgl-lk-")), "absent.json");
@@ -24,6 +372,7 @@ const lockFile = (skills: Record<string, { source: string; updatedAt: string }>)
 // can name the skills a source still provides and let the stale ones keep an old stamp.
 const lockWritingExec = (calls: string[][], file: string, provides: Record<string, string[]>): Exec => {
   return async (cmd, args) => {
+    if (args[1] === "ls") return { code: 0, stdout: "[]", stderr: "" };
     calls.push([cmd, ...args]);
     if (args[1] === "add") {
       const source = (args[2] ?? "").split("#")[0] ?? "";
@@ -48,6 +397,7 @@ const lockWritingExec = (calls: string[][], file: string, provides: Record<strin
 const fakeExec =
   (calls: string[][]): Exec =>
   async (cmd, args) => {
+    if (args[1] === "ls") return { code: 0, stdout: "[]", stderr: "" };
     calls.push([cmd, ...args]);
     if (args[2] === "fail/fail#v1") return { code: 1, stdout: "■ Installation failed", stderr: "" };
     return { code: 0, stdout: "Installed 3 skills", stderr: "" };
@@ -328,6 +678,44 @@ test("keeps every skill when the add stamped none of them", async () => {
   expect(calls).toHaveLength(1);
   expect(r.counts().skipped).toBe(1);
   expect(Object.keys(JSON.parse(readFileSync(lock, "utf8")).skills).sort()).toEqual(["alpha", "beta"]);
+});
+
+test("installation-only phase still removes upstream deletions across the selected removal union", async () => {
+  const file = managed();
+  const lock = lockFile({
+    alpha: { source: "a/b", updatedAt: "2020-01-01" },
+    beta: { source: "a/b", updatedAt: "2020-01-01" },
+  });
+  const calls: string[][] = [];
+  expect(
+    await runInstallSkills({
+      lists: [{ path: "skills.list", text: "a/b@v1" }],
+      exec: lockWritingExec(calls, lock, { "a/b": ["alpha"] }),
+      reporter: quiet(),
+      skillsBin: "/bin/skills",
+      skillsAgents: ["claude-code"],
+      managedFile: file,
+      skillLockFile: lock,
+      nodeVersion: NODE,
+      phase: "install",
+      staleRemovalAgents: ["claude-code", "codex", "cursor"],
+    }),
+  ).toBe(0);
+  expect(Object.keys(JSON.parse(readFileSync(lock, "utf8")).skills)).toEqual(["alpha"]);
+  expect(calls.at(-1)).toEqual([
+    process.execPath,
+    "/bin/skills",
+    "remove",
+    "beta",
+    "-g",
+    "-y",
+    "-a",
+    "claude-code",
+    "-a",
+    "codex",
+    "-a",
+    "cursor",
+  ]);
 });
 
 test("removes every skill of a source that no list names any more", async () => {

@@ -5,12 +5,12 @@ The directory name must equal the Group name in `catalog.yaml`.
 
 | File | Purpose |
 |---|---|
-| `catalog.yaml` | The Group, its Users, and the Domains and Systems it owns. Required. |
+| `catalog.yaml` | The Group, its Users, and the Domains and Systems it owns. Optional. |
 | `registry.yaml` | MCP servers for this team. Same format as `company/registry.yaml`. |
 | `skills.list` | Skills for this team. Same format as `company/skills.list`. |
 | `agents.list` | Shared subagents from other repositories. Same format as `company/agents.list`. |
 | `agents/*.md` | Subagents for this team. |
 | `instructions/*.md` | Instructions appended after the company instructions. |
 
-The scaffold creates each of these files. Every file except
-`catalog.yaml` may stay empty or be deleted.
+The scaffold creates example files. Every file, including `catalog.yaml`, may
+stay empty or be deleted.

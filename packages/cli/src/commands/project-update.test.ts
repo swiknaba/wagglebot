@@ -4,7 +4,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { HARNESSES } from "../harness";
 import { createReporter } from "../report";
-import { INSTRUCTIONS_DIR, projectTargets, readInstructionSources, runSyncProject } from "./sync-project";
+import {
+  PROJECT_INSTRUCTIONS_DIR as INSTRUCTIONS_DIR,
+  PROJECT_CHANGELOG_FILE,
+  PROJECT_MEMORY_FILE,
+  projectTargets,
+  readInstructionSources,
+  runProjectUpdate as runSyncProject,
+} from "./project-update";
 
 const quiet = () => createReporter(() => {}, false);
 
@@ -180,7 +187,7 @@ test("projectTargets merges harnesses that share one path", () => {
   const targets = projectTargets(HARNESSES);
   expect(targets).toHaveLength(4);
   const agents = targets.find((t) => t.relative === "AGENTS.md");
-  expect(agents?.harnesses).toEqual(["codex", "junie", "cline"]);
+  expect(agents?.harnesses).toEqual(["codex", "junie", "cline", "cursor", "devin", "kiro"]);
   expect(agents?.warnBytes).toBe(32 * 1024);
   const claude = targets.find((t) => t.relative === "CLAUDE.md");
   expect(claude?.mode).toBe("import");
@@ -216,4 +223,42 @@ test("running from a nested subdirectory finds the same root", () => {
 test("running outside a Git repository throws mentioning Git repository", () => {
   const outside = realpathSync(mkdtempSync(join(tmpdir(), "wgl-noGit-")));
   expect(() => runSyncProject({ cwd: outside, reporter: quiet() })).toThrow(/Git repository/);
+});
+
+test("project update creates missing memory and changelog without instruction sources", () => {
+  const repo = realpathSync(mkdtempSync(join(tmpdir(), "wgl-repo-")));
+  mkdirSync(join(repo, ".git"));
+
+  expect(runSyncProject({ cwd: repo, reporter: quiet() })).toBe(0);
+
+  expect(readFileSync(join(repo, PROJECT_MEMORY_FILE), "utf8")).toContain("# Component Memory");
+  expect(readFileSync(join(repo, PROJECT_CHANGELOG_FILE), "utf8")).toBe(
+    "# Agent Changelog\n\n<!-- Add dated Added, Changed, Fixed, or Removed sections after meaningful repository changes. -->\n",
+  );
+  expect(existsSync(join(repo, "AGENTS.md"))).toBe(false);
+  expect(existsSync(join(repo, "catalog-info.yaml"))).toBe(false);
+  expect(existsSync(join(repo, ".gitignore"))).toBe(false);
+});
+
+test("project update preserves memory and changelog bytes and excludes other agent files from published instructions", () => {
+  const { repo, instructionsDir } = setupRepo();
+  const memory = "memory\r\ntext\n";
+  const changelog = "changelog\r\ntext\n";
+  writeFileSync(join(repo, PROJECT_MEMORY_FILE), memory);
+  writeFileSync(join(repo, PROJECT_CHANGELOG_FILE), changelog);
+  mkdirSync(join(repo, ".agents", "subagents"), { recursive: true });
+  writeFileSync(join(repo, ".agents", "subagents", "reviewer.md"), "never publish this");
+  writeFileSync(join(instructionsDir, "only-source.md"), "publish this");
+
+  expect(runSyncProject({ cwd: repo, reporter: quiet() })).toBe(0);
+
+  expect(readFileSync(join(repo, PROJECT_MEMORY_FILE), "utf8")).toBe(memory);
+  expect(readFileSync(join(repo, PROJECT_CHANGELOG_FILE), "utf8")).toBe(changelog);
+  const agents = readFileSync(join(repo, "AGENTS.md"), "utf8");
+  expect(agents).toContain("publish this");
+  expect(agents).not.toContain("memory");
+  expect(agents).not.toContain("changelog");
+  expect(agents).not.toContain("never publish this");
+  expect(agents).toContain("wagglebot update");
+  expect(agents).not.toContain("wagglebot sync-project");
 });
