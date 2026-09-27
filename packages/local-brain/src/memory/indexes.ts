@@ -39,6 +39,17 @@ const displayText = (value: string): string => value.replace(/\r\n?/gu, " ").rep
 
 const linkLabel = (value: string): string => displayText(value).replaceAll("[", "\\[").replaceAll("]", "\\]");
 
+const encodePathDestination = (path: string): string =>
+  path
+    .split("/")
+    .map((segment) =>
+      encodeURIComponent(segment).replace(
+        /[!'()*]/gu,
+        (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`,
+      ),
+    )
+    .join("/");
+
 const titleCaseDirectory = (name: string): string =>
   name
     .split(/[-_\s]+/u)
@@ -59,7 +70,7 @@ const directoryDescription = (relativePath: string): string | undefined => {
 const bullet = (entry: IndexEntry): string => {
   const description =
     entry.description === undefined || entry.description.trim() === "" ? "" : `: ${displayText(entry.description)}`;
-  return `- [${linkLabel(entry.title)}](${entry.path})${description}`;
+  return `- [${linkLabel(entry.title)}](${encodePathDestination(entry.path)})${description}`;
 };
 
 const linkPath = (fromDirectory: string, target: string): string => {

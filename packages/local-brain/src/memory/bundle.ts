@@ -9,7 +9,7 @@ import { renderMemoryIndexes } from "./indexes";
 import { MemoryParseError, parseConcept } from "./parse";
 
 const BUNDLE_PATH = ".agents/memory" as const;
-export const LEGACY_MEMORY_PATH = ".agents/memory.md" as const;
+const UNSUPPORTED_MEMORY_FILE = ".agents/memory.md" as const;
 const MAX_BUNDLE_BYTES = 256 * 1024;
 
 type FileRecord = {
@@ -47,7 +47,7 @@ const lstatOrMissing = (path: string) => {
 };
 
 const assertNoLegacyMemory = (projectRoot: string): void => {
-  const legacyPath = join(projectRoot, LEGACY_MEMORY_PATH);
+  const legacyPath = join(projectRoot, UNSUPPORTED_MEMORY_FILE);
   if (lstatOrMissing(legacyPath) !== undefined) {
     localMemoryInvalid(`legacy memory file is unsupported; use ${BUNDLE_PATH}/`);
   }
@@ -105,14 +105,17 @@ const validateDateHeading = (heading: string): boolean => {
 const validateLog = (text: string, relativePath: string): void => {
   const lines = text.replace(/\r\n?/gu, "\n").split("\n");
   let hasHeading = false;
-  let fence: string | undefined;
+  let fence: { marker: "`" | "~"; length: number } | undefined;
 
   for (const line of lines) {
-    const fenceMatch = /^\s*(```+|~~~+).*$/u.exec(line);
+    const fenceMatch = /^\s*(`{3,}|~{3,})(.*)$/u.exec(line);
     if (fenceMatch?.[1] !== undefined) {
-      const marker = fenceMatch[1][0];
-      if (fence === undefined) fence = marker;
-      else if (marker === fence) fence = undefined;
+      const run = fenceMatch[1];
+      const marker = run[0] as "`" | "~";
+      if (fence === undefined) fence = { marker, length: run.length };
+      else if (marker === fence.marker && run.length >= fence.length && /^\s*$/u.test(fenceMatch[2] ?? "")) {
+        fence = undefined;
+      }
       continue;
     }
     if (fence !== undefined) continue;

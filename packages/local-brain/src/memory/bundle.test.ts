@@ -146,6 +146,31 @@ test("accepts dated log headings and rejects non-date H2 headings", () => {
   expect(localMemoryError(() => loadMemoryBundle(rejected)).code).toBe("local_memory_invalid");
 });
 
+test("does not parse H2 headings inside nested or shorter mismatched fences", () => {
+  const repo = fixtureRepo();
+  writeReserved(
+    repo,
+    "log.md",
+    [
+      "# Memory Log",
+      "",
+      "````md",
+      "~~~",
+      "## Hidden in a mismatched marker fence",
+      "```",
+      "## Hidden after a too-short closing fence",
+      "````",
+      "",
+      "~~~md",
+      "```",
+      "## Hidden under the opposite marker",
+      "~~~",
+    ].join("\n"),
+  );
+
+  expect(loadMemoryBundle(repo)?.logs).toHaveLength(1);
+});
+
 test("validates root index version YAML and forbids frontmatter on category indexes", () => {
   const invalidRoots = [
     "---\nokf_version: [broken\n---\n\n# Component Memory\n",

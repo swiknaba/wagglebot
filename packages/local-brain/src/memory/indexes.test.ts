@@ -74,3 +74,14 @@ test("title-cases generic directories without inventing a description", () => {
     '---\nokf_version: "0.2"\n---\n\n# Component Memory\n\n- [Team Notes](team-notes/index.md)\n',
   );
 });
+
+test("percent-encodes Markdown link destinations by path segment", () => {
+  const indexes = renderMemoryIndexes([
+    concept(
+      ".agents/memory/warnings/retry (draft)#1?.md",
+      "---\ntype: Warning\ntitle: Retry draft\n---\n\nConfirm the original write.\n",
+    ),
+  ]);
+
+  expect(indexes.get(".agents/memory/warnings/index.md")).toContain("- [Retry draft](retry%20%28draft%29%231%3F.md)");
+});
