@@ -402,6 +402,8 @@ git commit -m "feat(memory): load and initialize OKF bundles"
 
 ### Task 3: Replace local memory search, proposal, save, and status
 
+**Execution status:** Complete, reviewed and re-reviewed (`23baae2`, `0940134`; plan clarifications in `f358a03`, `46461ab`).
+
 **Files:**
 
 - Replace: `packages/local-brain/src/memory/provider.ts`
@@ -492,7 +494,7 @@ export type LocalMemorySaveResult = {
 };
 ```
 
-- [ ] **Step 1: Write failing OKF search, status, proposal, and save tests**
+- [x] **Step 1: Write failing OKF search, status, proposal, and save tests**
 
 Search across at least three concepts in different directories. Assert exact concept paths; matching across type/title/description/tags/headings/body; exact source lines and chunk hash; indexes/logs excluded; changing concepts changes the search cache key; changing only indexes does not change search; and missing, legacy, malformed, oversize, and symlink cases return the documented outcomes.
 
@@ -587,17 +589,17 @@ Save tests must assert:
 - near the 256 KiB limit, stale and obsolete index files plus the ordered partial-repair states are accounted for: either the save is rejected before any writer call, or an injected index-write failure leaves a loadable/searchable bundle under the cap with its actual hash;
 - a later lifecycle repair fixes indexes without changing that hash.
 
-- [ ] **Step 2: Run local-memory tests and capture RED**
+- [x] **Step 2: Run local-memory tests and capture RED**
 
 Run: `bun test packages/local-brain/src/memory/parse.test.ts packages/local-brain/src/memory/provider.test.ts packages/local-brain/src/memory/proposal.test.ts packages/local-brain/src/memory/write.test.ts packages/local-brain/src/local-brain.test.ts packages/cli/src/commands/brain-remember.test.ts packages/cli/src/commands/brain-status.test.ts packages/contracts/src/base.test.ts services/context-engine/src/mcp/low-level.test.ts`
 
 Expected: FAIL because search, proposal, save, status, and CLI results still use the single-file shapes.
 
-- [ ] **Step 3: Replace the parser and fixture legacy bridge**
+- [x] **Step 3: Replace the parser and fixture legacy bridge**
 
 Delete `parseMemory`, `LocalMemoryDocument`, the old one-argument parse-error overload, old `writeMemory` fixture helper, the literal `.agents/memory.md` path from public local-memory types, and their exports. Retain only `parseConcept` and deliberate legacy-file rejection tests. Run `rg -n "parseMemory|LocalMemoryDocument|writeMemory\(|baseContentHash|PROJECT_MEMORY_FILE|component-memory\.md|LEGACY_MEMORY_PATH|\.agents/memory\.md" packages/local-brain/src`; every remaining legacy-path hit must be a rejection fixture/test or explanatory message.
 
-- [ ] **Step 4: Implement bundle search and ranking**
+- [x] **Step 4: Implement bundle search and ranking**
 
 Cache by canonical project root and `bundleHash`. Flatten `bundle.concepts.flatMap((concept) => concept.chunks)`. Index this text:
 
@@ -608,7 +610,7 @@ Cache by canonical project root and `bundleHash`. Flatten `bundle.concepts.flatM
 
 Keep query length `1..2,000` Unicode code points and result limit `1..20`. Request scores for every indexed chunk, sort by score descending, exact lowercased title/heading match descending, then stable chunk ID ascending, and only then slice to limit. Preserve the BM25 score on each result. Map loader/parser errors to stable `LocalBrainError` codes without absolute roots, body text, raw YAML, or queries.
 
-- [ ] **Step 5: Implement deterministic OKF proposal rendering**
+- [x] **Step 5: Implement deterministic OKF proposal rendering**
 
 Use `YAML.stringify(frontmatter, { lineWidth: 0 })` (or the equivalent supported options) and `---` delimiters. Do not invent `generated` or `verified`. Map sections exactly:
 
@@ -625,7 +627,7 @@ const CATEGORY = {
 
 For `file` and `adr` evidence, parse an optional trailing `:<line>` and resolve the repository-relative path from the concept directory; include `#L<line>` when present. Other evidence kinds remain portable `resource` scope descriptors. Preserve `title` and the Wagglebot `kind` extension. Append stable footnote markers to the summary in evidence order.
 
-- [ ] **Step 6: Implement conflicts, bundle-bound save, and stale index recovery**
+- [x] **Step 6: Implement conflicts, bundle-bound save, and stale index recovery**
 
 Derive a kebab-case filename using Unicode NFKD, ASCII normalization, and lowercase. Check all concept titles and the target path; exact duplicate yields `no_change`, conflicting target/title yields `needs_resolution`, and never invent a numeric suffix. Replacement must use exact `{ path, contentHash }` and preserve unknown frontmatter keys.
 
@@ -637,23 +639,23 @@ At save, first verify `proposalId` against all fields the caller submitted, incl
 
 Before the first write, simulate the deterministic index repair in write order with the new/replaced concept already durable. Check the total Markdown bytes at every possible failure prefix, including current/stale/obsolete indexes that still exist until their cleanup step, all concepts, logs, and each generated index. Reject with `local_memory_too_large` if any durable partial-repair state could exceed 256 KiB. Then safely create only the fixed category directory under the validated bundle root, atomically write the concept, invalidate search cache, and repair indexes. If concept writing fails after creating a new empty category directory, remove only that newly created empty directory. `patch` in a proposal/save result describes the intended review changes, not proof that every file was written; if `indexes_stale` is present, only the concept write is guaranteed and CLI/MCP must not report the whole patch as applied. Every such state must remain loadable/searchable.
 
-- [ ] **Step 7: Adapt `brain remember` to the new public proposal type**
+- [x] **Step 7: Adapt `brain remember` to the new public proposal type**
 
 Replace the hand-written proposal shape in `brain-remember.ts` with `LocalMemoryProposal` from `@wagglebot/local-brain`. Print the saved concept path and `newBundleHash`; print every save warning. Add command tests verifying preview does not write, explicit save reports the OKF path/hash, and `warnings: ["indexes_stale"]` is visible without claiming every file in the intended patch was applied. This is part of the core API transition so the package typecheck remains green at this task boundary.
 
-- [ ] **Step 8: Migrate the public context and MCP contracts in the same API transition**
+- [x] **Step 8: Migrate the public context and MCP contracts in the same API transition**
 
 In `packages/contracts/src/base.ts`, export `LocalMemoryConceptPathSchema` built on `RelativePathSchema`, and re-export it from `packages/contracts/src/index.ts`. It accepts normalized POSIX concept paths with at least one segment below `.agents/memory/` (including `.agents/memory/component.md`), ending in `.md`, and rejects final basenames `index.md` and `log.md`. Use it for `EvidenceRefSchema`'s `local_memory` path while retaining its ordered-line and lowercase SHA-256 validation. Import it from the package entrypoint in tests to verify the public export; accept `.agents/memory/warnings/retry-writes.md` and `.agents/memory/component.md`; reject `.agents/memory.md`, outside paths, backslashes, traversal, `index.md`, and `log.md`. The proposal input uses this general schema shape for safe paths but separately enforces section/category matching for replacement.
 
 In `services/context-engine/src/mcp/low-level.ts`, change the provider `read()` return type from `LocalMemoryDocument` to `LocalMemoryBundle | undefined`, and consume `LocalMemorySearchResult` directly. The tool returns the exact `hits` and same-snapshot `bundleHash`; it does not perform a second read after search. Replace the proposal Zod schema with a strict mirror of Task 3's complete `LocalMemoryProposal`, including concept `path`/`content`, `baseBundleHash`, `indexChanges`, optional exact `replace: { path, contentHash }`, patch, and warnings. Validate concept/replacement paths and SHA-256 fields at this boundary. Do not add a `@wagglebot/contracts` workspace dependency: `services/context-engine` retains its current dependency set, and its low-level MCP module uses local strict Zod path/hash refinements matching the full `RelativePathSchema` security rules plus `LocalMemoryConceptPathSchema` and `Sha256Schema`; contract and MCP tests use the same positive/negative cases to catch drift. The local-brain save operation remains the authoritative second validation boundary. Accept the same `replace` field in `brain_memory_propose` input. Search's MCP query schema must count Unicode code points exactly like the provider. Keep schema version 1 and do not change CodeGraph/Git shapes or provider isolation. Add assertions for snapshot-consistent hits/hash (including proving no follow-up `read()`), exact OKF hit paths, replacement input, all proposal/save field names, absence of the old single-file/hash names, path security edge cases at both schema boundaries, a supplementary-Unicode query within the code-point limit, and `local_brain_status` carrying the memory path, state, bundle metadata, and independent CodeGraph/Git status.
 
-- [ ] **Step 9: Run focused validation**
+- [x] **Step 9: Run focused validation**
 
 Run: `bun test packages/local-brain/src/memory/parse.test.ts packages/local-brain/src/memory/bundle.test.ts packages/local-brain/src/memory/indexes.test.ts packages/local-brain/src/memory/lifecycle.test.ts packages/local-brain/src/memory/provider.test.ts packages/local-brain/src/memory/proposal.test.ts packages/local-brain/src/memory/write.test.ts packages/local-brain/src/local-brain.test.ts packages/cli/src/commands/brain-remember.test.ts packages/cli/src/commands/brain-status.test.ts packages/contracts/src/base.test.ts services/context-engine/src/mcp/low-level.test.ts && bun run check && bun run typecheck`
 
 Expected: PASS.
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
 ```bash
 git add packages/local-brain/src/types.ts packages/local-brain/src/index.ts packages/local-brain/src/memory/parse.ts packages/local-brain/src/memory/test-fixture.ts packages/local-brain/src/memory/provider.ts packages/local-brain/src/memory/provider.test.ts packages/local-brain/src/memory/proposal.ts packages/local-brain/src/memory/proposal.test.ts packages/local-brain/src/memory/write.test.ts packages/local-brain/src/local-brain.ts packages/local-brain/src/local-brain.test.ts packages/cli/src/commands/brain-remember.ts packages/cli/src/commands/brain-remember.test.ts packages/cli/src/commands/brain-status.ts packages/cli/src/commands/brain-status.test.ts packages/contracts/src/base.ts packages/contracts/src/base.test.ts packages/contracts/src/index.ts services/context-engine/src/mcp/low-level.ts services/context-engine/src/mcp/low-level.test.ts
