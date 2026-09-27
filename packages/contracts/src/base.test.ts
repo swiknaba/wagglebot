@@ -12,6 +12,36 @@ import {
 
 const sha256 = "a".repeat(64);
 const gitSha = "b".repeat(40);
+const invalidConceptPaths = [
+  "",
+  "\u0000",
+  "/.agents/memory/warnings/retry-writes.md",
+  "C:/repo/.agents/memory/warnings/retry-writes.md",
+  ".agents/memory\\warnings\\retry-writes.md",
+  ".agents/memory//warnings/retry-writes.md",
+  ".agents/memory/./warnings/retry-writes.md",
+  ".agents/memory/../warnings/retry-writes.md",
+  ".agents/memory/warnings/\u0000/retry-writes.md",
+  ".agents/memory/.env/retry-writes.md",
+  ".agents/memory/.ENV/retry-writes.md",
+  ".agents/memory/warnings/.env.local/retry-writes.md",
+  ".agents/memory/warnings/.ENV.local/retry-writes.md",
+  ".agents/memory/certificates/server.pem/retry-writes.md",
+  ".agents/memory/certificates/server.PEM/retry-writes.md",
+  ".agents/memory/keys/service.key/retry-writes.md",
+  ".agents/memory/keys/service.KEY/retry-writes.md",
+  ".agents/memory/credentials/retry-writes.md",
+  ".agents/memory/CREDENTIALS/retry-writes.md",
+  ".agents/memory/secrets/retry-writes.md",
+  ".agents/memory/warnings/SECRETS/retry-writes.md",
+  "outside/warnings/retry-writes.md",
+  ".agents/memory",
+  ".agents/memory.md",
+  ".agents/memory/index.md",
+  ".agents/memory/warnings/index.md",
+  ".agents/memory/log.md",
+  ".agents/memory/warnings/log.md",
+];
 
 test("project identity is strict while allowing its documented optional fields", () => {
   expect(
@@ -49,20 +79,10 @@ test("relative paths reject absolute, traversal, unnormalized, secret, and NUL p
   }
 });
 
-test("public local-memory concept paths stay below the bundle and exclude reserved files", () => {
+test("public local-memory concept paths mirror relative-path security and exclude reserved files", () => {
   expect(LocalMemoryConceptPathSchema.safeParse(".agents/memory/warnings/retry-writes.md").success).toBe(true);
   expect(LocalMemoryConceptPathSchema.safeParse(".agents/memory/component.md").success).toBe(true);
-  for (const path of [
-    ".agents/memory.md",
-    ".agents/memory",
-    "outside/warnings/retry-writes.md",
-    ".agents/memory\\warnings\\retry-writes.md",
-    ".agents/memory/warnings/../retry-writes.md",
-    ".agents/memory/index.md",
-    ".agents/memory/warnings/index.md",
-    ".agents/memory/log.md",
-    ".agents/memory/warnings/log.md",
-  ]) {
+  for (const path of invalidConceptPaths) {
     expect(LocalMemoryConceptPathSchema.safeParse(path).success).toBe(false);
   }
 });

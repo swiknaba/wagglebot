@@ -1,15 +1,5 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type {
-  CodeGraphResult,
-  GitCommit,
-  GitWhyResult,
-  LocalBrain,
-  LocalMemoryBundle,
-  LocalMemoryProposal,
-  LocalMemoryProposalInput,
-  LocalMemorySaveResult,
-  LocalMemorySearchResult,
-} from "@wagglebot/local-brain";
+import type { LocalBrain, LocalMemoryProposal, LocalMemoryProposalInput } from "@wagglebot/local-brain";
 import { z } from "zod";
 
 export const TOOL_NAMES = [
@@ -29,40 +19,6 @@ type InvokeResult = {
   structuredContent?: Record<string, unknown>;
 };
 type InvokableServer = McpServer & { invoke(name: string, args: unknown): Promise<InvokeResult> };
-type MemoryProvider = {
-  search(input: { projectRoot: string; query: string; limit: number }): Promise<LocalMemorySearchResult>;
-  read(projectRoot: string): Promise<LocalMemoryBundle | undefined>;
-  propose(input: LocalMemoryProposalInput): Promise<LocalMemoryProposal>;
-  save(input: { projectRoot: string; proposal: LocalMemoryProposal }): Promise<LocalMemorySaveResult>;
-};
-type BrainProviders = {
-  memory: MemoryProvider;
-  code: {
-    explore(input: {
-      projectRoot: string;
-      query: string;
-      maxNodes: number;
-      includeCode: boolean;
-    }): Promise<CodeGraphResult>;
-  };
-  git: {
-    history(input: {
-      projectRoot: string;
-      path?: string;
-      limit: number;
-    }): Promise<{ commits: GitCommit[]; limitations: string[] }>;
-    why(input: {
-      projectRoot: string;
-      path: string;
-      startLine?: number;
-      endLine?: number;
-      query?: string;
-      maxCommits?: number;
-    }): Promise<GitWhyResult>;
-  };
-  status(projectPath: string): Promise<unknown>;
-};
-
 const projectPath = z.string().refine((value) => value.startsWith("/"), "absolute projectPath is required");
 const evidence = z
   .object({
@@ -72,37 +28,36 @@ const evidence = z
   .strict();
 const section = z.enum(["Architecture", "Conventions", "Commands", "Decisions", "Warnings", "Learnings"]);
 const sha256 = z.string().regex(/^[a-f0-9]{64}$/u);
-const conceptPath = z
+const relativePath = z
   .string()
   .min(1)
   .superRefine((path, context) => {
     const segments = path.split("/");
-    const basename = segments.at(-1) ?? "";
-    if (
-      !path.startsWith(".agents/memory/") ||
-      !path.endsWith(".md") ||
-      path.includes("\\") ||
-      segments.some((segment) => segment === "" || segment === "." || segment === "..") ||
-      basename === "index.md" ||
-      basename === "log.md"
-    ) {
-      context.addIssue({ code: "custom", message: "path must name an OKF concept below .agents/memory" });
+    if (path.includes("\0")) context.addIssue({ code: "custom", message: "path must not contain NUL" });
+    if (path.startsWith("/") || /^[A-Za-z]:[\\/]/u.test(path)) {
+      context.addIssue({ code: "custom", message: "path must be repository-relative" });
+    }
+    if (path.includes("\\")) context.addIssue({ code: "custom", message: "path must use POSIX separators" });
+    if (segments.some((segment) => segment === "" || segment === "." || segment === "..")) {
+      context.addIssue({ code: "custom", message: "path must be normalized" });
+    }
+    if (segments.some((segment) => /^\.env/iu.test(segment))) {
+      context.addIssue({ code: "custom", message: "path must not name an environment file" });
+    }
+    if (segments.some((segment) => /\.(pem|key)$/iu.test(segment))) {
+      context.addIssue({ code: "custom", message: "path must not name a key file" });
+    }
+    if (segments.some((segment) => /^(credentials|secrets)$/iu.test(segment))) {
+      context.addIssue({ code: "custom", message: "path must not use a secret directory" });
     }
   });
-const indexPath = z
-  .string()
-  .min(1)
-  .superRefine((path, context) => {
-    const segments = path.split("/");
-    if (
-      !path.startsWith(".agents/memory/") ||
-      (!path.endsWith("/index.md") && path !== ".agents/memory/index.md") ||
-      path.includes("\\") ||
-      segments.some((segment) => segment === "" || segment === "." || segment === "..")
-    ) {
-      context.addIssue({ code: "custom", message: "path must name a generated index below .agents/memory" });
-    }
-  });
+const conceptPath = relativePath.refine((path) => {
+  const basename = path.slice(path.lastIndexOf("/") + 1);
+  return path.startsWith(".agents/memory/") && path.endsWith(".md") && basename !== "index.md" && basename !== "log.md";
+}, "path must name an OKF concept below .agents/memory");
+const indexPath = relativePath.refine((path) => {
+  return path.startsWith(".agents/memory/") && (path.endsWith("/index.md") || path === ".agents/memory/index.md");
+}, "path must name a generated index below .agents/memory");
 const replacement = z.object({ path: conceptPath, contentHash: sha256 }).strict();
 const proposal = z
   .object({
@@ -133,7 +88,6 @@ const fail = (error: unknown): InvokeResult => ({
 
 export const createLowLevelServer = (brain: LocalBrain): InvokableServer => {
   const server = new McpServer({ name: "wagglebot-local-brain", version: "0.0.0" }) as InvokableServer;
-  const providers = brain as unknown as BrainProviders;
   const handlers = new Map<string, (args: Args) => Promise<InvokeResult>>();
   const schemas = new Map<string, z.ZodObject<z.ZodRawShape>>();
   const register = (name: string, schema: z.ZodRawShape, handler: (args: Args) => Promise<unknown>): void => {
@@ -168,7 +122,7 @@ export const createLowLevelServer = (brain: LocalBrain): InvokableServer => {
       const input = args as { projectPath: string; query: string; limit?: number };
       return {
         schemaVersion: 1,
-        ...(await providers.memory.search({
+        ...(await brain.memory.search({
           projectRoot: input.projectPath,
           query: input.query,
           limit: input.limit ?? 10,
@@ -190,7 +144,7 @@ export const createLowLevelServer = (brain: LocalBrain): InvokableServer => {
       const input = args as Omit<LocalMemoryProposalInput, "projectRoot"> & { projectPath: string };
       return {
         schemaVersion: 1,
-        proposal: await providers.memory.propose({ ...input, projectRoot: input.projectPath }),
+        proposal: await brain.memory.propose({ ...input, projectRoot: input.projectPath }),
       };
     },
   );
@@ -198,7 +152,7 @@ export const createLowLevelServer = (brain: LocalBrain): InvokableServer => {
     const input = args as { projectPath: string; proposal: LocalMemoryProposal };
     return {
       schemaVersion: 1,
-      ...(await providers.memory.save({ projectRoot: input.projectPath, proposal: input.proposal })),
+      ...(await brain.memory.save({ projectRoot: input.projectPath, proposal: input.proposal })),
     };
   });
   register(
@@ -211,9 +165,10 @@ export const createLowLevelServer = (brain: LocalBrain): InvokableServer => {
     },
     async (args) => {
       const input = args as { projectPath: string; query: string; maxNodes?: number; includeCode?: boolean };
+      if (!("explore" in brain.code)) throw new Error("CodeGraph exploration is unavailable");
       return {
         schemaVersion: 1,
-        result: await providers.code.explore({
+        result: await brain.code.explore({
           projectRoot: input.projectPath,
           query: input.query,
           maxNodes: input.maxNodes ?? 25,
@@ -227,9 +182,10 @@ export const createLowLevelServer = (brain: LocalBrain): InvokableServer => {
     { projectPath, path: z.string().optional(), limit: z.number().int().min(1).max(100).optional() },
     async (args) => {
       const input = args as { projectPath: string; path?: string; limit?: number };
+      if (!("history" in brain.git)) throw new Error("Git history is unavailable");
       return {
         schemaVersion: 1,
-        ...(await providers.git.history({
+        ...(await brain.git.history({
           projectRoot: input.projectPath,
           path: input.path,
           limit: input.limit ?? 20,
@@ -248,13 +204,25 @@ export const createLowLevelServer = (brain: LocalBrain): InvokableServer => {
       maxCommits: z.number().int().min(1).max(200).optional(),
     },
     async (args) => {
-      const input = args as Parameters<BrainProviders["git"]["why"]>[0];
-      return { schemaVersion: 1, result: await providers.git.why(input) };
+      const input = args as {
+        projectPath: string;
+        path: string;
+        startLine?: number;
+        endLine?: number;
+        query?: string;
+        maxCommits?: number;
+      };
+      if (!("why" in brain.git)) throw new Error("Git explanation is unavailable");
+      const { projectPath: projectRoot, ...whyInput } = input;
+      return {
+        schemaVersion: 1,
+        result: await brain.git.why({ ...whyInput, projectRoot }),
+      };
     },
   );
   register("local_brain_status", { projectPath }, async (args) => ({
     schemaVersion: 1,
-    status: await providers.status((args as { projectPath: string }).projectPath),
+    status: await brain.status((args as { projectPath: string }).projectPath),
   }));
 
   server.invoke = async (name, args) => {

@@ -5,15 +5,15 @@ import { GitProvider } from "./git/provider";
 import { MarkdownMemoryProvider } from "./memory/provider";
 import { LocalBrainError } from "./path-policy";
 import { identifyProject } from "./project-identity";
-import type { CodeGraphStatus, GitStatus, LocalBrainStatus, LocalMemoryBundle } from "./types";
+import type { CodeGraphStatus, GitStatus, LocalBrainStatus } from "./types";
 
-type MemoryStatusProvider = { read(projectPath: string): Promise<LocalMemoryBundle | undefined> };
+export type LocalMemoryApi = Pick<MarkdownMemoryProvider, "read" | "search" | "propose" | "save">;
 type CodeStatusProvider = { status(projectPath: string): Promise<CodeGraphStatus>; close(): Promise<void> };
 type GitStatusProvider = { status(projectPath: string): Promise<GitStatus> };
 
 export type LocalBrain = {
   identify(projectPath: string): Promise<ProjectIdentity>;
-  memory: MarkdownMemoryProvider | MemoryStatusProvider;
+  memory: LocalMemoryApi;
   code: CodeGraphProvider | CodeStatusProvider;
   git: GitProvider | GitStatusProvider;
   status(projectPath: string): Promise<LocalBrainStatus>;
@@ -23,7 +23,7 @@ export type LocalBrain = {
 export const createLocalBrain = (
   options: {
     identity?: (projectPath: string) => Promise<ProjectIdentity>;
-    memory?: MarkdownMemoryProvider | MemoryStatusProvider;
+    memory?: LocalMemoryApi;
     code?: CodeGraphProvider | CodeStatusProvider;
     git?: GitProvider | GitStatusProvider;
   } = {},

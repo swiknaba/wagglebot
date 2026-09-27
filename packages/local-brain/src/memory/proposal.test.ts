@@ -7,6 +7,37 @@ import type { LocalBrainError } from "../path-policy";
 import { MarkdownMemoryProvider } from "./provider";
 import { conceptText, fixtureRepo, writeConcept } from "./test-fixture";
 
+const invalidConceptPaths = [
+  "",
+  "\u0000",
+  "/.agents/memory/warnings/retry-writes.md",
+  "C:/repo/.agents/memory/warnings/retry-writes.md",
+  ".agents/memory\\warnings\\retry-writes.md",
+  ".agents/memory//warnings/retry-writes.md",
+  ".agents/memory/./warnings/retry-writes.md",
+  ".agents/memory/../warnings/retry-writes.md",
+  ".agents/memory/warnings/\u0000/retry-writes.md",
+  ".agents/memory/.env/retry-writes.md",
+  ".agents/memory/.ENV/retry-writes.md",
+  ".agents/memory/warnings/.env.local/retry-writes.md",
+  ".agents/memory/warnings/.ENV.local/retry-writes.md",
+  ".agents/memory/certificates/server.pem/retry-writes.md",
+  ".agents/memory/certificates/server.PEM/retry-writes.md",
+  ".agents/memory/keys/service.key/retry-writes.md",
+  ".agents/memory/keys/service.KEY/retry-writes.md",
+  ".agents/memory/credentials/retry-writes.md",
+  ".agents/memory/CREDENTIALS/retry-writes.md",
+  ".agents/memory/secrets/retry-writes.md",
+  ".agents/memory/warnings/SECRETS/retry-writes.md",
+  "outside/warnings/retry-writes.md",
+  ".agents/memory",
+  ".agents/memory.md",
+  ".agents/memory/index.md",
+  ".agents/memory/warnings/index.md",
+  ".agents/memory/log.md",
+  ".agents/memory/warnings/log.md",
+];
+
 const input = (projectRoot: string) => ({
   projectRoot,
   section: "Warnings" as const,
@@ -202,6 +233,20 @@ test("rejects replacement from a different category than the selected section", 
   ).rejects.toMatchObject({ code: "proposal_invalid" });
 });
 
+test("replacement paths mirror relative-path security and reserved bundle paths", async () => {
+  const repo = fixtureRepo();
+  writeConcept(repo, "component.md", conceptText({ type: "Component Overview", title: "Component overview" }));
+  const provider = new MarkdownMemoryProvider();
+  for (const path of invalidConceptPaths) {
+    await expect(
+      provider.propose({
+        ...input(repo),
+        replace: { path: path as never, contentHash: "a".repeat(64) },
+      }),
+    ).rejects.toMatchObject({ code: "proposal_invalid" });
+  }
+});
+
 test("enforces proposal bounds, safe references, and unknown-field rejection", async () => {
   const repo = fixtureRepo();
   writeConcept(repo, "component.md", conceptText({ type: "Component Overview", title: "Component overview" }));
@@ -268,4 +313,17 @@ test("uses portable scope descriptors for non-file evidence", async () => {
   });
   expect(proposal.content).toContain("resource: commit:abcdef123456");
   expect(proposal.content).toContain("[^evidence-1]: `abcdef123456`");
+});
+
+test("non-file evidence preserves a trailing colon-number descriptor", async () => {
+  const repo = fixtureRepo();
+  writeConcept(repo, "component.md", conceptText({ type: "Component Overview", title: "Component overview" }));
+  const proposal = await new MarkdownMemoryProvider().propose({
+    ...input(repo),
+    evidence: [{ kind: "issue", ref: "OPS-1:0" }],
+  });
+
+  expect(proposal.content).toContain("resource: issue:OPS-1:0");
+  expect(proposal.content).toContain("title: OPS-1:0");
+  expect(proposal.content).toContain("[^evidence-1]: `OPS-1:0`");
 });

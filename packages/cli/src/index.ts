@@ -242,7 +242,7 @@ export async function main(argv: string[], deps: CliDeps = { write: console.log 
             summary: values.summary,
             evidence,
             save: values.save === true,
-            brain: brain as unknown as Parameters<typeof runBrainRemember>[0]["brain"],
+            brain,
             write: deps.write,
           });
         } finally {

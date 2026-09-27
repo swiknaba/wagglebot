@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { loadMemoryBundle } from "./bundle";
 import { ensureLocalMemoryBundle } from "./lifecycle";
+import { proposalIdFor } from "./proposal";
 import { MarkdownMemoryProvider } from "./provider";
 import { conceptText, fixtureRepo, writeConcept } from "./test-fixture";
 import { writeMemoryAtomically } from "./write";
@@ -92,6 +93,28 @@ test("proposal ID covers derived index changes and patch while save regenerates 
   const result = await provider.save({ projectRoot: repo, proposal });
   expect(result.patch).toContain("# Component Memory");
   expect((await provider.read(repo))?.indexState).toBe("current");
+});
+
+test("proposal and recomputed save patch include obsolete generated-index deletions", async () => {
+  const repo = setup();
+  const obsoleteIndex = "# Obsolete Learnings\n\nThis index is no longer generated.\n";
+  writeConcept(repo, "learnings/index.md", obsoleteIndex);
+  const provider = new MarkdownMemoryProvider();
+  const proposal = await provider.propose(input(repo));
+  const deletionHunk = [
+    "--- a/.agents/memory/learnings/index.md",
+    "+++ /dev/null",
+    "@@ -1,3 +0,0 @@",
+    "-# Obsolete Learnings",
+    "-",
+    "-This index is no longer generated.",
+  ].join("\n");
+
+  expect(proposal.indexChanges.map(({ path }) => path)).not.toContain(".agents/memory/learnings/index.md");
+  expect(proposal.patch).toContain(deletionHunk);
+  const saved = await provider.save({ projectRoot: repo, proposal });
+  expect(saved.patch).toContain(deletionHunk);
+  expect(existsSync(join(repo, ".agents", "memory", "learnings", "index.md"))).toBe(false);
 });
 
 test("successful add writes one concept and regenerated indexes without staging or committing", async () => {
@@ -237,7 +260,7 @@ test("near-cap preflight accounts for stale and obsolete indexes before invoking
   expect(readFileSync(join(repo, ".agents", "memory", "log.md"), "utf8")).toBe(log);
 });
 
-test("a final replacement concept containing a secret is rejected before the writer", async () => {
+test("proposal rejects a preserved secret before exposing a preview", async () => {
   const repo = setup();
   const path = "warnings/unsafe-metadata.md";
   writeConcept(
@@ -247,14 +270,36 @@ test("a final replacement concept containing a secret is rejected before the wri
   );
   const provider = new MarkdownMemoryProvider();
   const existing = (await provider.read(repo))?.concepts.find(({ relativePath }) => relativePath === path);
-  const proposal = await provider.propose({
-    ...input(repo),
-    title: "Unsafe metadata",
-    replace: {
-      path: ".agents/memory/warnings/unsafe-metadata.md",
-      contentHash: existing?.contentHash ?? "",
-    },
-  });
+  const result = await provider
+    .propose({
+      ...input(repo),
+      title: "Unsafe metadata",
+      replace: {
+        path: ".agents/memory/warnings/unsafe-metadata.md",
+        contentHash: existing?.contentHash ?? "",
+      },
+    })
+    .then(
+      (proposal) => ({ proposal }),
+      (error: unknown) => ({ error }),
+    );
+
+  expect(result).toMatchObject({ error: { code: "secret_rejected" } });
+  expect("proposal" in result).toBe(false);
+  expect(readFileSync(join(repo, ".agents", "memory", path), "utf8")).toContain(
+    'producer_note: "password: synthetic-password"',
+  );
+});
+
+test("save rejects tampered final content before the writer", async () => {
+  const repo = setup();
+  const provider = new MarkdownMemoryProvider();
+  const proposal = await provider.propose(input(repo));
+  const tampered = {
+    ...proposal,
+    content: `${proposal.content}\nproducer_note: "password: synthetic-password"\n`,
+  };
+  const submitted = { ...tampered, proposalId: proposalIdFor(tampered) };
   let writes = 0;
   const tracking = new MarkdownMemoryProvider({
     write: () => {
@@ -262,9 +307,8 @@ test("a final replacement concept containing a secret is rejected before the wri
     },
   });
 
-  await expect(tracking.save({ projectRoot: repo, proposal })).rejects.toMatchObject({ code: "secret_rejected" });
+  await expect(tracking.save({ projectRoot: repo, proposal: submitted })).rejects.toMatchObject({
+    code: "proposal_invalid",
+  });
   expect(writes).toBe(0);
-  expect(readFileSync(join(repo, ".agents", "memory", path), "utf8")).toContain(
-    'producer_note: "password: synthetic-password"',
-  );
 });

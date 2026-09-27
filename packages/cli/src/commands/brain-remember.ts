@@ -1,10 +1,7 @@
-import type { LocalMemoryProposal, LocalMemoryProposalInput, LocalMemorySaveResult } from "@wagglebot/local-brain";
+import type { LocalBrain, LocalMemoryProposalInput } from "@wagglebot/local-brain";
 
 type RememberBrain = {
-  memory: {
-    propose(input: LocalMemoryProposalInput): Promise<LocalMemoryProposal>;
-    save(input: { projectRoot: string; proposal: LocalMemoryProposal }): Promise<LocalMemorySaveResult>;
-  };
+  memory: Pick<LocalBrain["memory"], "propose" | "save">;
 };
 
 export async function runBrainRemember(input: {

@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { posix } from "node:path";
+import { LocalMemoryConceptPathSchema } from "@wagglebot/contracts";
 import { assertSafeText } from "@wagglebot/secret-scanner";
 import { stringify } from "yaml";
 
@@ -60,15 +61,8 @@ const safeRelativeRef = (value: string): boolean => {
 };
 
 const validConceptPath = (value: unknown): value is LocalMemoryPath => {
-  if (typeof value !== "string" || !value.startsWith(CONCEPT_PREFIX) || value.includes("\\")) return false;
-  const segments = value.split("/");
-  const basename = segments.at(-1) ?? "";
   return (
-    segments.length >= 3 &&
-    segments.every((segment) => segment !== "" && segment !== "." && segment !== "..") &&
-    basename.endsWith(".md") &&
-    basename !== "index.md" &&
-    basename !== "log.md"
+    typeof value === "string" && value.split("/").length >= 3 && LocalMemoryConceptPathSchema.safeParse(value).success
   );
 };
 
@@ -166,14 +160,15 @@ const slugFor = (title: string): string =>
     .replace(/^-+|-+$/gu, "");
 
 const sourceFor = (evidence: MemoryEvidence, path: LocalMemoryPath, index: number) => {
-  const lineMatch = /:(\d+)$/u.exec(evidence.ref);
+  const fileEvidence = evidence.kind === "file" || evidence.kind === "adr";
+  const lineMatch = fileEvidence ? /:(\d+)$/u.exec(evidence.ref) : null;
   const line = lineMatch === null ? undefined : Number(lineMatch[1]);
   if (line !== undefined && (!Number.isSafeInteger(line) || line < 1)) {
     throw new LocalBrainError("proposal_invalid", "evidence line number is invalid");
   }
-  const sourcePath = lineMatch === null ? evidence.ref : evidence.ref.slice(0, -lineMatch[0].length);
   let resource: string;
-  if (evidence.kind === "file" || evidence.kind === "adr") {
+  if (fileEvidence) {
+    const sourcePath = lineMatch === null ? evidence.ref : evidence.ref.slice(0, -lineMatch[0].length);
     if (!safeRelativeRef(sourcePath)) throw new LocalBrainError("proposal_invalid", "evidence path is invalid");
     const conceptDirectory = posix.dirname(path);
     resource = posix.relative(conceptDirectory, sourcePath);
@@ -225,7 +220,7 @@ const filePatch = (path: string, before: string, after: string): string => {
   const newStart = newLines.length === 0 ? 0 : 1;
   return [
     `--- a/${path}`,
-    `+++ b/${path}`,
+    `+++ ${newLines.length === 0 ? "/dev/null" : `b/${path}`}`,
     `@@ -${oldStart},${oldLines.length} +${newStart},${newLines.length} @@`,
     ...oldLines.map((line) => `-${line}`),
     ...newLines.map((line) => `+${line}`),
@@ -252,9 +247,12 @@ export const proposalIdFor = (proposal: Omit<LocalMemoryProposal, "proposalId"> 
   return sha256(canonical(fields));
 };
 
-const indexChangesFor = (bundle: LocalMemoryBundle, concepts: LocalMemoryConcept[]): LocalMemoryIndexChange[] => {
+const indexChangesFor = (
+  bundle: LocalMemoryBundle,
+  generatedIndexes: Map<LocalMemoryPath, string>,
+): LocalMemoryIndexChange[] => {
   const current = new Map(bundle.indexes.map(({ path, text }) => [path, text]));
-  return [...renderMemoryIndexes(concepts)]
+  return [...generatedIndexes]
     .filter(([path, content]) => current.get(path) !== content)
     .map(([path, content]) => ({ path, content }))
     .sort((left, right) => compare(left.path, right.path));
@@ -283,6 +281,7 @@ export const buildProposal = (rawInput: LocalMemoryProposalInput, bundle: LocalM
     path,
     input.replace === undefined ? undefined : previous,
   );
+  rejectUnsafeText(content);
   let parsed: LocalMemoryConcept;
   try {
     parsed = parseConcept(content, path);
@@ -312,16 +311,26 @@ export const buildProposal = (rawInput: LocalMemoryProposalInput, bundle: LocalM
   let patch = "";
   if (action === "add" || action === "replace") {
     const concepts = bundle.concepts.filter((concept) => concept.path !== path).concat(parsed);
-    indexChanges = indexChangesFor(bundle, concepts);
+    const generatedIndexes = renderMemoryIndexes(concepts);
+    indexChanges = indexChangesFor(bundle, generatedIndexes);
     const before = new Map<string, string>([
       ...bundle.concepts.map((concept) => [concept.path, concept.text] as const),
       ...bundle.indexes.map((index) => [index.path, index.text] as const),
     ]);
-    patch = [
-      ...[{ path, content } as LocalMemoryIndexChange, ...indexChanges]
-        .sort((left, right) => compare(left.path, right.path))
-        .map((change) => filePatch(change.path, before.get(change.path) ?? "", change.content)),
-    ]
+    const patchFiles = [
+      { path, before: before.get(path) ?? "", after: content },
+      ...indexChanges.map((change) => ({
+        path: change.path,
+        before: before.get(change.path) ?? "",
+        after: change.content,
+      })),
+      ...bundle.indexes
+        .filter(({ path: indexPath }) => !generatedIndexes.has(indexPath))
+        .map((index) => ({ path: index.path, before: index.text, after: "" })),
+    ];
+    patch = patchFiles
+      .sort((left, right) => compare(left.path, right.path))
+      .map((change) => filePatch(change.path, change.before, change.after))
       .filter(Boolean)
       .join("\n");
   }
