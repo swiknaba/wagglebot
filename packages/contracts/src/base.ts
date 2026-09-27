@@ -43,6 +43,11 @@ export const RelativePathSchema = z
     }
   });
 
+export const LocalMemoryConceptPathSchema = RelativePathSchema.refine((path) => {
+  const basename = path.slice(path.lastIndexOf("/") + 1);
+  return path.startsWith(".agents/memory/") && path.endsWith(".md") && basename !== "index.md" && basename !== "log.md";
+}, "path must name an OKF concept below .agents/memory");
+
 export const ProjectIdentitySchema = z
   .object({
     component: nonEmptyText.optional(),
@@ -60,7 +65,7 @@ export const ProjectIdentitySchema = z
 const localMemoryEvidence = z
   .object({
     kind: z.literal("local_memory"),
-    path: z.literal(".agents/memory.md"),
+    path: LocalMemoryConceptPathSchema,
     startLine: evidenceLineNumber,
     endLine: evidenceLineNumber,
     contentHash: Sha256Schema,
@@ -156,6 +161,7 @@ export const PacketMetadataSchema = z
 
 export type ProjectIdentity = z.infer<typeof ProjectIdentitySchema>;
 export type RelativePath = z.infer<typeof RelativePathSchema>;
+export type LocalMemoryConceptPath = z.infer<typeof LocalMemoryConceptPathSchema>;
 export type EvidenceRef = z.infer<typeof EvidenceRefSchema>;
 export type Provenance = z.infer<typeof ProvenanceSchema>;
 export type SharedScope = z.infer<typeof SharedScopeSchema>;

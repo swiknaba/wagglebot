@@ -5,7 +5,7 @@ import { join } from "node:path";
 
 import { LocalBrainError } from "../path-policy";
 import { loadMemoryBundle } from "./bundle";
-import { conceptText, fixtureRepo, writeConcept, writeMemory } from "./test-fixture";
+import { conceptText, fixtureRepo, writeConcept } from "./test-fixture";
 
 const memoryRoot = (root: string): string => join(root, ".agents", "memory");
 const writeReserved = (root: string, path: string, text: string): void => {
@@ -31,7 +31,8 @@ test("returns undefined for a missing bundle but guides legacy users toward the 
   expect(loadMemoryBundle(absent)).toBeUndefined();
 
   const legacy = fixtureRepo();
-  writeMemory(legacy, "# Component Memory\n");
+  mkdirSync(join(legacy, ".agents"), { recursive: true });
+  writeFileSync(join(legacy, ".agents", "memory.md"), "# Component Memory\n");
   const error = localMemoryError(() => loadMemoryBundle(legacy));
   expect(error.code).toBe("local_memory_invalid");
   expect(error.message).toContain(".agents/memory/");

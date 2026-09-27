@@ -3,10 +3,11 @@ import type { ProjectIdentity } from "@wagglebot/contracts";
 import { CodeGraphProvider } from "./codegraph/provider";
 import { GitProvider } from "./git/provider";
 import { MarkdownMemoryProvider } from "./memory/provider";
+import { LocalBrainError } from "./path-policy";
 import { identifyProject } from "./project-identity";
-import type { CodeGraphStatus, GitStatus, LocalBrainStatus } from "./types";
+import type { CodeGraphStatus, GitStatus, LocalBrainStatus, LocalMemoryBundle } from "./types";
 
-type MemoryStatusProvider = { read(projectPath: string): Promise<{ contentHash: string } | undefined> };
+type MemoryStatusProvider = { read(projectPath: string): Promise<LocalMemoryBundle | undefined> };
 type CodeStatusProvider = { status(projectPath: string): Promise<CodeGraphStatus>; close(): Promise<void> };
 type GitStatusProvider = { status(projectPath: string): Promise<GitStatus> };
 
@@ -49,15 +50,33 @@ export const createLocalBrain = (
         project.status === "fulfilled"
           ? project.value
           : { workingTree: "dirty" as const, catalogState: "missing" as const, catalogWarning: "identity unavailable" };
+      const memoryStatus =
+        memoryResult.status === "fulfilled" && memoryResult.value !== undefined
+          ? {
+              path: ".agents/memory" as const,
+              state: "ready" as const,
+              bundleHash: memoryResult.value.bundleHash,
+              conceptCount: memoryResult.value.concepts.length,
+              totalBytes: memoryResult.value.totalBytes,
+              indexState: memoryResult.value.indexState,
+              observedAt: now,
+            }
+          : {
+              path: ".agents/memory" as const,
+              state:
+                memoryResult.status === "fulfilled"
+                  ? ("missing" as const)
+                  : memoryResult.reason instanceof LocalBrainError &&
+                      ["local_memory_invalid", "local_memory_too_large", "path_outside_repository"].includes(
+                        memoryResult.reason.code,
+                      )
+                    ? ("invalid" as const)
+                    : ("error" as const),
+              observedAt: now,
+            };
       return {
         project: projectIdentity,
-        memory:
-          memoryResult.status === "fulfilled" && memoryResult.value !== undefined
-            ? { state: "ready" as const, contentHash: memoryResult.value.contentHash, observedAt: now }
-            : {
-                state: memoryResult.status === "fulfilled" ? ("missing" as const) : ("error" as const),
-                observedAt: now,
-              },
+        memory: memoryStatus,
         codeGraph:
           codeResult.status === "fulfilled"
             ? codeResult.value

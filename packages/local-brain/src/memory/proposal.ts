@@ -1,22 +1,32 @@
 import { createHash } from "node:crypto";
-import { isAbsolute } from "node:path";
-
+import { posix } from "node:path";
 import { assertSafeText } from "@wagglebot/secret-scanner";
+import { stringify } from "yaml";
 
 import { LocalBrainError } from "../path-policy";
-import type { LocalMemoryProposal, LocalMemoryProposalInput, LocalMemorySection, MemoryEvidence } from "../types";
-import { type LocalMemoryDocument, parseMemory } from "./parse";
+import type {
+  LocalMemoryBundle,
+  LocalMemoryConcept,
+  LocalMemoryIndexChange,
+  LocalMemoryPath,
+  LocalMemoryProposal,
+  LocalMemoryProposalInput,
+  LocalMemorySection,
+  MemoryEvidence,
+} from "../types";
+import { renderMemoryIndexes } from "./indexes";
+import { parseConcept } from "./parse";
 
-type ProposalAction = LocalMemoryProposal["action"];
+const CATEGORY = {
+  Architecture: ["architecture", "Architecture"],
+  Conventions: ["conventions", "Convention"],
+  Commands: ["commands", "Command"],
+  Decisions: ["decisions", "Decision"],
+  Warnings: ["warnings", "Warning"],
+  Learnings: ["learnings", "Learning"],
+} as const;
 
-const SECTIONS = new Set<LocalMemorySection>([
-  "Architecture",
-  "Conventions",
-  "Commands",
-  "Decisions",
-  "Warnings",
-  "Learnings",
-]);
+const SECTIONS = new Set<LocalMemorySection>(Object.keys(CATEGORY) as LocalMemorySection[]);
 const EVIDENCE_KINDS = new Set<MemoryEvidence["kind"]>([
   "file",
   "commit",
@@ -25,13 +35,15 @@ const EVIDENCE_KINDS = new Set<MemoryEvidence["kind"]>([
   "test",
   "maintainer_confirmation",
 ]);
+const MAX_BUNDLE_BYTES = 256 * 1024;
+const CONCEPT_PREFIX = ".agents/memory/";
 
 const sha256 = (value: string): string => createHash("sha256").update(value).digest("hex");
+const codePoints = (value: string): number => [...value].length;
 const normalizeLines = (value: string): string => value.replace(/\r\n?/gu, "\n");
 const hasLineBreak = (value: string): boolean => /[\r\n]/u.test(value);
-const normalizeTitle = (value: string): string => normalizeLines(value).trim().toLocaleLowerCase();
-const codePoints = (value: string): number => [...value].length;
-const normalizeBody = (value: string): string => normalizeLines(value).trim().replace(/\s+/gu, " ").toLocaleLowerCase();
+const normalizeTitle = (value: string): string => value.trim().toLowerCase();
+const compare = (left: string, right: string): number => (left < right ? -1 : left > right ? 1 : 0);
 
 const rejectUnsafeText = (value: string): void => {
   try {
@@ -41,33 +53,54 @@ const rejectUnsafeText = (value: string): void => {
   }
 };
 
-const validateEvidence = (evidence: MemoryEvidence[]): MemoryEvidence[] => {
-  if (evidence.length === 0 || evidence.length > 20) {
+const safeRelativeRef = (value: string): boolean => {
+  if (value === "" || value.includes("\0") || value.includes("\\") || value.startsWith("/")) return false;
+  if (/^[A-Za-z]:/u.test(value)) return false;
+  return value.split("/").every((segment) => segment !== "" && segment !== "." && segment !== "..");
+};
+
+const validConceptPath = (value: unknown): value is LocalMemoryPath => {
+  if (typeof value !== "string" || !value.startsWith(CONCEPT_PREFIX) || value.includes("\\")) return false;
+  const segments = value.split("/");
+  const basename = segments.at(-1) ?? "";
+  return (
+    segments.length >= 3 &&
+    segments.every((segment) => segment !== "" && segment !== "." && segment !== "..") &&
+    basename.endsWith(".md") &&
+    basename !== "index.md" &&
+    basename !== "log.md"
+  );
+};
+
+const validateEvidence = (value: unknown): MemoryEvidence[] => {
+  if (!Array.isArray(value) || value.length < 1 || value.length > 20) {
     throw new LocalBrainError("proposal_invalid", "proposal evidence must contain 1 to 20 entries");
   }
-  return evidence.map((item) => {
+  return value.map((item) => {
+    const entry = item as Record<string, unknown> | null;
     if (
-      typeof item !== "object" ||
-      item === null ||
-      !EVIDENCE_KINDS.has(item.kind) ||
-      typeof item.ref !== "string" ||
-      item.ref.trim() === ""
+      typeof entry !== "object" ||
+      entry === null ||
+      Object.keys(entry).some((key) => key !== "kind" && key !== "ref") ||
+      !EVIDENCE_KINDS.has(entry.kind as MemoryEvidence["kind"]) ||
+      typeof entry.ref !== "string"
     ) {
       throw new LocalBrainError("proposal_invalid", "proposal evidence is invalid");
     }
-    if (hasLineBreak(item.ref))
-      throw new LocalBrainError("proposal_invalid", "proposal evidence must not contain line breaks");
-    const ref = normalizeLines(item.ref).trim();
-    if (codePoints(ref) > 500 || isAbsolute(ref) || /(?:^|[\\/])\.\.(?:[\\/]|$)/u.test(ref)) {
-      throw new LocalBrainError("proposal_invalid", "proposal evidence must be repository-relative");
+    const ref = normalizeLines(entry.ref).trim();
+    if (hasLineBreak(ref) || codePoints(ref) > 500 || !safeRelativeRef(ref)) {
+      throw new LocalBrainError("proposal_invalid", "proposal evidence must be a safe relative reference");
     }
     rejectUnsafeText(ref);
-    return { kind: item.kind, ref };
+    return { kind: entry.kind as MemoryEvidence["kind"], ref };
   });
 };
 
-export const validateProposalInput = (input: LocalMemoryProposalInput): LocalMemoryProposalInput => {
-  const unknownKeys = Object.keys(input).filter(
+export const validateProposalInput = (raw: LocalMemoryProposalInput): LocalMemoryProposalInput => {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+    throw new LocalBrainError("proposal_invalid", "proposal fields are invalid");
+  }
+  const unknownKeys = Object.keys(raw).filter(
     (key) => !["projectRoot", "section", "title", "summary", "evidence", "replace"].includes(key),
   );
   if (unknownKeys.length > 0) {
@@ -76,200 +109,333 @@ export const validateProposalInput = (input: LocalMemoryProposalInput): LocalMem
       : "proposal contains unknown fields";
     throw new LocalBrainError("proposal_invalid", message);
   }
-  if (!SECTIONS.has(input.section) || typeof input.title !== "string" || typeof input.summary !== "string") {
+  if (
+    typeof raw.projectRoot !== "string" ||
+    !SECTIONS.has(raw.section) ||
+    typeof raw.title !== "string" ||
+    typeof raw.summary !== "string"
+  ) {
     throw new LocalBrainError("proposal_invalid", "proposal fields are invalid");
   }
-
-  if (hasLineBreak(input.title) || hasLineBreak(input.summary)) {
-    throw new LocalBrainError("proposal_invalid", "proposal title and summary must not contain line breaks");
+  if (hasLineBreak(raw.title) || hasLineBreak(raw.summary)) {
+    throw new LocalBrainError("proposal_invalid", "proposal title and summary must be one line");
   }
-  const title = normalizeLines(input.title).trim();
-  const summary = normalizeLines(input.summary).trim();
+  const title = normalizeLines(raw.title).trim();
+  const summary = normalizeLines(raw.summary).trim();
   if (title.startsWith("#") || summary.startsWith("#")) {
     throw new LocalBrainError("proposal_invalid", "proposal title and summary must not start with a Markdown heading");
   }
-  if (codePoints(title) === 0 || codePoints(title) > 80 || codePoints(summary) === 0 || codePoints(summary) > 1_000) {
+  if (codePoints(title) < 1 || codePoints(title) > 80 || codePoints(summary) < 1 || codePoints(summary) > 1_000) {
     throw new LocalBrainError("proposal_invalid", "proposal title or summary exceeds its bound");
   }
   rejectUnsafeText(title);
   rejectUnsafeText(summary);
-  if (!Array.isArray(input.evidence)) throw new LocalBrainError("proposal_invalid", "proposal evidence is invalid");
 
-  if (input.replace !== undefined) {
+  let replace: LocalMemoryProposalInput["replace"];
+  if (raw.replace !== undefined) {
     if (
-      typeof input.replace.title !== "string" ||
-      input.replace.title.trim() === "" ||
-      !/^[a-f0-9]{64}$/u.test(input.replace.contentHash)
+      typeof raw.replace !== "object" ||
+      raw.replace === null ||
+      Object.keys(raw.replace).some((key) => key !== "path" && key !== "contentHash") ||
+      !validConceptPath(raw.replace.path) ||
+      !raw.replace.path.startsWith(`${CONCEPT_PREFIX}${CATEGORY[raw.section][0]}/`) ||
+      typeof raw.replace.contentHash !== "string" ||
+      !/^[a-f0-9]{64}$/u.test(raw.replace.contentHash)
     ) {
       throw new LocalBrainError("proposal_invalid", "replacement target is invalid");
     }
+    replace = { path: raw.replace.path, contentHash: raw.replace.contentHash };
   }
 
   return {
-    projectRoot: input.projectRoot,
-    section: input.section,
+    projectRoot: raw.projectRoot,
+    section: raw.section,
     title,
     summary,
-    evidence: validateEvidence(input.evidence),
-    ...(input.replace === undefined
-      ? {}
-      : { replace: { title: normalizeLines(input.replace.title).trim(), contentHash: input.replace.contentHash } }),
+    evidence: validateEvidence(raw.evidence),
+    ...(replace === undefined ? {} : { replace }),
   };
 };
 
-export const renderEntry = (
+const slugFor = (title: string): string =>
+  title
+    .normalize("NFKD")
+    .replace(/\p{M}/gu, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/gu, "-")
+    .replace(/^-+|-+$/gu, "");
+
+const sourceFor = (evidence: MemoryEvidence, path: LocalMemoryPath, index: number) => {
+  const lineMatch = /:(\d+)$/u.exec(evidence.ref);
+  const line = lineMatch === null ? undefined : Number(lineMatch[1]);
+  if (line !== undefined && (!Number.isSafeInteger(line) || line < 1)) {
+    throw new LocalBrainError("proposal_invalid", "evidence line number is invalid");
+  }
+  const sourcePath = lineMatch === null ? evidence.ref : evidence.ref.slice(0, -lineMatch[0].length);
+  let resource: string;
+  if (evidence.kind === "file" || evidence.kind === "adr") {
+    if (!safeRelativeRef(sourcePath)) throw new LocalBrainError("proposal_invalid", "evidence path is invalid");
+    const conceptDirectory = posix.dirname(path);
+    resource = posix.relative(conceptDirectory, sourcePath);
+    if (line !== undefined) resource += `#L${line}`;
+  } else {
+    resource = `${evidence.kind}:${evidence.ref}`;
+  }
+  return {
+    id: `evidence-${index + 1}`,
+    resource,
+    title: evidence.ref,
+    kind: evidence.kind,
+  };
+};
+
+const renderConcept = (
   input: Omit<LocalMemoryProposalInput, "projectRoot" | "replace">,
-  addedOn: string,
-): string =>
-  [
-    `### ${input.title}`,
-    "",
-    input.summary,
-    "",
-    ...input.evidence.map((evidence) => `- Evidence: \`${evidence.ref}\``),
-    `- Added: ${addedOn}`,
-    "",
-  ].join("\n");
+  path: LocalMemoryPath,
+  previous?: LocalMemoryConcept,
+): string => {
+  const [, type] = CATEGORY[input.section];
+  const sources = input.evidence.map((item, index) => sourceFor(item, path, index));
+  const metadata: Record<string, unknown> = {
+    ...(previous?.frontmatter ?? {}),
+    type,
+    title: input.title,
+    description: input.summary,
+    tags: [type.toLowerCase()],
+    status: "stable",
+    sources,
+  };
+  const frontmatter = stringify(metadata, { lineWidth: 0 }).trimEnd();
+  const footnoteMarkers = input.evidence.map((_, index) => `[^evidence-${index + 1}]`).join("");
+  const footnotes = input.evidence.map((item, index) => `[^evidence-${index + 1}]: \`${item.ref}\``).join("\n");
+  return `---\n${frontmatter}\n---\n\n# ${type}\n\n${input.summary}${footnoteMarkers}\n\n${footnotes}\n`;
+};
 
-const unifiedPatch = (before: string, after: string): string => {
+const normalizedText = (text: string): string => text.replace(/\r\n?/gu, "\n");
+const lines = (text: string): string[] => {
+  const normalized = normalizedText(text);
+  return normalized === "" ? [] : (normalized.endsWith("\n") ? normalized.slice(0, -1) : normalized).split("\n");
+};
+
+const filePatch = (path: string, before: string, after: string): string => {
   if (before === after) return "";
-  const beforeLines = before.endsWith("\n") ? before.slice(0, -1).split("\n") : before.split("\n");
-  const afterLines = after.endsWith("\n") ? after.slice(0, -1).split("\n") : after.split("\n");
+  const oldLines = lines(before);
+  const newLines = lines(after);
+  const oldStart = oldLines.length === 0 ? 0 : 1;
+  const newStart = newLines.length === 0 ? 0 : 1;
   return [
-    "--- a/.agents/memory.md",
-    "+++ b/.agents/memory.md",
-    `@@ -1,${beforeLines.length} +1,${afterLines.length} @@`,
-    ...beforeLines.map((line) => `-${line}`),
-    ...afterLines.map((line) => `+${line}`),
-    "",
+    `--- a/${path}`,
+    `+++ b/${path}`,
+    `@@ -${oldStart},${oldLines.length} +${newStart},${newLines.length} @@`,
+    ...oldLines.map((line) => `-${line}`),
+    ...newLines.map((line) => `+${line}`),
   ].join("\n");
 };
 
-type EntryMatch = { title: string; content: string; contentHash: string; startLine: number };
-
-const sectionEntries = (document: LocalMemoryDocument, section: LocalMemorySection): EntryMatch[] =>
-  document.chunks
-    .filter((chunk) => chunk.headingPath.length === 2 && chunk.headingPath[0] === section)
-    .map((chunk) => ({
-      title: chunk.headingPath[1] ?? "",
-      content: chunk.content,
-      contentHash: chunk.contentHash,
-      startLine: chunk.startLine,
-    }));
-
-const sectionExists = (document: LocalMemoryDocument, section: LocalMemorySection): boolean =>
-  document.text.split("\n").some((line) => line.trim() === `## ${section}`);
-
-const appendToSection = (document: LocalMemoryDocument, section: LocalMemorySection, entry: string): string => {
-  const lines = document.text.split("\n");
-  const headingIndex = lines.findIndex((line) => line.trim() === `## ${section}`);
-  if (headingIndex === -1) throw new LocalBrainError("proposal_conflict", "target memory section is unavailable");
-  let insertAt = lines.length;
-  for (let index = headingIndex + 1; index < lines.length; index += 1) {
-    if (/^##\s+/u.test(lines[index] ?? "")) {
-      insertAt = index;
-      break;
+const canonical = (value: unknown): string => {
+  const sortValue = (item: unknown): unknown => {
+    if (Array.isArray(item)) return item.map(sortValue);
+    if (item !== null && typeof item === "object") {
+      return Object.fromEntries(
+        Object.entries(item as Record<string, unknown>)
+          .sort(([left], [right]) => compare(left, right))
+          .map(([key, child]) => [key, sortValue(child)]),
+      );
     }
-  }
-  const prefix = lines.slice(0, insertAt).join("\n").replace(/\s*$/u, "");
-  const suffix = lines.slice(insertAt).join("\n").replace(/^\s*/u, "");
-  return `${prefix}\n\n${entry}${suffix === "" ? "" : `\n\n${suffix}`}`.replace(/\n*$/u, "\n");
+    return item;
+  };
+  return JSON.stringify(sortValue(value));
 };
 
-const replaceEntry = (document: LocalMemoryDocument, entry: EntryMatch, replacement: string): string => {
-  const lines = document.text.split("\n");
-  let headingIndex = entry.startLine - 1;
-  while (headingIndex >= 0 && !/^###\s+/u.test(lines[headingIndex] ?? "")) headingIndex -= 1;
-  if (headingIndex < 0) throw new LocalBrainError("proposal_conflict", "replacement entry is unavailable");
-  let endIndex = lines.length;
-  for (let index = headingIndex + 1; index < lines.length; index += 1) {
-    if (/^#{2,3}\s+/u.test(lines[index] ?? "")) {
-      endIndex = index;
-      break;
-    }
-  }
-  return `${lines.slice(0, headingIndex).join("\n").replace(/\s*$/u, "")}\n\n${replacement}${lines
-    .slice(endIndex)
-    .join("\n")
-    .replace(/^\s*/u, "")}`.replace(/\n*$/u, "\n");
+export const proposalIdFor = (proposal: Omit<LocalMemoryProposal, "proposalId"> | LocalMemoryProposal): string => {
+  const { proposalId: _proposalId, ...fields } = proposal as LocalMemoryProposal;
+  return sha256(canonical(fields));
 };
 
-export type BuiltProposal = LocalMemoryProposal & { nextText?: string; renderedEntry: string };
+const indexChangesFor = (bundle: LocalMemoryBundle, concepts: LocalMemoryConcept[]): LocalMemoryIndexChange[] => {
+  const current = new Map(bundle.indexes.map(({ path, text }) => [path, text]));
+  return [...renderMemoryIndexes(concepts)]
+    .filter(([path, content]) => current.get(path) !== content)
+    .map(([path, content]) => ({ path, content }))
+    .sort((left, right) => compare(left.path, right.path));
+};
 
-export const buildProposal = (
-  rawInput: LocalMemoryProposalInput,
-  document: LocalMemoryDocument,
-  addedOn: string,
-): BuiltProposal => {
+const semanticDuplicate = (left: LocalMemoryConcept, right: LocalMemoryConcept): boolean =>
+  left.type === right.type &&
+  left.title === right.title &&
+  left.description === right.description &&
+  canonical(left.tags) === canonical(right.tags) &&
+  canonical(left.frontmatter.sources) === canonical(right.frontmatter.sources) &&
+  left.frontmatter.status === right.frontmatter.status &&
+  left.body === right.body;
+
+export const buildProposal = (rawInput: LocalMemoryProposalInput, bundle: LocalMemoryBundle): LocalMemoryProposal => {
   const input = validateProposalInput(rawInput);
-  if (!sectionExists(document, input.section)) {
-    throw new LocalBrainError("proposal_conflict", "target memory section is unavailable");
+  const [category] = CATEGORY[input.section];
+  const slug = slugFor(input.title);
+  if (input.replace === undefined && slug === "") {
+    throw new LocalBrainError("proposal_invalid", "proposal title does not produce a usable filename");
+  }
+  const path = input.replace?.path ?? (`${CONCEPT_PREFIX}${category}/${slug}.md` as LocalMemoryPath);
+  const previous = bundle.concepts.find((concept) => concept.path === path);
+  const content = renderConcept(
+    { section: input.section, title: input.title, summary: input.summary, evidence: input.evidence },
+    path,
+    input.replace === undefined ? undefined : previous,
+  );
+  let parsed: LocalMemoryConcept;
+  try {
+    parsed = parseConcept(content, path);
+  } catch {
+    throw new LocalBrainError("proposal_invalid", "proposal would produce an invalid concept");
   }
 
-  const entry = renderEntry(input, addedOn);
-  const currentEntries = sectionEntries(document, input.section);
-  const sameTitle = currentEntries.filter((current) => normalizeTitle(current.title) === normalizeTitle(input.title));
-  let action: ProposalAction = "add";
-  let nextText: string | undefined;
+  const sameTitle = bundle.concepts.filter((concept) => normalizeTitle(concept.title) === normalizeTitle(input.title));
+  let action: LocalMemoryProposal["action"];
   if (input.replace !== undefined) {
-    const replacement = currentEntries.find(
-      (current) =>
-        normalizeTitle(current.title) === normalizeTitle(input.replace?.title ?? "") &&
-        current.contentHash === input.replace?.contentHash,
+    const selected = bundle.concepts.find(
+      (concept) => concept.path === input.replace?.path && concept.contentHash === input.replace?.contentHash,
     );
-    if (replacement === undefined) action = "needs_resolution";
-    else {
-      action = "replace";
-      nextText = replaceEntry(document, replacement, entry);
-    }
-  } else if (
-    sameTitle.some((current) => normalizeBody(current.content) === normalizeBody(entry.slice(entry.indexOf("\n") + 1)))
-  ) {
-    action = "no_change";
+    const conflict = sameTitle.some((concept) => concept.path !== input.replace?.path);
+    action = selected === undefined || conflict ? "needs_resolution" : "replace";
   } else if (sameTitle.length > 0) {
+    const exactDuplicate = sameTitle.every((concept) => semanticDuplicate(concept, parsed));
+    const targetIsConflict = previous !== undefined && !semanticDuplicate(previous, parsed);
+    action = exactDuplicate && !targetIsConflict ? "no_change" : "needs_resolution";
+  } else if (previous !== undefined) {
     action = "needs_resolution";
   } else {
-    const titleTokens = new Set(normalizeTitle(input.title).split(/\s+/u));
-    const ambiguous = currentEntries.some((current) => {
-      const candidate = new Set(normalizeTitle(current.title).split(/\s+/u));
-      const overlap = [...titleTokens].filter((token) => candidate.has(token)).length;
-      return overlap >= 2 && overlap / Math.max(titleTokens.size, candidate.size) >= 0.7;
-    });
-    if (ambiguous) action = "needs_resolution";
-    else nextText = appendToSection(document, input.section, entry);
+    action = "add";
   }
 
-  if (nextText !== undefined) {
-    try {
-      parseMemory(nextText, document.path);
-    } catch {
-      throw new LocalBrainError("proposal_invalid", "proposal would produce invalid memory");
-    }
+  let indexChanges: LocalMemoryIndexChange[] = [];
+  let patch = "";
+  if (action === "add" || action === "replace") {
+    const concepts = bundle.concepts.filter((concept) => concept.path !== path).concat(parsed);
+    indexChanges = indexChangesFor(bundle, concepts);
+    const before = new Map<string, string>([
+      ...bundle.concepts.map((concept) => [concept.path, concept.text] as const),
+      ...bundle.indexes.map((index) => [index.path, index.text] as const),
+    ]);
+    patch = [
+      ...[{ path, content } as LocalMemoryIndexChange, ...indexChanges]
+        .sort((left, right) => compare(left.path, right.path))
+        .map((change) => filePatch(change.path, before.get(change.path) ?? "", change.content)),
+    ]
+      .filter(Boolean)
+      .join("\n");
   }
-  const patch = nextText === undefined ? "" : unifiedPatch(document.text, nextText);
-  const proposalId = sha256(
-    JSON.stringify({
-      schemaVersion: 1,
-      baseContentHash: document.contentHash,
-      action,
-      section: input.section,
-      title: input.title,
-      summary: input.summary,
-      evidence: input.evidence,
-      renderedEntry: action === "add" || action === "replace" ? entry : "",
-    }),
-  );
-  return {
-    proposalId,
-    baseContentHash: document.contentHash,
+
+  const fields: Omit<LocalMemoryProposal, "proposalId"> = {
+    baseBundleHash: bundle.bundleHash,
+    path,
     section: input.section,
     title: input.title,
     summary: input.summary,
     evidence: input.evidence,
+    ...(input.replace === undefined ? {} : { replace: input.replace }),
     action,
+    content,
+    indexChanges,
     patch,
     warnings: [],
-    renderedEntry: entry,
-    ...(nextText === undefined ? {} : { nextText }),
   };
+  return { proposalId: proposalIdFor(fields), ...fields };
+};
+
+export const verifyProposal = (value: unknown): value is LocalMemoryProposal => {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const proposal = value as Record<string, unknown>;
+  const allowed = new Set([
+    "proposalId",
+    "baseBundleHash",
+    "path",
+    "section",
+    "title",
+    "summary",
+    "evidence",
+    "replace",
+    "action",
+    "content",
+    "indexChanges",
+    "patch",
+    "warnings",
+  ]);
+  if (Object.keys(proposal).some((key) => !allowed.has(key))) return false;
+  if (
+    typeof proposal.proposalId !== "string" ||
+    !/^[a-f0-9]{64}$/u.test(proposal.proposalId) ||
+    typeof proposal.baseBundleHash !== "string" ||
+    !/^[a-f0-9]{64}$/u.test(proposal.baseBundleHash) ||
+    !validConceptPath(proposal.path) ||
+    typeof proposal.section !== "string" ||
+    !SECTIONS.has(proposal.section as LocalMemorySection) ||
+    typeof proposal.title !== "string" ||
+    typeof proposal.summary !== "string" ||
+    typeof proposal.content !== "string" ||
+    typeof proposal.patch !== "string" ||
+    !Array.isArray(proposal.warnings) ||
+    !proposal.warnings.every((warning) => typeof warning === "string") ||
+    !Array.isArray(proposal.indexChanges) ||
+    !["add", "replace", "no_change", "needs_resolution"].includes(String(proposal.action))
+  )
+    return false;
+  const validIndexPath = (path: unknown): path is LocalMemoryPath => {
+    if (typeof path !== "string" || !path.startsWith(CONCEPT_PREFIX) || path.includes("\\")) return false;
+    const segments = path.split("/");
+    return (
+      segments.every((segment) => segment !== "" && segment !== "." && segment !== "..") &&
+      (path === `${CONCEPT_PREFIX}index.md` || path.endsWith("/index.md"))
+    );
+  };
+  if (
+    !proposal.indexChanges.every((change) => {
+      if (typeof change !== "object" || change === null || Array.isArray(change)) return false;
+      const candidate = change as Record<string, unknown>;
+      return (
+        Object.keys(candidate).every((key) => key === "path" || key === "content") &&
+        validIndexPath(candidate.path) &&
+        typeof candidate.content === "string"
+      );
+    })
+  )
+    return false;
+  try {
+    validateProposalInput({
+      projectRoot: "/repo",
+      section: proposal.section as LocalMemorySection,
+      title: proposal.title,
+      summary: proposal.summary,
+      evidence: proposal.evidence as MemoryEvidence[],
+      ...(proposal.replace === undefined ? {} : { replace: proposal.replace as LocalMemoryProposalInput["replace"] }),
+    });
+  } catch {
+    return false;
+  }
+  const { proposalId, ...fields } = proposal;
+  return proposalIdFor(fields as Omit<LocalMemoryProposal, "proposalId">) === proposalId;
+};
+
+export const canonicalProposalValue = canonical;
+
+export const assertProjectedBundleSize = (
+  bundle: LocalMemoryBundle,
+  proposal: LocalMemoryProposal,
+  concepts: LocalMemoryConcept[],
+): void => {
+  const oldConcept = bundle.concepts.find(({ path }) => path === proposal.path);
+  let projected = bundle.totalBytes - (oldConcept === undefined ? 0 : Buffer.byteLength(oldConcept.text, "utf8"));
+  projected += Buffer.byteLength(proposal.content, "utf8");
+  if (projected > MAX_BUNDLE_BYTES)
+    throw new LocalBrainError("local_memory_too_large", "local memory bundle exceeds 256 KiB");
+
+  const expected = renderMemoryIndexes(concepts);
+  const existing = new Map(bundle.indexes.map(({ path, text }) => [path, text]));
+  for (const [path, content] of expected) {
+    if (existing.get(path) === content) continue;
+    projected -= Buffer.byteLength(existing.get(path) ?? "", "utf8");
+    projected += Buffer.byteLength(content, "utf8");
+    if (projected > MAX_BUNDLE_BYTES)
+      throw new LocalBrainError("local_memory_too_large", "local memory bundle exceeds 256 KiB");
+  }
 };

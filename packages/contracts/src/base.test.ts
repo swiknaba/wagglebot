@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import {
   EvidenceRefSchema,
+  LocalMemoryConceptPathSchema,
   PacketMetadataSchema,
   ProjectIdentitySchema,
   ProvenanceSchema,
@@ -48,11 +49,29 @@ test("relative paths reject absolute, traversal, unnormalized, secret, and NUL p
   }
 });
 
+test("public local-memory concept paths stay below the bundle and exclude reserved files", () => {
+  expect(LocalMemoryConceptPathSchema.safeParse(".agents/memory/warnings/retry-writes.md").success).toBe(true);
+  expect(LocalMemoryConceptPathSchema.safeParse(".agents/memory/component.md").success).toBe(true);
+  for (const path of [
+    ".agents/memory.md",
+    ".agents/memory",
+    "outside/warnings/retry-writes.md",
+    ".agents/memory\\warnings\\retry-writes.md",
+    ".agents/memory/warnings/../retry-writes.md",
+    ".agents/memory/index.md",
+    ".agents/memory/warnings/index.md",
+    ".agents/memory/log.md",
+    ".agents/memory/warnings/log.md",
+  ]) {
+    expect(LocalMemoryConceptPathSchema.safeParse(path).success).toBe(false);
+  }
+});
+
 test("evidence references require ordered line ranges, safe paths, and lowercase hashes", () => {
   expect(
     EvidenceRefSchema.safeParse({
       kind: "local_memory",
-      path: ".agents/memory.md",
+      path: ".agents/memory/warnings/retry-writes.md",
       startLine: 4,
       endLine: 4,
       contentHash: sha256,

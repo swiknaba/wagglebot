@@ -4,7 +4,7 @@ import { join } from "node:path";
 
 import { LocalBrainError } from "../path-policy";
 import { ensureLocalMemoryBundle } from "./lifecycle";
-import { conceptText, fixtureRepo, writeConcept, writeMemory } from "./test-fixture";
+import { conceptText, fixtureRepo, writeConcept } from "./test-fixture";
 
 const memoryRoot = (root: string): string => join(root, ".agents", "memory");
 
@@ -64,7 +64,8 @@ test("repairs corrupted indexes without rewriting human concepts or logs", () =>
 
 test("legacy memory preflight fails before creating a bundle directory", () => {
   const repo = fixtureRepo();
-  writeMemory(repo, "# Component Memory\n");
+  mkdirSync(join(repo, ".agents"), { recursive: true });
+  writeFileSync(join(repo, ".agents", "memory.md"), "# Component Memory\n");
 
   let thrown: unknown;
   try {

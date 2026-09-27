@@ -8,10 +8,8 @@ export { loadMemoryBundle } from "./memory/bundle";
 export { renderMemoryIndexes } from "./memory/indexes";
 export { ensureLocalMemoryBundle, INITIAL_COMPONENT_PATH, repairMemoryIndexes } from "./memory/lifecycle";
 export {
-  type LocalMemoryDocument,
   MemoryParseError,
   parseConcept,
-  parseMemory,
 } from "./memory/parse";
 export { MarkdownMemoryProvider } from "./memory/provider";
 export { writeMemoryAtomically } from "./memory/write";
@@ -38,12 +36,14 @@ export type {
   LocalMemoryChunk,
   LocalMemoryConcept,
   LocalMemoryHit,
+  LocalMemoryIndexChange,
   LocalMemoryIndexState,
   LocalMemoryPath,
   LocalMemoryProposal,
   LocalMemoryProposalInput,
   LocalMemoryReservedFile,
   LocalMemorySaveResult,
+  LocalMemorySearchResult,
   LocalMemorySection,
   MemoryEvidence,
   ProjectIdentity,

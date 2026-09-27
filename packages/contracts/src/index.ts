@@ -22,6 +22,7 @@ export {
 } from "./auth";
 export type {
   EvidenceRef,
+  LocalMemoryConceptPath,
   PacketMetadata,
   ProjectIdentity,
   Provenance,
@@ -33,6 +34,7 @@ export {
   EvidenceRefSchema,
   FullGitShaSchema,
   GitShaSchema,
+  LocalMemoryConceptPathSchema,
   PacketMetadataSchema,
   ProjectIdentitySchema,
   ProvenanceSchema,
