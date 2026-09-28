@@ -21,8 +21,7 @@ it describes.
 Phase 1 v0.3.0 shipped Ludwig's project lifecycle idea: `wagglebot init` and
 `wagglebot update` create committed component memory, and generated agent
 instructions teach agents to maintain it. This design keeps that behavior and
-changes only its representation from one `.agents/memory.md` file to the OKF
-bundle.
+replaces its unshipped single-file representation with the OKF bundle.
 
 The Repository Brain has not shipped a supported consumer of the single-file
 format, and the project has no live memory data that needs conversion.
@@ -341,9 +340,8 @@ The Phase 2 low-level MCP surface remains at schema version 1 because it has not
 shipped as a usable public contract. Its local-memory shapes change before the
 first release:
 
-- search hits carry the exact concept path instead of the literal
-  `.agents/memory.md` path;
-- search returns `bundleHash` instead of `fileHash`;
+- search hits carry the exact concept path;
+- search returns the aggregate `bundleHash`;
 - proposals carry `baseBundleHash` and `path`;
 - replacements identify `{ path, contentHash }`;
 - saves return the concept `path`, prior/new bundle hashes, and the multi-file

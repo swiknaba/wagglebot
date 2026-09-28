@@ -420,9 +420,10 @@ trade.
 `AGENTS.base.md` ships inside the wagglebot package (D35) as the
 **shared agent base template**. It contains harness-independent
 instructions plus a wagglebot connection block. In Phase 1 the block
-carries the memory rule. Component memory is a local file. A fact
-that crosses a repository waits for the shared store. How to reach the
-hub arrives with Phase 2, and coordination etiquette with Phase 3.
+carries the memory rule. Component memory is an OKF bundle under
+`.agents/memory/`. A fact that crosses a repository waits for the shared
+store. How to reach the hub arrives with Phase 2, and coordination etiquette
+with Phase 3.
 Teams append company instructions from the
 company repository. Composition is plain concatenation:
 `AGENTS.base.md` + `instructions/*.md` → the rendered template. YAGNI: no
@@ -652,7 +653,8 @@ Write or update exactly one OKF concept under `.agents/memory/`.
 * Do not judge the importance. They asked, so write it.
 * When they tell you a fact is wrong, remove it.
 * Keep a non-empty `type` in YAML frontmatter.
-* Regenerate the affected category index and root `index.md`.
+* Run `wagglebot update` after direct edits to validate the bundle and repair
+  derived indexes, then commit concept and index changes for Git review.
 ```
 
 NOTE: The superpowers skill set already works this way for larger
@@ -748,6 +750,12 @@ Not every memory belongs on a server. Facts about one repository belong
 ├── component.md
 └── <category>/<concept>.md
 ```
+
+Project `init` and `update`, including the `sync-project` alias, and
+`brain init` share one idempotent bundle lifecycle. It creates the root index
+and draft component concept when needed, preserves concepts, and repairs
+derived indexes. Project commands also create `.agents/changelog.md`; that
+human-authored changelog remains separate and unchanged.
 
 The directory name matters (D29). `.agents/` follows the emerging
 dotagents convention, and it pairs with the `AGENTS.md` standard. An

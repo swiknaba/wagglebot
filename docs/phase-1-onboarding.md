@@ -29,6 +29,15 @@ Copy the active cache's `.env.credentials.example` to that path, then enter the 
 Open a new terminal after `update --wagglebot` to load the file.
 Cache refresh preserves this personal file outside its immutable revisions.
 
+## Project memory
+
+Project `init` and `update` scaffold `.agents/memory/index.md`,
+`.agents/memory/component.md`, and the separate `.agents/changelog.md`;
+`brain init` shares the same lifecycle. Keep one concept per Markdown file,
+read the root index, and edit concepts directly. Run `wagglebot update` to
+repair derived indexes, then commit concepts and indexes for Git review. The
+changelog remains separate and unchanged.
+
 ## Administrator flow
 
 ```sh

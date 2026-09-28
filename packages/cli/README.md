@@ -26,6 +26,22 @@ The company update uses a private cache under `~/.wagglebot/company/`.
 Engineers run it after the company announces a reviewed change. Project `init`
 and `update` do not need company configuration.
 
+## Project memory
+
+Project `init` and `update`, along with `brain init`, use one memory-bundle
+lifecycle. When no bundle exists, it creates `.agents/memory/index.md` and a
+draft `.agents/memory/component.md`; it preserves existing concepts and
+repairs derived indexes. Project commands also create `.agents/changelog.md`
+when missing and preserve its content. The changelog stays separate and
+unchanged. Keep one concept per Markdown file with YAML frontmatter;
+only a non-empty `type` is required. Read the root index, edit concepts
+directly, run `wagglebot update`, and commit concepts plus derived indexes for
+Git review.
+
+`wagglebot brain remember` previews by default and writes only with `--save`.
+The legacy `.agents/memory.md` is rejected; Wagglebot does not read or migrate
+it.
+
 ## Administrator flow
 
 ```sh

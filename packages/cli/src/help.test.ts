@@ -172,3 +172,24 @@ test("administrator documentation initializes a Git repository before update", (
     "https://github.com/swiknaba/wagglebot/blob/main/docs/phase-1-onboarding.md",
   );
 });
+
+test("project lifecycle documentation explains the committed OKF memory workflow", () => {
+  for (const path of [["README.md"], ["packages", "cli", "README.md"], ["docs", "phase-1-onboarding.md"]]) {
+    const text = readDocumentation(...path);
+    const normalized = text.toLowerCase().replace(/\s+/gu, " ");
+    for (const scaffoldPath of [".agents/memory/index.md", ".agents/memory/component.md", ".agents/changelog.md"])
+      expect(normalized).toContain(scaffoldPath);
+    expect(normalized).toMatch(/one concept per (?:markdown )?file/);
+    expect(normalized).toContain("wagglebot update");
+    expect(normalized).toContain("git");
+    expect(normalized).toContain("review");
+
+    for (const match of text.matchAll(/\.agents\/memory\.md/gi)) {
+      const start = text.lastIndexOf("\n", match.index ?? 0) + 1;
+      const end = text.indexOf("\n", match.index ?? 0);
+      const statement = text.slice(start, end === -1 ? undefined : end).toLowerCase();
+      expect(statement).toMatch(/\breject(?:s|ed)?\b/);
+      expect(statement).not.toMatch(/\b(?:supported|authoritative)\b/);
+    }
+  }
+});

@@ -93,7 +93,7 @@ and remains outside the Phase 2 release.
 
 ## Current Implementation Baseline
 
-Status updated on 2026-09-16 from branch `DEV-001`:
+Status updated on 2026-09-28 from branch `DEV-002`:
 
 | Area | Evidence | Status |
 |---|---|---|
@@ -101,7 +101,7 @@ Status updated on 2026-09-16 from branch `DEV-001`:
 | Shared contract/scanner groundwork | Commit `c37c31f` adds contract and scanner fixtures | Committed groundwork |
 | Phase 2 subsystem designs and detailed plans | Current plans plus historical plans marked superseded | Active work follows the current plan for each subsystem |
 | Shared Memory Foundation Task 1 | Memory/principal schemas, workspace registration, memory-worker package metadata, tests, and lockfile updates | Implemented contract checkpoint |
-| Local Repository Brain runtime | Commits `4cc72e3` through `0a5f4c6` implement BM25, path policy, CodeGraph, Git, CLI, and seven low-level MCP tools; their single-file memory layer is unshipped and superseded | OKF replacement required |
+| Local Repository Brain and OKF runtime | BM25, path policy, CodeGraph, Git, CLI, low-level MCP tools, OKF bundle/provider, and shared project/brain lifecycle are implemented | Task 1A implementation, documentation, and release gate complete |
 | SSH authentication | `services/auth` and `packages/auth-protocol` verify SSH signatures and issue/verify sessions | Implemented; full-stack verification remains part of the release gate |
 | Shared database/admin design updates | Ludwig commit `a81a37f` on this branch | Database foundation active; dashboard deferred until after Phase 3 |
 | Authenticated registry | `services/registry` serves validated authenticated registry snapshots | Implemented |
@@ -223,27 +223,27 @@ scaffolding and agent-editing idea is preserved in the OKF representation.
   progressive indexes, aggregate bundle hashing, exact-path search evidence,
   updated CLI/MCP contracts, and consistent lifecycle documentation.
 
-- [ ] Replace the single-file parser and types with a permissive OKF concept
+- [x] Replace the single-file parser and types with a permissive OKF concept
   parser and bounded recursive bundle loader; reject `.agents/memory.md`.
-- [ ] Generate deterministic root/category indexes from `type`, `title`, and
+- [x] Generate deterministic root/category indexes from `type`, `title`, and
   `description`; never use a model or index generated files as search content.
-- [ ] Make project `init`, project `update`, the hidden `sync-project` alias,
+- [x] Make project `init`, project `update`, the hidden `sync-project` alias,
   and `brain init` share one idempotent OKF bundle lifecycle. Preserve existing
   concepts and `.agents/changelog.md`; reject the removed file before changing
   project instruction targets.
-- [ ] Rework propose/save for one concept file, stable source IDs and
+- [x] Rework propose/save for one concept file, stable source IDs and
   footnotes, exact-path replacement, bundle-hash concurrency, secret scanning,
   atomic concept writes, and explicit stale-index warnings.
-- [ ] Change `brain remember`, `brain status`, templates, help, and
+- [x] Change `brain remember`, `brain status`, templates, help, and
   agent/onboarding instructions to use only `.agents/memory/`; teach
   progressive index-first reading, direct one-concept-per-file edits, explicit
   remember/correct behavior, and Git review.
-- [ ] Change low-level MCP and unified-context evidence contracts to return
+- [x] Change low-level MCP and unified-context evidence contracts to return
   exact concept paths and `bundleHash`; update API reference and fixtures.
-- [ ] Update D29, the Phase 1 provisioning contract, active memory/context
+- [x] Update D29, the Phase 1 provisioning contract, active memory/context
   designs and plans, README, and the persisted-state inventory so no active
   document names the removed file as authoritative.
-- [ ] Run focused red/green tests followed by `bun run check`,
+- [x] Run focused red/green tests followed by `bun run check`,
   `bun run typecheck`, `bun test`, `bun run build`, and `git diff --check`.
 
 **Gate:** A new repository initializes a conformant OKF v0.2 bundle; each saved

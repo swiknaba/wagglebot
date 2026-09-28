@@ -6,7 +6,7 @@ Wagglebot gives each engineering team one local AI-agent setup.
 > company repository without a Wagglebot service. Phase 2 is in progress: the
 > local Repository Brain foundations, SSH authentication, authenticated
 > registry, and Sequel migration service are implemented. The local-memory
-> layer will move to OKF before its supported MCP/context release. The MCP hub
+> layer now uses OKF v0.2 ahead of its supported MCP/context release. The MCP hub
 > has no runnable server yet; the shared-memory worker, unified context engine,
 > and Context Bridge are not built. See the
 > [Phase 1 onboarding](docs/phase-1-onboarding.md) and the
@@ -17,6 +17,12 @@ Wagglebot gives each engineering team one local AI-agent setup.
 Phase 1 installs curated skills, custom agents, global instructions, compatible
 hooks, shell credential loading, and MCP configurations. It also publishes
 project instructions and creates committed project memory and changelog files.
+
+Project `init` and `update` scaffold `.agents/memory/index.md`,
+`.agents/memory/component.md`, and `.agents/changelog.md`. Keep one concept per
+Markdown file under `.agents/memory/`; read the root index, edit
+concepts directly, then run `wagglebot update` to refresh derived indexes.
+Commit concepts and indexes for Git review.
 
 An engineer does not keep a visible company clone. `wagglebot connect` records
 the company URL. `wagglebot update --wagglebot` refreshes the private cache and

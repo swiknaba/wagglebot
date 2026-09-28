@@ -13,6 +13,34 @@
 > architecture decisions  
 > **Plan:** [Local Repository Brain implementation plan](../plans/2026-09-11-local-repository-brain.md)
 
+## Current OKF Contract (Task 1A)
+
+[OKF Local Component Memory Design](2026-09-26-okf-local-memory-design.md) is
+the authority for component-memory format and behavior. The current bundle is
+under `.agents/memory/`: each durable concept is one Markdown file with YAML
+frontmatter and a non-empty `type`; deterministic root/category indexes are
+derived from concepts. `.agents/changelog.md` remains a separate,
+human-authored file.
+
+The current provider exposes `LocalMemoryBundle` with concept files, reserved
+indexes/logs, `bundleHash`, size, and index state. Search hits identify exact
+concept paths and line ranges, and search results carry `bundleHash`; proposals
+carry `baseBundleHash` and the target concept path. `init`, `update`, the
+`sync-project` alias, and `brain init` share `ensureLocalMemoryBundle`.
+`brain remember` previews by default and writes only with `--save`. The legacy
+`.agents/memory.md` has no read, migration, or dual-read path.
+
+**Current gate:** The OKF implementation must preserve concepts and the
+separate changelog while repairing deterministic indexes, return exact search
+provenance, enforce proposal/save concurrency and secret checks, and reject the
+legacy file before project outputs change. Focused tests and the complete
+repository gates are recorded in Task 1A of the Phase 2 implementation
+sequence.
+
+> **Historical body:** The single-file component-memory paths, interfaces, and
+> acceptance criteria below document the original unshipped design. They remain
+> implementation history; the current behavior is defined by the OKF design.
+
 ## Problem
 
 Shared semantic memory cannot tell an agent what the current checkout contains,
