@@ -181,8 +181,13 @@ test("project lifecycle documentation explains the committed OKF memory workflow
       expect(normalized).toContain(scaffoldPath);
     expect(normalized).toMatch(/one concept per (?:markdown )?file/);
     expect(normalized).toContain("wagglebot update");
-    expect(normalized).toContain("git");
-    expect(normalized).toContain("review");
+
+    const memoryWorkflow = text
+      .split(/\n\s*\n/u)
+      .map((paragraph) => paragraph.toLowerCase().replace(/\s+/gu, " "))
+      .filter((paragraph) => paragraph.includes(".agents/memory/"))
+      .join(" ");
+    expect(memoryWorkflow).toMatch(/\bcommit concepts (?:and|plus) (?:derived )?indexes for git review\b/u);
 
     for (const match of text.matchAll(/\.agents\/memory\.md/gi)) {
       const start = text.lastIndexOf("\n", match.index ?? 0) + 1;
