@@ -16,7 +16,7 @@ prepares the repository for the Phase 2 shared layer.
 |---|---|---|
 | `catalog-info.yaml` | The component, its system, and its owner (D20) | Yes |
 | `.agents/instructions/*.md` | One portable instruction source (D36) | Yes |
-| `.agents/memory.md` | Facts about this repository (D29) | Yes |
+| `.agents/memory/` | The local OKF bundle: an index and one concept per file (D29) | Yes |
 | `.agents/subagents/*.md` | Subagents for this repository only (D31) | Yes |
 
 ## Step 1: Get Catalog Values
@@ -73,7 +73,7 @@ Repository instructions belong to the repository. Write portable Markdown in
     10-testing.md
 ```
 
-Run `wagglebot sync-project` in the repository. The command finds the Git
+Run `wagglebot update` in the repository. The command finds the Git
 root, sorts the source files by name, and writes one managed block for each
 harness target.
 
@@ -88,21 +88,28 @@ The command needs a Git repository only. It needs no company repository, no
 catalog, and no engineer identity. It keeps every line outside its managed
 block. Commit the generated files together with the source files.
 
-Edit the files under `.agents/instructions/` only. A later `sync-project` run
+Edit the files under `.agents/instructions/` only. A later `wagglebot update` run
 overwrites each managed block.
 
-## Step 4: Commit The Memory File
+## Step 4: Work With Component Memory
 
-An agent records a fact about this repository in `.agents/memory.md`. That
-file is **committed**, never gitignored (D29). Three results follow:
+Start with `.agents/memory/index.md`. Read only linked concepts that matter
+to the task. Do not read the whole bundle up front.
 
-* The fact appears in `git status`, so a pull request reviews it.
-* Git distributes the file to everyone who clones the repository.
-* The agent reads the file at the start of a session, with no server call.
+Keep one concept per file. Store each durable fact in one non-reserved
+Markdown file under its matching category. Edit an existing concept instead
+of duplicating it, and tell the engineer when facts conflict.
 
-A fact that crosses a repository boundary belongs to a `system`, `domain`, or
-`org` scope in the shared store instead. A fact about this repository stays
-here.
+When the engineer explicitly asks you to remember a fact, skip the importance
+judgment and create or update one concept. When they correct a fact, remove it
+or update the concept.
+
+Run `wagglebot update` to validate concepts and regenerate indexes. Do not
+hand-edit `index.md`. Commit concept and index changes for Git and pull-request
+review.
+
+A cross-repository fact belongs in the future shared layer. Never copy it into
+another repository's local bundle.
 
 ## Step 5: Add A Component Subagent
 
@@ -119,7 +126,8 @@ For an agent that a whole team needs, read the `writing-a-custom-agent` skill.
 |---|---|
 | `spec.system` names a System that no catalog declares | Add the System to the company catalog first |
 | An agent guesses a scope from the Git remote | Stop. Declare the component (P35) |
-| `.agents/memory.md` in `.gitignore` | Remove that line. The review is the feature |
-| Instructions edited in `AGENTS.md` | Edit `.agents/instructions/*.md`, then run `wagglebot sync-project` |
-| `.agents/memory.md` merged into the instructions | Only `.agents/instructions/*.md` is an instruction source |
+| `.agents/memory/` in `.gitignore` | Remove that line. Git must review local memory changes |
+| A generated `index.md` edited by hand | Edit the concept, then run `wagglebot update` |
+| Memory merged into project instructions | Keep concepts under `.agents/memory/`; only `.agents/instructions/*.md` is an instruction source |
+| Instructions edited in `AGENTS.md` | Edit `.agents/instructions/*.md`, then run `wagglebot update` |
 | A component subagent added to `agents.list` | Delete the entry. Git already distributes the file |

@@ -144,36 +144,37 @@ Write few facts. A large memory is a haystack.
 
 WHERE MEMORY LIVES
 
-Component memory is one file in the repository you work in:
+Component memory is an OKF bundle in the repository you work in:
 
-    .agents/memory.md
+    .agents/memory/
+      index.md
+      component.md
+      architecture/<concept>.md
+      conventions/<concept>.md
+      commands/<concept>.md
+      decisions/<concept>.md
+      warnings/<concept>.md
+      learnings/<concept>.md
 
-Read it at the start of a session, before you plan. Edit it when you
-learn a durable fact about this repository. The file is committed, so a
-pull request reviews every change, and git keeps the history.
+Read `.agents/memory/index.md` first. Then read only the linked concepts
+that matter to the task. Do not read the entire bundle up front.
 
-A fact that crosses a repository boundary has no home yet. The shared
-memory store arrives with the wagglebot shared layer. Until then, tell
-your engineer the fact in the session, and let them place it. Do not
-invent a memory tool. Do not write outside `.agents/memory.md`.
+Keep one concept per file. Store each durable fact in one non-reserved
+Markdown file under its matching category. Direct edits are supported.
+Update an existing concept instead of duplicating it, and tell your engineer
+when facts conflict.
 
-BEFORE YOU WRITE
+When your engineer explicitly asks you to remember something, skip the
+importance judgment and create or update one concept. When they correct a
+fact, remove it or update the concept.
 
-1. Read `.agents/memory.md` first.
-2. If the fact exists, update it. Do not add a duplicate.
-3. If the fact contradicts an existing one, say so to your engineer.
+Run `wagglebot update` after memory edits. It validates concepts and
+regenerates the indexes. Do not hand-edit `index.md`.
 
-WHEN TO WRITE
+Commit concept and index changes. Git history and pull requests review them.
 
-Write at the end of a session, and after you learn something that cost
-you time. Do not write during exploration.
-
-WHEN YOUR ENGINEER TELLS YOU TO REMEMBER SOMETHING
-
-Write it to `.agents/memory.md`.
-
-* Do not judge the importance. They asked, so write it.
-* When they tell you a fact is wrong, remove it.
+A fact that crosses repository boundaries belongs in the future shared
+layer. Never copy it into another repository's local bundle.
 
 ## Agent Changelog
 

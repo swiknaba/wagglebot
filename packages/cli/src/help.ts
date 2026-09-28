@@ -1,4 +1,4 @@
-import { PROJECT_INSTRUCTIONS_DIR } from "./commands/project-update";
+import { PROJECT_INSTRUCTIONS_DIR, PROJECT_MEMORY_DIR } from "./commands/project-update";
 import { SHELL_RC_FILES } from "./commands/sync-shell";
 import { HARNESSES } from "./harness";
 
@@ -45,7 +45,7 @@ const LAYERS = "company/ and teams/<team>/ for each team of the engineer";
 const COMPANY_SOURCE =
   "Use the marked company working tree. Elsewhere, use --wagglebot to select the active cache and its exact runtime pin.";
 const projectWrites = () => [
-  "<git root>/.agents/memory.md  (create only when missing)",
+  `<git root>/${PROJECT_MEMORY_DIR}/  (OKF bundle: index.md and one concept per file)`,
   "<git root>/.agents/changelog.md  (create only when missing)",
   ...projectFiles(),
 ];
@@ -121,7 +121,7 @@ const SECTIONS: Record<string, Section> = {
   project: {
     title: "update",
     purpose:
-      "Publishes sorted project instructions to every supported project target. Preserves personal content outside managed blocks and all existing memory and changelog files. Git provides history and recovery. Requires a Git repository, but no company configuration or identity.",
+      "Publishes sorted project instructions to every supported project target. Preserves personal content outside managed blocks and existing memory concepts and changelog files. Memory uses one concept per file. Git provides history and recovery. Requires a Git repository, but no company configuration or identity.",
     reads: [`<git root>/${PROJECT_INSTRUCTIONS_DIR}/*.md  (sorted by name, concatenated)`],
     writes: projectWrites(),
   },
@@ -167,9 +167,9 @@ const SECTIONS: Record<string, Section> = {
     title: "brain <init|remember|status>",
     purpose:
       "Phase 2: Maintains local component memory, CodeGraph, and Git evidence. Phase 1 init and update do not invoke these commands.",
-    reads: ["the current Git repository", ".agents/memory.md when it exists"],
+    reads: ["the current Git repository", `${PROJECT_MEMORY_DIR}/index.md, then relevant linked concepts`],
     writes: [
-      ".agents/memory.md only with brain remember --save",
+      `${PROJECT_MEMORY_DIR}/  (OKF bundle, one concept per file)`,
       ".gitignore with the owned .codegraph/ block",
       ".codegraph/ (generated and ignored)",
     ],

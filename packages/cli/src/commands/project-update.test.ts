@@ -1,13 +1,12 @@
 import { expect, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { HARNESSES } from "../harness";
 import { createReporter } from "../report";
 import {
   PROJECT_INSTRUCTIONS_DIR as INSTRUCTIONS_DIR,
   PROJECT_CHANGELOG_FILE,
-  PROJECT_MEMORY_FILE,
   projectTargets,
   readInstructionSources,
   runProjectUpdate as runSyncProject,
@@ -173,14 +172,20 @@ test("a small source produces no warning", () => {
   expect(lines.some((l) => l.toLowerCase().includes("warning"))).toBe(false);
 });
 
-test("a malformed lone begin marker aborts before any other target is created", () => {
+test("a malformed later target aborts before earlier targets or memory scaffolding change", () => {
   const { repo, instructionsDir } = setupRepo();
   writeFileSync(join(instructionsDir, "a.md"), "A content\n");
-  writeFileSync(join(repo, "CLAUDE.md"), "<!-- wagglebot:begin -->\nstuff\n");
+  const claude = "# Personal Claude instructions\n";
+  const malformed = "<!-- wagglebot:begin -->\nstuff\n";
+  writeFileSync(join(repo, "CLAUDE.md"), claude);
+  writeFileSync(join(repo, "AGENTS.md"), malformed);
   expect(() => runSyncProject({ cwd: repo, reporter: quiet() })).toThrow();
-  expect(existsSync(join(repo, "AGENTS.md"))).toBe(false);
+  expect(readFileSync(join(repo, "CLAUDE.md"), "utf8")).toBe(claude);
+  expect(readFileSync(join(repo, "AGENTS.md"), "utf8")).toBe(malformed);
   expect(existsSync(join(repo, "GEMINI.md"))).toBe(false);
   expect(existsSync(join(repo, ".github/copilot-instructions.md"))).toBe(false);
+  expect(existsSync(join(repo, ".agents/memory"))).toBe(false);
+  expect(existsSync(join(repo, PROJECT_CHANGELOG_FILE))).toBe(false);
 });
 
 test("projectTargets merges harnesses that share one path", () => {
@@ -231,7 +236,9 @@ test("project update creates missing memory and changelog without instruction so
 
   expect(runSyncProject({ cwd: repo, reporter: quiet() })).toBe(0);
 
-  expect(readFileSync(join(repo, PROJECT_MEMORY_FILE), "utf8")).toContain("# Component Memory");
+  expect(readFileSync(join(repo, ".agents/memory/index.md"), "utf8")).toContain('okf_version: "0.2"');
+  expect(readFileSync(join(repo, ".agents/memory/component.md"), "utf8")).toContain("# Component Overview");
+  expect(existsSync(join(repo, ".agents/memory.md"))).toBe(false);
   expect(readFileSync(join(repo, PROJECT_CHANGELOG_FILE), "utf8")).toBe(
     "# Agent Changelog\n\n<!-- Add dated Added, Changed, Fixed, or Removed sections after meaningful repository changes. -->\n",
   );
@@ -242,9 +249,12 @@ test("project update creates missing memory and changelog without instruction so
 
 test("project update preserves memory and changelog bytes and excludes other agent files from published instructions", () => {
   const { repo, instructionsDir } = setupRepo();
-  const memory = "memory\r\ntext\n";
-  const changelog = "changelog\r\ntext\n";
-  writeFileSync(join(repo, PROJECT_MEMORY_FILE), memory);
+  const memory = "---\ntype: Architecture\ntitle: Private architecture\n---\n\nPrivate concept sentinel.\n";
+  const memoryPath = join(repo, ".agents/memory/architecture/boundaries.md");
+  mkdirSync(join(repo, ".agents/memory/architecture"), { recursive: true });
+  writeFileSync(memoryPath, memory);
+  writeFileSync(join(repo, ".agents/memory/index.md"), '---\nokf_version: "0.2"\n---\n\n# Stale index\n');
+  const changelog = "changelog\r\ntext sentinel\n";
   writeFileSync(join(repo, PROJECT_CHANGELOG_FILE), changelog);
   mkdirSync(join(repo, ".agents", "subagents"), { recursive: true });
   writeFileSync(join(repo, ".agents", "subagents", "reviewer.md"), "never publish this");
@@ -252,13 +262,42 @@ test("project update preserves memory and changelog bytes and excludes other age
 
   expect(runSyncProject({ cwd: repo, reporter: quiet() })).toBe(0);
 
-  expect(readFileSync(join(repo, PROJECT_MEMORY_FILE), "utf8")).toBe(memory);
+  expect(readFileSync(memoryPath, "utf8")).toBe(memory);
+  expect(readFileSync(join(repo, ".agents/memory/index.md"), "utf8")).toContain("architecture/index.md");
+  expect(readFileSync(join(repo, ".agents/memory/architecture/index.md"), "utf8")).toContain("Private architecture");
+  expect(readFileSync(join(repo, ".agents/memory/index.md"), "utf8")).not.toContain("# Stale index");
   expect(readFileSync(join(repo, PROJECT_CHANGELOG_FILE), "utf8")).toBe(changelog);
   const agents = readFileSync(join(repo, "AGENTS.md"), "utf8");
   expect(agents).toContain("publish this");
-  expect(agents).not.toContain("memory");
-  expect(agents).not.toContain("changelog");
+  expect(agents).not.toContain("Private concept sentinel");
+  expect(agents).not.toContain("text sentinel");
   expect(agents).not.toContain("never publish this");
   expect(agents).toContain("wagglebot update");
   expect(agents).not.toContain("wagglebot sync-project");
+});
+
+test("a legacy memory file rejects project update before any instruction target changes", () => {
+  const { repo, instructionsDir } = setupRepo();
+  writeFileSync(join(instructionsDir, "a.md"), "New managed instruction.\n");
+  mkdirSync(join(repo, ".agents"), { recursive: true });
+  writeFileSync(join(repo, ".agents/memory.md"), "# Old memory\n");
+
+  const targets = projectTargets(HARNESSES);
+  for (const target of targets) {
+    const absolute = join(repo, target.relative);
+    mkdirSync(dirname(absolute), { recursive: true });
+    writeFileSync(absolute, `Personal ${target.relative}\n`);
+  }
+  const before = targets.map((target) => readFileSync(join(repo, target.relative), "utf8"));
+  let thrown: unknown;
+  try {
+    runSyncProject({ cwd: repo, reporter: quiet() });
+  } catch (error) {
+    thrown = error;
+  }
+
+  expect((thrown as { code?: string } | undefined)?.code).toBe("local_memory_invalid");
+  expect(targets.map((target) => readFileSync(join(repo, target.relative), "utf8"))).toEqual(before);
+  expect(existsSync(join(repo, ".agents/memory"))).toBe(false);
+  expect(existsSync(join(repo, PROJECT_CHANGELOG_FILE))).toBe(false);
 });

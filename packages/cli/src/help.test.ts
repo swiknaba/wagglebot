@@ -66,7 +66,13 @@ test("public help describes project and cached workflows without internal runtim
       expect(text).not.toContain(hidden);
     expect(text).toContain("--wagglebot");
   }
-  expect(helpText("init")).toContain(".agents/memory.md");
+  for (const command of ["init", "update", "brain"]) {
+    const text = helpText(command);
+    expect(text).toContain(".agents/memory/");
+    expect(text).toContain("one concept per file");
+    expect(text).not.toContain(".agents/memory.md");
+  }
+  expect(helpText("brain")).toContain(".agents/memory/index.md");
   expect(helpText("update")).toContain("working tree");
   expect(helpText("update")).toContain("--overwrite-local");
   expect(helpText()).toContain("Phase 2");
@@ -102,8 +108,9 @@ test("unknown command help falls back to the general text", () => {
 
 test("brain help describes local memory and status", () => {
   const text = helpText("brain");
-  expect(text).toContain(".agents/memory.md");
-  expect(text).toContain("brain remember");
+  expect(text).toContain(".agents/memory/index.md");
+  expect(text).toContain("relevant linked concepts");
+  expect(text).toContain("remember [path]");
   expect(text).toContain("--json");
 });
 

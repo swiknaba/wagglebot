@@ -147,8 +147,10 @@ for (const company of [false, true]) {
     put(join(f.cwd, ".agents/instructions/project.md"), "Project instruction.\n");
     expect(await f.run(["init"])).toBe(0);
     expect(read(join(f.cwd, "AGENTS.md"))).toContain("Project instruction.");
-    expect(existsSync(join(f.cwd, ".agents/memory.md"))).toBe(true);
+    expect(existsSync(join(f.cwd, ".agents/memory/index.md"))).toBe(true);
+    expect(existsSync(join(f.cwd, ".agents/memory/component.md"))).toBe(true);
     expect(existsSync(join(f.cwd, ".agents/changelog.md"))).toBe(true);
+    expect(existsSync(join(f.cwd, ".agents/memory.md"))).toBe(false);
     expect(existsSync(join(f.cwd, "catalog-info.yaml"))).toBe(false);
     expect(f.calls).toEqual([]);
   });
@@ -166,6 +168,17 @@ for (const directory of [undefined, "new-company"]) {
 }
 
 for (const command of ["update", "sync-project"]) {
+  test(`${command} creates the same memory and changelog bundle without instruction sources`, async () => {
+    const f = fixture();
+    expect(await f.run([command])).toBe(0);
+    expect(read(join(f.cwd, ".agents/memory/index.md"))).toContain('okf_version: "0.2"');
+    expect(read(join(f.cwd, ".agents/memory/component.md"))).toContain("# Component Overview");
+    expect(read(join(f.cwd, ".agents/changelog.md"))).toContain("# Agent Changelog");
+    expect(existsSync(join(f.cwd, ".agents/memory.md"))).toBe(false);
+    expect(existsSync(join(f.cwd, "catalog-info.yaml"))).toBe(false);
+    expect(existsSync(join(f.cwd, ".gitignore"))).toBe(false);
+  });
+
   test(`${command} publishes project instructions without company dependencies`, async () => {
     const f = fixture();
     put(join(f.cwd, ".agents/instructions/project.md"), "Project content.\n");

@@ -34,3 +34,19 @@ test("onboarding asks for owner and system before it directs an agent to write c
   expect(write).toBeGreaterThan(ask);
   expect(text).toContain("Do not derive either value from the directory or Git remote.");
 });
+
+test("agent memory guidance uses the OKF bundle and progressive concept reading", () => {
+  const guidance = [
+    readFileSync(join(repoRoot, "packages/cli/templates/AGENTS.base.md"), "utf8"),
+    readFileSync(join(skillsDir, "onboarding-a-repository", "SKILL.md"), "utf8"),
+  ];
+
+  for (const text of guidance) {
+    expect(text).toContain(".agents/memory/index.md");
+    expect(text).toContain("one concept per file");
+    expect(text).toContain("wagglebot update");
+    expect(text).not.toContain("Do not write outside `.agents/memory.md`");
+    expect(text).not.toContain("Read it at the start of a session");
+    expect(text).not.toContain("reads the file at the start of a session");
+  }
+});
