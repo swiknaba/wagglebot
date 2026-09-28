@@ -666,6 +666,8 @@ git commit -m "feat(memory): complete OKF core contract"
 
 ### Task 4: Preserve Ludwig's project lifecycle and teach agents the OKF workflow
 
+**Execution status:** Complete, Task 4 review approved; controller pressure test passed (`a0d69ed`). One minor CLI wording observation is deferred to the final review ledger.
+
 **Files:**
 
 - Modify: `packages/cli/src/commands/project-update.ts`
@@ -689,7 +691,7 @@ git commit -m "feat(memory): complete OKF core contract"
 
 **Skill RED evidence already captured before editing:** A fresh Luna xhigh agent read the current onboarding skill and base template and answered that it would read/edit only `.agents/memory.md`, would not create one concept per file, and had no post-edit memory command. It quoted `Do not write outside .agents/memory.md`. This is the failing baseline that the skill edit must correct.
 
-- [ ] **Step 1: Write failing project lifecycle tests**
+- [x] **Step 1: Write failing project lifecycle tests**
 
 Change project command tests and E2E assertions to require:
 
@@ -704,7 +706,7 @@ Change project command tests and E2E assertions to require:
 
 Update the Git tracked-file E2E assertion to expect the committed paths `.agents/memory/index.md`, `.agents/memory/component.md`, and `.agents/changelog.md`.
 
-- [ ] **Step 2: Write failing brain command and help tests**
+- [x] **Step 2: Write failing brain command and help tests**
 
 Require:
 
@@ -712,7 +714,7 @@ Require:
 - init/update/brain help names only `.agents/memory/` and explains one concept per file;
 - no public help names `.agents/memory.md` except a concise rejection/migration-free diagnostic example if tests need it.
 
-- [ ] **Step 3: Write failing template and skill assertions**
+- [x] **Step 3: Write failing template and skill assertions**
 
 In `first-party-skills.test.ts` or the existing template test, assert both guidance files contain:
 
@@ -724,19 +726,19 @@ wagglebot update
 
 and do not contain `Do not write outside .agents/memory.md` or an instruction to read the entire corpus at session start.
 
-- [ ] **Step 4: Run CLI tests and capture RED**
+- [x] **Step 4: Run CLI tests and capture RED**
 
 Run: `bun test packages/cli/src/commands/project-update.test.ts packages/cli/src/commands/project-init.test.ts packages/cli/src/commands/brain-init.test.ts packages/cli/src/help.test.ts packages/cli/src/index.test.ts packages/cli/e2e/sync-project.test.ts packages/cli/e2e/first-party-skills.test.ts`
 
 Expected: FAIL on the legacy file paths and guidance.
 
-- [ ] **Step 5: Wire the shared lifecycle into every command**
+- [x] **Step 5: Wire the shared lifecycle into every command**
 
 Remove `ensureProjectFile(..., "component-memory.md")` and its template. `runProjectUpdate` first reads sources/targets and computes and validates every proposed instruction output read-only, including all size and managed-block checks. Only after the entire preflight succeeds does it call `ensureLocalMemoryBundle(root)`, create missing changelog scaffolding, and then mutate instruction targets. Do not return early on an empty instruction plan before the shared lifecycle/changelog calls: zero-source projects still get memory and changelog scaffolding. A preflight failure must not create those files; a legacy memory-file rejection must occur before any instruction target changes. Preserve the current all-target preflight and failure reporting. `runProjectInit` continues creating `.agents/instructions/` and then delegates to `runProjectUpdate`; the alias already delegates to the same function and must remain hidden.
 
 `runBrainInit` calls `ensureLocalMemoryBundle(root)` instead of embedding a template. Keep CodeGraph initialization and `close()` behavior. Do not create a second initializer or a CLI-owned memory template.
 
-- [ ] **Step 6: Rewrite the base agent memory contract**
+- [x] **Step 6: Rewrite the base agent memory contract**
 
 Keep the existing durable-memory inclusion/exclusion judgment. Replace only the storage/workflow sections with this behavior:
 
@@ -750,21 +752,21 @@ Keep the existing durable-memory inclusion/exclusion judgment. Replace only the 
 
 Do not instruct agents to hand-edit `index.md`, to read every concept up front, or to invent a memory service.
 
-- [ ] **Step 7: Rewrite the onboarding skill minimally**
+- [x] **Step 7: Rewrite the onboarding skill minimally**
 
 Keep its catalog and subagent behavior. Change the overview table and Step 4 to the OKF bundle, progressive reading, one-concept-per-file editing, `wagglebot update`, and Git review. Change the project instruction command from the hidden `wagglebot sync-project` alias to `wagglebot update`. Update common mistakes for gitignored bundles, hand-edited generated indexes, and memory merged into project instructions.
 
-- [ ] **Step 8: Run focused validation**
+- [x] **Step 8: Run focused validation**
 
 Run: `bun test packages/cli/src/commands/project-update.test.ts packages/cli/src/commands/project-init.test.ts packages/cli/src/commands/brain-init.test.ts packages/cli/src/help.test.ts packages/cli/src/index.test.ts packages/cli/e2e/sync-project.test.ts packages/cli/e2e/first-party-skills.test.ts && bun run check && bun run typecheck`
 
 Expected: PASS.
 
-- [ ] **Step 9: Run the skill GREEN pressure scenario**
+- [x] **Step 9: Run the skill GREEN pressure scenario**
 
 The controller dispatches a fresh `gpt-6-luna` xhigh read-only agent with the updated `skills/onboarding-a-repository/SKILL.md` and `packages/cli/templates/AGENTS.base.md`, using the same scenario as the captured baseline. Passing output must name `.agents/memory/index.md`, one relevant concept file under `.agents/memory/<category>/`, and `wagglebot update`; it must not recommend `.agents/memory.md` or reading the entire bundle. Record the response in the task report.
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
 ```bash
 git add packages/cli/src/commands/project-update.ts packages/cli/src/commands/project-update.test.ts packages/cli/src/commands/project-init.test.ts packages/cli/src/commands/brain-init.ts packages/cli/src/commands/brain-init.test.ts packages/cli/src/help.ts packages/cli/src/help.test.ts packages/cli/src/index.test.ts packages/cli/e2e/sync-project.test.ts packages/cli/templates/AGENTS.base.md skills/onboarding-a-repository/SKILL.md packages/cli/e2e/first-party-skills.test.ts
