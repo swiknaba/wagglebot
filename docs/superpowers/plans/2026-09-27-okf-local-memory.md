@@ -778,6 +778,8 @@ git commit -m "feat(cli): scaffold OKF component memory"
 
 ### Task 5: Align active documentation and run the release gate
 
+**Execution status:** Complete; documentation and release gates passed (`ae65b84`, `ebcb554`), and the Task 5 fix re-review is clean.
+
 **Files:**
 
 - Modify: `README.md`
@@ -799,17 +801,17 @@ git commit -m "feat(cli): scaffold OKF component memory"
 - Consumes: the implemented behavior and the approved design.
 - Produces: one consistent active documentation contract and a fully verified branch.
 
-- [ ] **Step 1: Add documentation consistency assertions before prose edits**
+- [x] **Step 1: Add documentation consistency assertions before prose edits**
 
 Extend an existing lightweight documentation test, preferably `packages/cli/src/help.test.ts`, to read the active user-facing files and assert that project lifecycle docs contain `.agents/memory/`, `one concept`, `wagglebot update`, and Git review language where memory is discussed. Do not assert wording in historical task bodies that are explicitly marked superseded.
 
-- [ ] **Step 2: Run the documentation test and capture RED**
+- [x] **Step 2: Run the documentation test and capture RED**
 
 Run: `bun test packages/cli/src/help.test.ts`
 
 Expected: FAIL because README and onboarding text still describe generic memory files or omit the OKF lifecycle.
 
-- [ ] **Step 3: Update active documentation surgically**
+- [x] **Step 3: Update active documentation surgically**
 
 Document these exact truths without duplicating the full specification:
 
@@ -823,7 +825,7 @@ Document these exact truths without duplicating the full specification:
 
 Keep explicit supersession banners in the historical local-brain design and plan. Do not rewrite completed history as if the earlier single-file implementation never happened; update their current-contract summaries, paths/interfaces that later plans consume, and gates.
 
-- [ ] **Step 4: Search for stale authoritative references**
+- [x] **Step 4: Search for stale authoritative references**
 
 Run:
 
@@ -841,7 +843,7 @@ Every remaining old hash-name hit must be unrelated shared-memory data or an exp
 
 The current implementation plan is excluded because its task text intentionally names the old interface in migration/removal steps and rejection tests; its final success conditions still require the new bundle contract. Task 3 separately searches the local-brain source for removed API names.
 
-- [ ] **Step 5: Run focused package tests**
+- [x] **Step 5: Run focused package tests**
 
 Run:
 
@@ -851,7 +853,7 @@ bun test packages/local-brain/src packages/contracts/src/base.test.ts services/c
 
 Expected: PASS with no warnings caused by this change.
 
-- [ ] **Step 6: Run the complete repository gate**
+- [x] **Step 6: Run the complete repository gate**
 
 Run each command separately and record its exact summary:
 
@@ -866,7 +868,7 @@ git status --short
 
 Expected: all checks pass. Existing optional CodeGraph skips are allowed if they remain the only skips. Full tests may create `.wagglebot-auth-e2e-*` directories; inspect each exact directory and remove only those test-created artifacts. Leave `.idea/` untouched.
 
-- [ ] **Step 7: Inspect the final diff**
+- [x] **Step 7: Inspect the final diff**
 
 Confirm:
 
@@ -877,7 +879,7 @@ Confirm:
 - no debug output, temporary file, absolute local path, or secret was introduced;
 - implementation matches every acceptance criterion in the spec.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add README.md packages/cli/README.md docs/phase-1-onboarding.md docs/api-reference.md docs/superpowers/specs/2026-08-28-wagglebot-design.md docs/superpowers/specs/2026-08-28-phase-1-provisioning.md docs/superpowers/specs/2026-09-11-local-repository-brain-design.md docs/superpowers/specs/2026-09-11-phase-2-memory-roadmap.md docs/superpowers/specs/2026-09-11-unified-context-engine-design.md docs/superpowers/plans/2026-09-11-local-repository-brain.md docs/superpowers/plans/2026-09-11-unified-context-engine.md docs/superpowers/plans/2026-09-12-phase-2-implementation-sequence.md packages/cli/src/help.test.ts
