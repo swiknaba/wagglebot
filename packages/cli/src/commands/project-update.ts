@@ -121,7 +121,11 @@ export function runProjectUpdate(input: { cwd: string; reporter: Reporter; harne
   ensureLocalMemoryBundle(root);
   ensureProjectFile(root, PROJECT_CHANGELOG_FILE, "agent-changelog.md");
   if (skipped) {
-    reporter.item(PROJECT_INSTRUCTIONS_DIR, "skipped", "no source file and no managed block, so nothing changes");
+    reporter.item(
+      PROJECT_INSTRUCTIONS_DIR,
+      "skipped",
+      "no source file or managed block exists; no instruction targets changed",
+    );
     return 0;
   }
 

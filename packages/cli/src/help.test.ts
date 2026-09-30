@@ -189,12 +189,32 @@ test("project lifecycle documentation explains the committed OKF memory workflow
       .join(" ");
     expect(memoryWorkflow).toMatch(/\bcommit concepts (?:and|plus) (?:derived )?indexes for git review\b/u);
 
-    for (const match of text.matchAll(/\.agents\/memory\.md/gi)) {
-      const start = text.lastIndexOf("\n", match.index ?? 0) + 1;
-      const end = text.indexOf("\n", match.index ?? 0);
-      const statement = text.slice(start, end === -1 ? undefined : end).toLowerCase();
+    for (const paragraph of text.split(/\n\s*\n/u)) {
+      if (!/\.agents\/memory\.md/iu.test(paragraph)) continue;
+      const statement = paragraph.toLowerCase().replace(/\s+/gu, " ");
       expect(statement).toMatch(/\breject(?:s|ed)?\b/);
       expect(statement).not.toMatch(/\b(?:supported|authoritative)\b/);
     }
   }
+});
+
+test("API reference matches the local brain proposal and status types", () => {
+  const api = readDocumentation("docs", "api-reference.md").replace(/\s+/gu, " ");
+  const proposalStart = api.indexOf("type LocalMemoryProposal = {");
+  const proposalEnd = api.indexOf("type GitWhyResult = {");
+  const proposal = api.slice(proposalStart, proposalEnd);
+  expect(proposal).toContain("content: string;");
+  expect(proposal).toContain("replace?: { path: LocalMemoryPath; contentHash: string };");
+  expect(proposal).toContain("indexChanges: LocalMemoryIndexChange[];");
+  expect(proposal).not.toContain("concept: string;");
+  expect(api).toContain("type LocalMemoryIndexChange = { path: LocalMemoryPath; content: string };");
+
+  const statusStart = api.indexOf("type LocalBrainStatus = {");
+  const statusEnd = api.indexOf("codeGraph:", statusStart);
+  const memoryStatus = api.slice(statusStart, statusEnd);
+  expect(memoryStatus).toContain('path: ".agents/memory";');
+  expect(memoryStatus).toContain("conceptCount?: number;");
+  expect(memoryStatus).toContain("totalBytes?: number;");
+  expect(memoryStatus).toContain('indexState?: "current" | "stale" | "missing";');
+  expect(memoryStatus).not.toMatch(/\bindexes\s*:/u);
 });

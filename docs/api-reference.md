@@ -742,16 +742,20 @@ type MemoryEvidence = {
   kind: "file" | "commit" | "adr" | "issue" | "test" | "maintainer_confirmation";
   ref: string;
 };
+type LocalMemoryPath = `.agents/memory/${string}.md`;
+type LocalMemoryIndexChange = { path: LocalMemoryPath; content: string };
 type LocalMemoryProposal = {
   proposalId: string;
   baseBundleHash: string;
-  path: `.agents/memory/${string}.md`;
+  path: LocalMemoryPath;
   section: "Architecture" | "Conventions" | "Commands" | "Decisions" | "Warnings" | "Learnings";
   title: string;
   summary: string;
   evidence: MemoryEvidence[];
+  replace?: { path: LocalMemoryPath; contentHash: string };
   action: "add" | "replace" | "no_change" | "needs_resolution";
-  concept: string;
+  content: string;
+  indexChanges: LocalMemoryIndexChange[];
   patch: string;
   warnings: string[];
 };
@@ -795,10 +799,11 @@ type LocalBrainStatus = {
   project: ProjectIdentity;
   memory: {
     state: "missing" | "ready" | "invalid" | "error";
-    path: ".agents/memory/";
+    path: ".agents/memory";
     bundleHash?: string;
-    conceptCount: number;
-    indexes: "current" | "stale" | "missing";
+    conceptCount?: number;
+    totalBytes?: number;
+    indexState?: "current" | "stale" | "missing";
     observedAt: string;
   };
   codeGraph: { state: "missing" | "indexing" | "ready" | "pending" | "error"; pendingFiles: string[]; observedAt: string };

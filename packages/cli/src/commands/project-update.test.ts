@@ -128,7 +128,9 @@ test("no source and no managed block does nothing and reports skipped", () => {
   const code = runSyncProject({ cwd: repo, reporter: createReporter((l) => lines.push(l), false) });
   expect(code).toBe(0);
   expect(existsSync(join(repo, "AGENTS.md"))).toBe(false);
-  expect(lines.some((l) => l.includes("skipped"))).toBe(true);
+  const skipped = lines.find((line) => line.includes("skipped"));
+  expect(skipped).toContain("no instruction targets changed");
+  expect(skipped).not.toContain("nothing changes");
 });
 
 test("a generated file a user appended to keeps the appended text and loses only the block when sources are gone", () => {
