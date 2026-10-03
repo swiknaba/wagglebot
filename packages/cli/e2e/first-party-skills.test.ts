@@ -1,10 +1,70 @@
 import { expect, test } from "bun:test";
-import { readdirSync, readFileSync } from "node:fs";
+import { cpSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { repoRoot } from "./helper";
+import { pathToFileURL } from "node:url";
+import { resolveSkillsBin, runInstallSkills } from "../src/commands/install-skills";
+import { runSyncHarnesses } from "../src/commands/sync-harnesses";
+import { realExec } from "../src/exec";
+import { HARNESSES } from "../src/harness";
+import { createReporter } from "../src/report";
+import { commitAll, git, initGit, isolatedEnv, repoRoot } from "./helper";
 
 const skillsDir = join(repoRoot, "skills");
-const REQUIRED = ["writing-a-custom-agent", "adding-an-mcp-server", "onboarding-a-repository"];
+const REQUIRED = [
+  "writing-a-custom-agent",
+  "adding-an-mcp-server",
+  "onboarding-a-repository",
+  "architecture-style-guide",
+];
+
+test("installs the architecture skill from the pinned source and syncs its pointer to every harness", async () => {
+  const scratch = mkdtempSync(join(tmpdir(), "wagglebot-first-party-"));
+  try {
+    const home = join(scratch, "home");
+    const source = join(scratch, "source");
+    const env = isolatedEnv(home);
+    cpSync(skillsDir, join(source, "skills"), { recursive: true });
+    initGit(source, env);
+    commitAll(source, env);
+    git(source, env, "tag", "v1.0.0");
+    const sourceUrl = "ssh://offline.invalid/first-party/wagglebot.git";
+    git(source, env, "config", "--global", `url.${pathToFileURL(source).href}.insteadOf`, sourceUrl);
+    const messages: string[] = [];
+    const reporter = createReporter((message) => messages.push(message), false);
+    const skillsBin = resolveSkillsBin();
+    expect(skillsBin).toBeDefined();
+    const installCode = await runInstallSkills({
+      lists: [{ path: "company/skills.list", text: `${sourceUrl} v1.0.0\n` }],
+      exec: (command, args) => realExec(command, args, { cwd: source, env }),
+      reporter,
+      skillsBin,
+      skillsAgents: HARNESSES.flatMap((harness) => harness.skillsAgents),
+      managedFile: join(home, ".wagglebot/managed.json"),
+      skillLockFile: join(home, ".agents/.skill-lock.json"),
+    });
+    expect(installCode, messages.join("\n")).toBe(0);
+    const lock = JSON.parse(readFileSync(join(home, ".agents/.skill-lock.json"), "utf8"));
+    expect(Object.keys(lock.skills).sort()).toEqual([...REQUIRED].sort());
+    const original = readFileSync(join(skillsDir, "architecture-style-guide/SKILL.md"), "utf8");
+    for (const directory of [
+      ".claude/skills",
+      ".junie/skills",
+      ".agents/skills",
+      ".config/devin/skills",
+      ".codeium/windsurf/skills",
+      ".kiro/skills",
+    ]) {
+      expect(readFileSync(join(home, directory, "architecture-style-guide/SKILL.md"), "utf8")).toBe(original);
+    }
+    expect(runSyncHarnesses({ home, harnesses: HARNESSES, instructionDirs: [], reporter })).toBe(0);
+    for (const target of HARNESSES.flatMap((harness) => harness.templateTargets)) {
+      expect(readFileSync(join(home, target), "utf8")).toContain("architecture-style-guide");
+    }
+  } finally {
+    rmSync(scratch, { recursive: true, force: true });
+  }
+}, 120_000);
 
 test("every first-party skill has a SKILL.md whose front matter name equals its directory", () => {
   const dirs = readdirSync(skillsDir, { withFileTypes: true })

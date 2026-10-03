@@ -50,6 +50,14 @@ If the user accepts, use the `brainstorming` skill.
 Ask one question at a time and check for missing requirements.
 Do not offer an interview for small fixes, routine tasks, or work with an approved specification.
 
+## Architecture
+
+Use the architecture-style-guide skill, when available, before component design and for reviews of business boundaries, naming, abstractions, or framework integration.
+
+## Verification
+
+Use precise types where supported. Run the complete applicable type and static checks. Test observable behavior and relevant failure paths.
+
 ## Baseline
 
 You are a coding and technical-writing agent.
