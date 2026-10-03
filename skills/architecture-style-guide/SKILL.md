@@ -7,134 +7,61 @@ description: Use when designing a component or reviewing changes to public names
 
 ## Overview
 
-Use the project's language and framework idiomatically. Apply the universal
-principles below; treat language and framework conventions as local choices.
-Existing repository instructions and established conventions take precedence
-over this guide when they conflict. Flag a consequential conflict in the result.
-Do not create layers merely to match a familiar architecture.
+Repository instructions and established conventions take precedence over this
+guide. Flag consequential conflicts. Use the language and framework idiomatically.
 
-## Core rules
+## Before implementation
 
-- Choose domain boundaries around product or business capabilities and their
-  rules. Name the need served, responsibility owned, and invariants protected.
-  `Orders` and `Returns` can own different rules; `Database` and `Services` are
-  technical categories, not business domains. Label technical infrastructure
-  honestly. Keep related behavior together until a separate boundary earns its
-  cost; domain folders and extra layers are optional.
-- Name public concepts after their meaning and responsibility, using the
-  language and framework's conventions. Prefer `ApproveReturn` to `Manager` or
-  an unexplained metaphor. A component README must explain whose need it serves,
-  the user outcome it enables, and why it is separate. Put technology lists in
-  setup or implementation documentation.
-- Give each unit one coherent responsibility. Do not turn a controller or
-  namespace into a container for unrelated request, value, error, or transport
-  types.
-- Reuse framework models, queries, validation, serialization, transactions,
-  and lifecycle tools. Add a wrapper only when it owns a domain rule, safety
-  boundary, invariant, lifecycle, or simpler intentional API.
-- Translate raw transport, storage, and vendor data at boundaries.
-  Workflow or use-case code orchestrates and may use framework models;
-  decision code takes values, returns outcomes, and imports no transport or storage modules.
-  Decision code must also avoid vendor modules. Adapters depend on the domain
-  contracts they implement. Connect them through existing framework composition
-  points. Cross-domain calls use named public operations and precise inputs and
-  outcomes; do not read another domain's tables or internal models. Do not add
-  layers that only forward calls.
-- Make relevant state transitions, idempotency, ordering, and uncertain side
-  effects visible.
-- Represent expected outcomes that callers branch on with the language's
-  idiomatic result or error mechanism. Distinguish them from programmer errors
-  and infrastructure failures. Preserve failure causes and useful context without
-  exposing secrets or personal data. Translate failures where the caller can
-  decide how to respond. Do not disguise a bug or an uncertain external action
-  as an ordinary business rejection.
-- Follow repository file and module conventions. Keep distinct concrete types
-  in distinct files where the ecosystem expects it; group closely related
-  functions or types in module-oriented languages when that is clearer.
+Read framework documentation, examples, and the installed version's APIs before
+designing around them. For an unfamiliar framework, trace a relevant example.
+Map proposed functionality to supported features; name the relevant API or example.
 
-## Before design and coding
+Use the framework's ORM, query, transaction, validation, and serialization
+facilities where applicable. Low-level access or custom replacements require a
+demonstrated capability gap; document it and keep the exception narrow.
+Unverified support is an unresolved design decision, not permission to rebuild.
 
-Read repository instructions, framework documentation, relevant examples, and
-the APIs supported by the installed version before proposing an implementation.
-For an unfamiliar framework, trace an existing example through those APIs.
-Map each proposed capability to a supported feature and cite the local example
-or API that demonstrates it. Include persistence, queries, row resolution,
-serialization of JSON fields, transactions, and lifecycle hooks where relevant.
+## Design rules
 
-Use those features directly. For any raw database access, custom row mapper,
-serializer, query helper, or framework wrapper, identify the specific capability
-gap and explain why the supported API cannot express it. Keep exceptions narrow.
-If support is unverified, mark the design decision unresolved and inspect the
-API further before implementing a replacement.
+- Define domains by product capabilities and invariants. `Orders` and `Returns`
+  can own different rules; `Database` and `Services` are technical categories.
+  Keep related behavior together until separation has a concrete benefit.
+- Use meaningful domain names and idiomatic file or module organization.
+  Explain unusual public terms. For an independently navigable component, a short
+  README states whose need it serves, the user outcome, and why it is separate.
+  Put technology lists elsewhere.
+- Give each unit a coherent responsibility. Keep unrelated request, value, error,
+  and transport types out of controller namespaces.
+- Workflow code orchestrates and may use framework models. Decision code takes
+  values and returns outcomes without importing transport, storage, or vendor
+  modules. Adapters depend on domain contracts. Cross-domain calls use explicit
+  public operations, not another domain's tables or internal models.
+  These responsibilities need no separate layers when local functions suffice.
+- Add an abstraction only for a domain concept, invariant, lifecycle, boundary,
+  or materially simpler API. Ask what becomes harder or less safe without it.
+  Keep code local otherwise; avoid forwarding wrappers and mock-only layers.
+- Make state transitions, ordering, idempotency, and uncertain effects explicit.
+  Represent expected outcomes through idiomatic results or errors. Distinguish
+  programmer errors and infrastructure failures; preserve useful causes and
+  context without exposing secrets or personal data.
 
-State the component's purpose, its boundary, the framework abstractions to
-reuse, and the behavior that proves the change. Identify state transitions,
-idempotency, and external effects when they matter. Keep the first design local
-unless a real cross-component contract is needed.
+## Example
 
-Create an abstraction only when it names a stable domain concept, protects a
-real dependency boundary or unsafe input, owns a lifecycle, invariant, or side
-effect, simplifies several callers intentionally, or makes a real behavior or
-dependency boundary easier to test.
+A handler validates a request and delegates a command. The workflow records
+delivery intent transactionally; delivery occurs after commit. Decision code
+returns outcomes such as `Queued` or `NotAllowed`. A network timeout remains
+uncertain until reconciled.
 
-Keep code local otherwise. Do not add a generic service, repository, DTO, or
-wrapper solely for familiar structure or to make implementation calls mockable.
+## Output and verification
 
-Ask: "What would become harder or less safe if this disappeared?" If the answer
-is only that the architecture would look less familiar, do not add it.
+Before coding, give a brief design: purpose, responsibilities, dependency
+direction, public contracts, framework mapping, justified exceptions, and
+observable acceptance behavior. Identify unresolved decisions.
 
-## Examples
+For review, compare actual names, imports, persistence, and contracts with that
+design and the supported framework APIs. Report actionable findings with file
+locations, impact, and the smallest useful correction. State what you inspected
+and what remains unverified; say when there are no findings.
 
-Keep request translation, domain decisions, and effects distinct:
-
-```text
-PostMessageHandler.handle(request):
-  command = PostMessageRequest.validate(request)
-  outcome = MessageDelivery.deliver(command)
-  return Response.from(outcome)
-
-MessageDelivery.deliver(command):
-  persist idempotent delivery intent in the caller's transaction
-  dispatch it after commit
-  return Queued or a precise rejection
-```
-
-Use framework model and query APIs before creating manual SQL, row mapping, or
-serialization. Create a response type only when it protects a real public
-contract, hides internal data, or represents a different public concept.
-
-After request validation, name the domain outcomes that the caller handles:
-
-```text
-start_review(validated_request) -> Started | AlreadyStarted | RevisionChanged
-```
-
-## Review prompts
-
-- Does each proposed domain own a business capability and its invariants, and
-  does its README explain the user need and reason for separation?
-- Does each new abstraction own a real concept, boundary, invariant, lifecycle,
-  simpler API, or behavior?
-- Which documented framework features replace custom persistence, mapping,
-  serialization, or lifecycle code? Inspect the implementation against the
-  supported API; require a specific gap for each remaining workaround.
-- Are raw external values contained at boundaries, and do imports follow the
-  intended dependency direction? Do cross-domain calls use public contracts?
-
-A passing type check or test suite does not establish suitable names, boundaries,
-or framework reuse. Review those design choices directly.
-
-## Output
-
-For design, return a short proposal stating purpose, responsibilities, dependency
-direction, cross-domain contracts, and why any new abstraction is needed. Include
-the capability-to-framework mapping with evidence, justified exceptions, observable
-acceptance behavior, and any decision that remains open. Produce this before
-implementation; keep its size proportional to the change.
-
-For review, report actionable findings with file locations, the concrete impact,
-and the smallest useful correction. If there are no findings, say so. Identify
-unverified assumptions separately from demonstrated problems. State which
-business boundaries and framework APIs you inspected; a review based only on
-types or tests is incomplete. Compare the actual names, imports, persistence,
-and public contracts against the design decisions and framework mapping.
+Run applicable whole-project type checks and tests of observable behavior and
+relevant failure paths. Passing checks alone do not validate architectural choices.
