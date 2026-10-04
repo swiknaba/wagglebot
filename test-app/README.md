@@ -1,6 +1,6 @@
 # Company Agent Environment
 
-Provisioned by [wagglebot](https://github.com/swiknaba/wagglebot) 0.3.1.
+Provisioned by [wagglebot](https://github.com/swiknaba/wagglebot) 0.3.2.
 
 ## Before Your First Run
 
