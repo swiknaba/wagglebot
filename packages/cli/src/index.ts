@@ -20,9 +20,18 @@ import { restoreHarnesses, runSyncHarnesses } from "./commands/sync-harnesses";
 import { runSyncShell } from "./commands/sync-shell";
 import { runWriteMcp } from "./commands/write-mcp";
 import { isCompanyRoot } from "./company";
-import { isCompanyCacheRoot, refreshCompanyCache, validateCompanyBase } from "./company-cache";
+import {
+  isCompanyCacheRoot,
+  refreshCompanyCache,
+  resolveCompanySubdirectory,
+  validateCompanyBase,
+} from "./company-cache";
 import { resolveCompanyContext } from "./company-context";
-import { type PackageMetadata, resolveCompanyRepositoryUrl } from "./company-url";
+import {
+  type PackageMetadata,
+  resolveCompanyRepositorySource,
+  resolveConfiguredCompanySubdirectory,
+} from "./company-url";
 import type { Exec } from "./exec";
 import { realExec } from "./exec";
 import { HARNESSES, templatesDir } from "./harness";
@@ -154,8 +163,14 @@ export async function main(argv: string[], deps: CliDeps = { write: console.log 
   try {
     if (command === "connect") {
       const { positionals } = parseArgs({ args: rest, allowPositionals: true });
-      if (positionals.length !== 1 || !positionals[0]?.trim()) throw new Error("Usage: wagglebot connect <git-url>");
-      const code = runConnect({ url: positionals[0], configFile: resolvePaths(home).configFile, reporter });
+      if (positionals.length < 1 || positionals.length > 2 || !positionals[0]?.trim())
+        throw new Error("Usage: wagglebot connect <git-url> [subdirectory]");
+      const code = runConnect({
+        url: positionals[0],
+        subdirectory: positionals[1],
+        configFile: resolvePaths(home).configFile,
+        reporter,
+      });
       deps.write(reporter.summary(true));
       return code;
     }
@@ -297,18 +312,23 @@ export async function main(argv: string[], deps: CliDeps = { write: console.log 
         let sourceFailed = false;
         let settleCredentials: (() => boolean) | undefined;
         companyRoot = paths.activeCompanyDir;
+        const config = existsSync(paths.configFile) ? JSON.parse(readFileSync(paths.configFile, "utf8")) : {};
+        if (typeof config !== "object" || config === null || Array.isArray(config))
+          throw new Error("configuration must be a JSON object");
         if (command === "update") {
-          const config = existsSync(paths.configFile) ? JSON.parse(readFileSync(paths.configFile, "utf8")) : {};
-          if (typeof config !== "object" || config === null || Array.isArray(config))
-            throw new Error("configuration must be a JSON object");
-          const url = resolveCompanyRepositoryUrl({ env, config, packageMetadata: metadata });
-          const cache = await refreshCompanyCache({ url, paths, exec });
+          const source = resolveCompanyRepositorySource({ env, config, packageMetadata: metadata });
+          const cache = await refreshCompanyCache({ ...source, paths, exec });
           companyRoot = cache.root;
           settleCredentials = cache.settleCredentials;
           sourceFailed = cache.refreshFailed;
           if (cache.warning) deps.write(cache.warning);
         } else if (!existsSync(companyRoot)) {
           throw new Error('Run "wagglebot update --wagglebot" first. No active company cache exists.');
+        } else {
+          companyRoot = resolveCompanySubdirectory(
+            paths.activeCompanyDir,
+            resolveConfiguredCompanySubdirectory({ env, config, packageMetadata: metadata }),
+          );
         }
         let runtimeExit = 1;
         try {

@@ -20,10 +20,10 @@ import {
   unlinkSync,
   writeFileSync,
 } from "node:fs";
-import { basename, isAbsolute, join, relative } from "node:path";
+import { basename, isAbsolute, join, relative, sep } from "node:path";
 import type { CompanyRepo } from "@wagglebot/company-config";
 import { loadCompanyRepo } from "@wagglebot/company-config";
-import { rejectRepositoryCredentials } from "./company-url";
+import { normalizeCompanySubdirectory, rejectRepositoryCredentials } from "./company-url";
 import type { Exec } from "./exec";
 import type { WagglePaths } from "./paths";
 
@@ -43,9 +43,14 @@ export function isCompanyCacheRoot(root: string, paths: WagglePaths): boolean {
 }
 
 // Keep both loading paths until shell configuration succeeds. No credential values are read or copied.
-export function migrateCachedCredentials(paths: WagglePaths): (() => void) | undefined {
+export function migrateCachedCredentials(
+  paths: WagglePaths,
+  companyRoot = paths.activeCompanyDir,
+): (() => void) | undefined {
   if (!pathExists(paths.activeCompanyDir)) return;
-  const legacy = join(realpathSync(paths.activeCompanyDir), ".env.credentials");
+  const selectedLegacy = pathExists(companyRoot) ? join(realpathSync(companyRoot), ".env.credentials") : undefined;
+  const rootLegacy = join(realpathSync(paths.activeCompanyDir), ".env.credentials");
+  const legacy = selectedLegacy !== undefined && pathExists(selectedLegacy) ? selectedLegacy : rootLegacy;
   if (!pathExists(legacy)) return;
   if (!lstatSync(legacy).isFile()) throw new Error("The legacy credential file must be a regular file.");
   if (!pathExists(paths.credentialsFile)) {
@@ -111,6 +116,18 @@ export function validateCompanyBase(root: string): { pin: string; company: Compa
   return { pin: company.pin, company };
 }
 
+export function resolveCompanySubdirectory(repositoryRoot: string, subdirectory?: string): string {
+  const normalized = normalizeCompanySubdirectory(subdirectory);
+  const root = realpathSync(repositoryRoot);
+  const selected = realpathSync(normalized === undefined ? root : join(root, normalized));
+  const relation = relative(root, selected);
+  if (isAbsolute(relation) || relation === ".." || relation.startsWith(`..${sep}`)) {
+    throw new Error("Company subdirectory must resolve inside the repository.");
+  }
+  if (!statSync(selected).isDirectory()) throw new Error("Company subdirectory must name a directory.");
+  return normalized === undefined ? repositoryRoot : join(repositoryRoot, normalized);
+}
+
 const pathExists = (path: string): boolean => {
   try {
     lstatSync(path);
@@ -146,10 +163,12 @@ const removeNewCacheDirectories = (
 
 export async function refreshCompanyCache(input: {
   url: string;
+  subdirectory?: string;
   paths: WagglePaths;
   exec: Exec;
 }): Promise<CompanyCacheResult> {
   rejectRepositoryCredentials(input.url);
+  const subdirectory = normalizeCompanySubdirectory(input.subdirectory);
   const { paths } = input;
   const companyDirExisted = pathExists(paths.companyDir);
   const activeExisted = pathExists(paths.activeCompanyDir);
@@ -168,8 +187,14 @@ export async function refreshCompanyCache(input: {
     const clone = await input.exec("git", ["clone", "--depth", "1", input.url, candidate]);
     if (clone.code !== 0) throw new Error(clone.stderr.trim() || "git clone failed");
 
-    validateCompanyBase(candidate);
-    const commitCredentials = migrateCachedCredentials(paths);
+    const candidateRoot = resolveCompanySubdirectory(candidate, subdirectory);
+    validateCompanyBase(candidateRoot);
+    const commitCredentials = activeExisted
+      ? migrateCachedCredentials(
+          paths,
+          subdirectory === undefined ? paths.activeCompanyDir : join(paths.activeCompanyDir, subdirectory),
+        )
+      : undefined;
     mkdirSync(revisionsDir, { recursive: true });
     const candidateRevision = join(revisionsDir, randomUUID());
     renameSync(candidate, candidateRevision);
@@ -180,9 +205,9 @@ export async function refreshCompanyCache(input: {
     nextCreated = true;
     renameSync(nextPath, paths.activeCompanyDir);
     nextCreated = false;
-    const activatedRevision = revision;
+    const activatedRevision = resolveCompanySubdirectory(paths.activeCompanyDir, subdirectory);
     return {
-      root: paths.activeCompanyDir,
+      root: activatedRevision,
       refreshFailed: false,
       settleCredentials:
         commitCredentials === undefined
@@ -192,7 +217,7 @@ export async function refreshCompanyCache(input: {
                 commitCredentials();
                 return true;
               }
-              if (realpathSync(paths.activeCompanyDir) !== realpathSync(activatedRevision))
+              if (realpathSync(paths.activeCompanyDir) !== realpathSync(candidateRevision))
                 throw new Error("Company cache changed before credential migration completed.");
               if (previousRoot === undefined) throw new Error("The legacy company cache is unavailable.");
               const rollbackLink = join(paths.companyDir, `rollback-${randomUUID()}`);
@@ -211,7 +236,13 @@ export async function refreshCompanyCache(input: {
     if (nextCreated) removeOwnedPath(nextPath);
     removeNewCacheDirectories(paths, companyDirExisted, revisionsDirCreated);
     const failure = failedRefresh(error);
-    if (activeExisted) return { root: paths.activeCompanyDir, refreshFailed: true, warning: failure.message };
+    if (activeExisted) {
+      return {
+        root: resolveCompanySubdirectory(paths.activeCompanyDir, subdirectory),
+        refreshFailed: true,
+        warning: failure.message,
+      };
+    }
     throw failure;
   }
 }
