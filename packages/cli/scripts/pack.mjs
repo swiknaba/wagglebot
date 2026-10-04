@@ -1,8 +1,8 @@
 import { execFileSync } from "node:child_process";
 import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
-import { dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const cliDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -33,7 +33,11 @@ try {
   );
   writeFileSync(
     join(stage, "package.json"),
-    JSON.stringify({ ...metadata, dependencies, devDependencies: {}, bundledDependencies: Object.keys(dependencies) }, null, 2),
+    JSON.stringify(
+      { ...metadata, dependencies, devDependencies: {}, bundledDependencies: Object.keys(dependencies) },
+      null,
+      2,
+    ),
   );
   for (const name of Object.keys(dependencies)) copyDependency(name, cliDir, stage);
 

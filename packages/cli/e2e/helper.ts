@@ -75,7 +75,11 @@ export function installBuiltPackage(cwd: string, env: NodeJS.ProcessEnv, scratch
     cwd: cliDir,
     env,
     encoding: "utf8",
-  }).trim().split("\n").at(-1)!;
+  })
+    .trim()
+    .split("\n")
+    .at(-1);
+  if (!tarball) throw new Error("Package builder did not return a tarball path");
   execFileSync(
     "npm",
     [
