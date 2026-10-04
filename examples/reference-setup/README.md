@@ -15,9 +15,9 @@ Run the commands in a disposable `HOME` when evaluating the setup. The configure
 Superpowers source provides shared skills to supported workers. The initial approved
 workflows are `brainstorming` and `writing-plans`; other packaged skills remain optional.
 
-Hermes is not yet a Wagglebot provisioning target. Digitaltwin therefore keeps the
-Commander workspace `AGENTS.md`, `SOUL.md`, native Markdown memory, SQLite history,
-and learned skills in its separate Hermes profile. Kirei enforces Commander permissions.
+Some runtime-specific agents consume this library through their own integration rather
+than Wagglebot provisioning. Their local role instructions and persistent state remain
+configured independently of this reusable worker setup.
 
 The published `0.3.1` package cannot install its cached runtime because its npm
 manifest still contains `workspace:*` dependencies. Publish a corrected `0.3.2`
