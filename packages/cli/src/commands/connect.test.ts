@@ -38,6 +38,42 @@ test("connect creates a private config file with the repository URL", () => {
   expect(statSync(configFile).mode & 0o777).toBe(0o600);
 });
 
+test("connect records a normalized repository subdirectory", () => {
+  const root = mkdtempSync(join(tmpdir(), "wgl-connect-"));
+  const configFile = join(root, ".wagglebot", "config.json");
+
+  expect(
+    runConnect({
+      url: "https://github.com/platform/company.git",
+      subdirectory: "examples/./reference-setup",
+      configFile,
+      reporter: quiet(),
+    }),
+  ).toBe(0);
+
+  expect(JSON.parse(readFileSync(configFile, "utf8"))).toEqual({
+    companyRepository: "https://github.com/platform/company.git",
+    companySubdirectory: "examples/reference-setup",
+  });
+});
+
+test.each(["../outside", "/absolute", "examples\\reference-setup"])(
+  "connect rejects unsafe repository subdirectories: %s",
+  (subdirectory) => {
+    const root = mkdtempSync(join(tmpdir(), "wgl-connect-"));
+    const configFile = join(root, "config.json");
+    expect(
+      runConnect({
+        url: "https://github.com/platform/company.git",
+        subdirectory,
+        configFile,
+        reporter: quiet(),
+      }),
+    ).toBe(1);
+    expect(existsSync(configFile)).toBe(false);
+  },
+);
+
 test("connect preserves unknown top-level configuration keys", () => {
   const root = mkdtempSync(join(tmpdir(), "wgl-connect-"));
   const configFile = join(root, "config.json");

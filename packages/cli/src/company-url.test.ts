@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { isReservedExampleUrl, resolveCompanyRepositoryUrl } from "./company-url";
+import { isReservedExampleUrl, resolveCompanyRepositorySource, resolveCompanyRepositoryUrl } from "./company-url";
 
 const metadata = {
   version: "0.3.1",
@@ -65,6 +65,19 @@ test("package metadata supplies the fallback URL", () => {
       },
     }),
   ).toBe("git@company.internal:platform/company.git");
+});
+
+test("the configured subdirectory follows the same precedence as the URL", () => {
+  expect(
+    resolveCompanyRepositorySource({
+      env: {
+        WAGGLEBOT_COMPANY_REPOSITORY_URL: "git@env.internal:company.git",
+        WAGGLEBOT_COMPANY_SUBDIRECTORY: "examples/reference-setup",
+      },
+      config: { companyRepository: "git@saved.internal:company.git", companySubdirectory: "saved" },
+      packageMetadata: { version: "0.3.1", wagglebot: { companySubdirectory: "package" } },
+    }),
+  ).toEqual({ url: "git@env.internal:company.git", subdirectory: "examples/reference-setup" });
 });
 
 test("recognizes reserved example hosts in SSH and HTTPS forms", () => {

@@ -1,0 +1,2 @@
+# This reference setup deliberately configures no shared MCP server.
+proxies: []
