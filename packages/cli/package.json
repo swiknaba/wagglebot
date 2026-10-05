@@ -1,6 +1,6 @@
 {
   "name": "wagglebot",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "wagglebot": {
     "companyRepository": "git@company.example:platform/mycompany-wagglebot.git"
   },
