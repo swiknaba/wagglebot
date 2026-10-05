@@ -8,6 +8,7 @@ set -euo pipefail
 
 MAIN_BRANCH="main"
 PACKAGE_JSON="packages/cli/package.json"
+REFERENCE_PACKAGE_JSON="examples/reference-setup/package.json"
 
 if ! command -v git &> /dev/null; then
   echo "git is not installed. Please run 'brew install git'."
@@ -89,6 +90,16 @@ package_version=$(node -p "require('./$PACKAGE_JSON').version")
 if [ "$NEW_VERSION" != "$package_version" ]; then
   echo "The package version ($package_version) does not match the release ($NEW_VERSION)."
   echo "Please update the version in $PACKAGE_JSON in a reviewed commit first."
+  exit 1
+fi
+
+# The public reference setup is a company configuration, so it deliberately uses
+# an exact reviewed runtime pin rather than a floating `latest` range. Check the
+# upcoming release target before the script can tag, push, or create a release.
+reference_version=$(node -p "require('./$REFERENCE_PACKAGE_JSON').dependencies.wagglebot")
+if [ "$NEW_VERSION" != "$reference_version" ]; then
+  echo "The reference setup version ($reference_version) does not match the release ($NEW_VERSION)."
+  echo "Please update $REFERENCE_PACKAGE_JSON in a reviewed commit first."
   exit 1
 fi
 

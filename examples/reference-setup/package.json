@@ -2,6 +2,6 @@
   "name": "@swiknaba/reference-agent-setup",
   "private": true,
   "dependencies": {
-    "wagglebot": "0.3.2"
+    "wagglebot": "0.3.3"
   }
 }

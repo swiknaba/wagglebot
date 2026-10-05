@@ -19,6 +19,6 @@ Some runtime-specific agents consume this library through their own integration 
 than Wagglebot provisioning. Their local role instructions and persistent state remain
 configured independently of this reusable worker setup.
 
-The published `0.3.1` package cannot install its cached runtime because its npm
-manifest still contains `workspace:*` dependencies. Publish a corrected `0.3.2`
-package before using this setup outside disposable source-tree tests.
+The reference setup currently pins published Wagglebot `0.3.3`. Its release
+workflow verifies the staged artifact, the published registry package, and this
+reference provisioning path before the release is considered ready.
