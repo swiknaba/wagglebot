@@ -16,9 +16,6 @@ permissions:
 jobs:
   publish:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: packages/cli
     steps:
       - uses: actions/checkout@v7.0.1
       - uses: oven-sh/setup-bun@v2.2.0
@@ -38,7 +35,7 @@ jobs:
       - name: Verify that the tag matches the package version
         run: |
           TAG_VERSION="${GITHUB_REF_NAME#v}"
-          PKG_VERSION="$(node -p "require('./package.json').version")"
+          PKG_VERSION="$(node -p "require('./packages/cli/package.json').version")"
           if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
             echo "Tag $TAG_VERSION does not match package.json $PKG_VERSION."
             exit 1
@@ -46,19 +43,34 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
         working-directory: .
-      - name: Build the bundle
-        run: bun run build
-      # Do not parse "npm pack --json": its shape differs between npm majors.
-      # Build the real tarball and look inside it instead.
-      - name: Assert the tarball ships the built bundle
+      # packages/cli/package.json has workspace dependencies for monorepo builds.
+      # The pack script stages a self-contained release manifest and bundles its
+      # runtime dependencies. Publish only that tarball, never a raw npm pack.
+      - name: Stage the release tarball
+        working-directory: packages/cli
         run: |
-          test -f dist/index.js
-          npm pack --pack-destination "$RUNNER_TEMP"
-          if ! tar -tzf "$RUNNER_TEMP"/wagglebot-*.tgz | grep -qx "package/dist/index.js"; then
-            echo "The tarball does not ship dist/index.js. It ships:"
-            tar -tzf "$RUNNER_TEMP"/wagglebot-*.tgz
+          bun run pack "$RUNNER_TEMP"
+          tarballs=("$RUNNER_TEMP"/wagglebot-*.tgz)
+          if [ "${#tarballs[@]}" -ne 1 ]; then
+            echo "Expected exactly one staged wagglebot tarball."
             exit 1
           fi
-          echo "The tarball ships dist/index.js."
+          printf '%s\n' "${tarballs[0]}" > "$RUNNER_TEMP/wagglebot-tarball"
+      - name: Verify the staged publish artifact
+        run: |
+          TARBALL="$(cat "$RUNNER_TEMP/wagglebot-tarball")"
+          if ! tar -tzf "$TARBALL" | grep -qx "package/dist/index.js"; then
+            echo "The tarball does not ship dist/index.js. It ships:"
+            tar -tzf "$TARBALL"
+            exit 1
+          fi
+          tar -xOf "$TARBALL" package/package.json > "$RUNNER_TEMP/wagglebot-package.json"
+          node -e 'const pkg = require(process.argv[1]); if (Object.values(pkg.dependencies ?? {}).some((version) => version.startsWith("workspace:"))) process.exit(1)' "$RUNNER_TEMP/wagglebot-package.json"
+      - name: Clean-install the staged publish artifact
+        run: |
+          TARBALL="$(cat "$RUNNER_TEMP/wagglebot-tarball")"
+          SMOKE_DIR="$RUNNER_TEMP/wagglebot-install"
+          npm install --prefix "$SMOKE_DIR" --no-save --no-package-lock "$TARBALL"
+          "$SMOKE_DIR/node_modules/.bin/wagglebot" --version | grep -Fx "${GITHUB_REF_NAME#v}"
       - name: Publish to npm with provenance
-        run: npm publish --provenance --access public
+        run: npm publish "$(cat "$RUNNER_TEMP/wagglebot-tarball")" --provenance --access public
