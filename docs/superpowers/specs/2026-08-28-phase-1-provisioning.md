@@ -241,6 +241,8 @@ that toolset. They live **in the wagglebot repository under `skills/`**,
 installed from `swiknaba/wagglebot@v<version>`, because they version
 with wagglebot itself. A registry format change breaks
 `adding-an-mcp-server` on the same day, so the two must move together.
+Wagglebot also ships the house architecture stance for every onboarded
+repository. That guidance shares the distribution channel without format coupling.
 The `skills` CLI discovers `skills/<name>/SKILL.md` in the repository,
 so the entry needs no path.
 
@@ -249,6 +251,7 @@ so the entry needs no path.
 | `writing-a-custom-agent` | Which shape to use, and the file format for it. It asks where the agent belongs before it writes code (D33). **The default is a Markdown subagent.** A Markdown subagent uses the AI the engineer already has, so it needs no API key and it reaches everyone. Reach for a runtime such as Flue only for durability or a sandbox, and say in the pull request what the agent costs to run. |
 | `adding-an-mcp-server` | A `registry.yaml` entry: the auth scheme against the credential source (D10), the pinning rules (D13), the trust approval (P29), and why a literal secret is rejected. |
 | `onboarding-a-repository` | `catalog-info.yaml`: which system, which owner, and why no fallback exists (D20, P35). |
+| `architecture-style-guide` | The house architecture stance every onboarded repository should share: meaningful names, framework reuse, dependency boundaries, and abstractions that earn their existence. It ships for consistent design and review guidance, without toolset format coupling. |
 
 `publishing-team-knowledge` is a candidate, and it waits. Add it when
 somebody publishes to a domain scope for the first time.
@@ -387,7 +390,7 @@ stays the only permission system (D15).
 
 ### The bundled skill (D33)
 
-Wagglebot ships three skills in the curated set (D33). This section
+Wagglebot ships four skills in the curated set (D33). This section
 describes `writing-a-custom-agent`. It teaches an agent how to help an
 engineer write a new custom agent.
 

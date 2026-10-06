@@ -85,21 +85,26 @@ const makeRemote = () => {
 const writeCandidate = (
   root: string,
   revision: string,
-  options: { marker?: boolean; company?: boolean; pin?: string } = {},
+  options: { marker?: boolean; company?: boolean; pin?: string; subdirectory?: string } = {},
 ) => {
-  if (options.marker !== false) writeFileSync(join(root, "wagglebot.yaml"), "version: 1\nkind: company\n");
-  writeFileSync(join(root, "package.json"), JSON.stringify({ dependencies: { wagglebot: options.pin ?? "1.2.3" } }));
+  const companyRoot = options.subdirectory === undefined ? root : join(root, options.subdirectory);
+  mkdirSync(companyRoot, { recursive: true });
+  if (options.marker !== false) writeFileSync(join(companyRoot, "wagglebot.yaml"), "version: 1\nkind: company\n");
+  writeFileSync(
+    join(companyRoot, "package.json"),
+    JSON.stringify({ dependencies: { wagglebot: options.pin ?? "1.2.3" } }),
+  );
   if (options.company !== false) {
-    mkdirSync(join(root, "company"), { recursive: true });
-    writeFileSync(join(root, "company", ".keep"), "");
+    mkdirSync(join(companyRoot, "company"), { recursive: true });
+    writeFileSync(join(companyRoot, "company", ".keep"), "");
   }
-  writeFileSync(join(root, "revision.txt"), revision);
+  writeFileSync(join(companyRoot, "revision.txt"), revision);
 };
 
 const pushCandidate = (
   source: string,
   revision: string,
-  options: { marker?: boolean; company?: boolean; pin?: string } = {},
+  options: { marker?: boolean; company?: boolean; pin?: string; subdirectory?: string } = {},
 ) => {
   runGit(source, ["rm", "-rf", "."]);
   writeCandidate(source, revision, options);
@@ -160,6 +165,59 @@ test("first refresh clones and activates a valid candidate", async () => {
   rmSync(remote.root, { recursive: true, force: true });
 });
 
+test("first refresh activates a validated company subdirectory", async () => {
+  const remote = makeRemote();
+  const home = mkdtempSync(join(tmpdir(), "wgl-company-home-"));
+  const paths = resolvePaths(home);
+  pushCandidate(remote.source, "reference", { subdirectory: "examples/reference-setup" });
+
+  const result = await refreshCompanyCache({
+    url: remote.remote,
+    subdirectory: "examples/reference-setup",
+    paths,
+    exec: realExec,
+  });
+
+  expect(result).toEqual({ root: join(paths.activeCompanyDir, "examples/reference-setup"), refreshFailed: false });
+  expect(readRevision(result.root)).toBe("reference");
+  rmSync(remote.root, { recursive: true, force: true });
+});
+
+test("refresh rejects traversal before cloning", async () => {
+  const home = mkdtempSync(join(tmpdir(), "wgl-company-home-"));
+  const calls: string[] = [];
+  await expect(
+    refreshCompanyCache({
+      url: "https://github.com/platform/company.git",
+      subdirectory: "../outside",
+      paths: resolvePaths(home),
+      exec: async (command) => {
+        calls.push(command);
+        return { code: 1, stdout: "", stderr: "should not run" };
+      },
+    }),
+  ).rejects.toThrow(/stay inside/);
+  expect(calls).toEqual([]);
+  rmSync(home, { recursive: true, force: true });
+});
+
+test("refresh rejects a subdirectory symlink that resolves outside the repository", async () => {
+  const remote = makeRemote();
+  const outside = mkdtempSync(join(tmpdir(), "wgl-company-outside-"));
+  const paths = resolvePaths(mkdtempSync(join(tmpdir(), "wgl-company-home-")));
+  symlinkSync(outside, join(remote.source, "reference"));
+  runGit(remote.source, ["add", "reference"]);
+  runGit(remote.source, ["-c", "commit.gpgsign=false", "commit", "-m", "outside link"]);
+  runGit(remote.source, ["push", "origin", "main"]);
+
+  await expect(
+    refreshCompanyCache({ url: remote.remote, subdirectory: "reference", paths, exec: realExec }),
+  ).rejects.toThrow(/resolve inside/);
+  expect(existsSync(paths.companyDir)).toBe(false);
+  rmSync(remote.root, { recursive: true, force: true });
+  rmSync(outside, { recursive: true, force: true });
+});
+
 test("a later valid revision replaces the active cache", async () => {
   const remote = makeRemote();
   const paths = resolvePaths(mkdtempSync(join(tmpdir(), "wgl-company-home-")));
@@ -209,6 +267,51 @@ test("a failed refresh returns the previous active cache", async () => {
 
   expect(result).toMatchObject({ root: paths.activeCompanyDir, refreshFailed: true });
   expect(readRevision(result.root)).toBe("first");
+  rmSync(remote.root, { recursive: true, force: true });
+});
+
+test("a failed subdirectory refresh returns the selected stale cache", async () => {
+  const remote = makeRemote();
+  const paths = resolvePaths(mkdtempSync(join(tmpdir(), "wgl-company-home-")));
+  pushCandidate(remote.source, "reference", { subdirectory: "examples/reference-setup" });
+  await refreshCompanyCache({
+    url: remote.remote,
+    subdirectory: "examples/reference-setup",
+    paths,
+    exec: realExec,
+  });
+
+  const result = await refreshCompanyCache({
+    url: join(remote.root, "missing.git"),
+    subdirectory: "examples/reference-setup",
+    paths,
+    exec: realExec,
+  });
+
+  expect(result).toMatchObject({ root: join(paths.activeCompanyDir, "examples/reference-setup"), refreshFailed: true });
+  expect(readRevision(result.root)).toBe("reference");
+  rmSync(remote.root, { recursive: true, force: true });
+});
+
+test("a root credential migrates when a later revision selects a company subdirectory", async () => {
+  const remote = makeRemote();
+  const home = mkdtempSync(join(tmpdir(), "wgl-company-home-"));
+  const paths = resolvePaths(home);
+  await refreshCompanyCache({ url: remote.remote, paths, exec: realExec });
+  writeFileSync(join(paths.activeCompanyDir, ".env.credentials"), "TOKEN=root-fixture\n");
+  pushCandidate(remote.source, "reference", { subdirectory: "examples/reference-setup" });
+
+  const result = await refreshCompanyCache({
+    url: remote.remote,
+    subdirectory: "examples/reference-setup",
+    paths,
+    exec: realExec,
+  });
+
+  expect(readFileSync(paths.credentialsFile, "utf8")).toBe("TOKEN=root-fixture\n");
+  recordCachedShellReady(paths, result.root);
+  expect(result.settleCredentials?.()).toBe(true);
+  expect(existsSync(join(paths.activeCompanyDir, ".env.credentials"))).toBe(false);
   rmSync(remote.root, { recursive: true, force: true });
 });
 

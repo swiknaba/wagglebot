@@ -1,8 +1,8 @@
 import { expect, test } from "bun:test";
-import { isReservedExampleUrl, resolveCompanyRepositoryUrl } from "./company-url";
+import { isReservedExampleUrl, resolveCompanyRepositorySource, resolveCompanyRepositoryUrl } from "./company-url";
 
 const metadata = {
-  version: "0.3.0",
+  version: "0.3.1",
   wagglebot: { companyRepository: "git@metadata.example.invalid:platform/company.git" },
 };
 for (const source of ["environment", "saved", "package"]) {
@@ -13,7 +13,7 @@ for (const source of ["environment", "saved", "package"]) {
         env: source === "environment" ? { WAGGLEBOT_COMPANY_REPOSITORY_URL: unsafe } : {},
         config: source === "saved" ? { companyRepository: unsafe } : {},
         packageMetadata: {
-          version: "0.3.0",
+          version: "0.3.1",
           wagglebot: { companyRepository: source === "package" ? unsafe : "git@git.internal:company.git" },
         },
       }),
@@ -60,11 +60,24 @@ test("package metadata supplies the fallback URL", () => {
       env: {},
       config: {},
       packageMetadata: {
-        version: "0.3.0",
+        version: "0.3.1",
         wagglebot: { companyRepository: "git@company.internal:platform/company.git" },
       },
     }),
   ).toBe("git@company.internal:platform/company.git");
+});
+
+test("the configured subdirectory follows the same precedence as the URL", () => {
+  expect(
+    resolveCompanyRepositorySource({
+      env: {
+        WAGGLEBOT_COMPANY_REPOSITORY_URL: "git@env.internal:company.git",
+        WAGGLEBOT_COMPANY_SUBDIRECTORY: "examples/reference-setup",
+      },
+      config: { companyRepository: "git@saved.internal:company.git", companySubdirectory: "saved" },
+      packageMetadata: { version: "0.3.1", wagglebot: { companySubdirectory: "package" } },
+    }),
+  ).toEqual({ url: "git@env.internal:company.git", subdirectory: "examples/reference-setup" });
 });
 
 test("recognizes reserved example hosts in SSH and HTTPS forms", () => {
@@ -78,7 +91,7 @@ test("recognizes a reserved host-only SCP input", () => {
     resolveCompanyRepositoryUrl({
       env: { WAGGLEBOT_COMPANY_REPOSITORY_URL: "git@company.example" },
       config: {},
-      packageMetadata: { version: "0.3.0" },
+      packageMetadata: { version: "0.3.1" },
     }),
   ).toThrow('Run "wagglebot connect <git-url>" first.');
 });
@@ -89,7 +102,7 @@ test("reserved example URLs count as unset and are never returned", () => {
       env: { WAGGLEBOT_COMPANY_REPOSITORY_URL: "git@company.example:platform/company.git" },
       config: { companyRepository: "https://nested.company.example/platform/company.git" },
       packageMetadata: {
-        version: "0.3.0",
+        version: "0.3.1",
         wagglebot: { companyRepository: "git@company.example:platform/company.git" },
       },
     }),
@@ -97,7 +110,7 @@ test("reserved example URLs count as unset and are never returned", () => {
 });
 
 test("missing usable URL asks the engineer to connect", () => {
-  expect(() => resolveCompanyRepositoryUrl({ env: {}, config: {}, packageMetadata: { version: "0.3.0" } })).toThrow(
+  expect(() => resolveCompanyRepositoryUrl({ env: {}, config: {}, packageMetadata: { version: "0.3.1" } })).toThrow(
     'Run "wagglebot connect <git-url>" first.',
   );
 });

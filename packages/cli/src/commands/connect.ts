@@ -1,6 +1,6 @@
 import { chmodSync, existsSync, readFileSync } from "node:fs";
 import { writeFileAtomic } from "../atomic-write";
-import { rejectRepositoryCredentials } from "../company-url";
+import { normalizeCompanySubdirectory, rejectRepositoryCredentials } from "../company-url";
 import type { Reporter } from "../report";
 
 function loadConfig(configFile: string): Record<string, unknown> {
@@ -12,13 +12,21 @@ function loadConfig(configFile: string): Record<string, unknown> {
   return { ...(parsed as Record<string, unknown>) };
 }
 
-export function runConnect(input: { url: string; configFile: string; reporter: Reporter }): number {
+export function runConnect(input: {
+  url: string;
+  subdirectory?: string;
+  configFile: string;
+  reporter: Reporter;
+}): number {
   input.reporter.section("Connect company repository");
   try {
     rejectRepositoryCredentials(input.url);
     const config = loadConfig(input.configFile);
     const existed = existsSync(input.configFile);
     config.companyRepository = input.url;
+    const subdirectory = normalizeCompanySubdirectory(input.subdirectory);
+    if (subdirectory === undefined) delete config.companySubdirectory;
+    else config.companySubdirectory = subdirectory;
     writeFileAtomic(input.configFile, `${JSON.stringify(config, null, 2)}\n`);
     chmodSync(input.configFile, 0o600);
     input.reporter.item("company repository", existed ? "updated" : "installed", "saved to local configuration");

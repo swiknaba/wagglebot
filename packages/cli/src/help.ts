@@ -157,7 +157,7 @@ const SECTIONS: Record<string, Section> = {
     ],
   },
   connect: {
-    title: "connect <git-url>",
+    title: "connect <git-url> [subdirectory]",
     purpose:
       "Stores the company repository URL without Git credentials. Works outside a Git repository. Git uses your existing authentication.",
     reads: [],
@@ -198,7 +198,7 @@ const GENERAL = (): string[] => [
   "Usage: wagglebot <command> [options]",
   "",
   "Phase 1 workflow:",
-  "  connect <git-url>   Save the company repository URL. Optional when the package has a real default.",
+  "  connect <git-url> [subdirectory]   Save the company repository location. Optional when the package has a real default.",
   "  init               Initialize the current Git project and perform its first update.",
   "  update             Update the project, or provision from a marked company working tree.",
   "  init --wagglebot [directory]   Scaffold a company repository with wagglebot.yaml.",
