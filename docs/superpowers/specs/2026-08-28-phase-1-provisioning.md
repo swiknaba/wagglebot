@@ -250,6 +250,7 @@ so the entry needs no path.
 | `adding-an-mcp-server` | A `registry.yaml` entry: the auth scheme against the credential source (D10), the pinning rules (D13), the trust approval (P29), and why a literal secret is rejected. |
 | `onboarding-a-repository` | `catalog-info.yaml`: which system, which owner, and why no fallback exists (D20, P35). |
 | `architecture-style-guide` | The house architecture stance every onboarded repository should share: meaningful names, framework reuse, dependency boundaries, and abstractions that earn their existence. It ships for consistent design and review guidance, without toolset format coupling. |
+| `writing-clear-text` | Clear, natural reader-facing prose for important rewrites and compact explanations. It preserves facts and engineering detail while checking reader effort, instead of relying on a banned-word list. |
 
 `publishing-team-knowledge` is a candidate, and it waits. Add it when
 somebody publishes to a domain scope for the first time.

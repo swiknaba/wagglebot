@@ -14,6 +14,19 @@ test("the generic shared worker template is product-agnostic", () => {
   expect(instructions).not.toMatch(/digitaltwin|kirei|commander|hermes/i);
 });
 
+test("the shared worker template gives every reader-focused writing baseline", () => {
+  const instructions = readFileSync(
+    join(repoRoot, "examples", "reference-setup", "company", "instructions", "00-shared-workers.md"),
+    "utf8",
+  );
+
+  expect(instructions).toContain("reader attention");
+  expect(instructions).toContain("factual meaning");
+  expect(instructions).toMatch(/plain\s+English/);
+  expect(instructions).toContain("When it is installed");
+  expect(instructions).toContain("writing-clear-text");
+});
+
 test("the reference setup pins the released CLI version used by company provisioning", () => {
   const released = JSON.parse(readFileSync(join(repoRoot, "packages", "cli", "package.json"), "utf8")) as {
     version: string;

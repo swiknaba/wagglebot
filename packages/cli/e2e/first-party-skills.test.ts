@@ -16,6 +16,7 @@ const REQUIRED = [
   "adding-an-mcp-server",
   "onboarding-a-repository",
   "architecture-style-guide",
+  "writing-clear-text",
 ];
 
 test("installs the architecture skill from the pinned source and syncs its pointer to every harness", async () => {
@@ -47,6 +48,7 @@ test("installs the architecture skill from the pinned source and syncs its point
     const lock = JSON.parse(readFileSync(join(home, ".agents/.skill-lock.json"), "utf8"));
     expect(Object.keys(lock.skills).sort()).toEqual([...REQUIRED].sort());
     const original = readFileSync(join(skillsDir, "architecture-style-guide/SKILL.md"), "utf8");
+    const evaluations = readFileSync(join(skillsDir, "writing-clear-text/evaluations.md"), "utf8");
     for (const directory of [
       ".claude/skills",
       ".junie/skills",
@@ -56,6 +58,7 @@ test("installs the architecture skill from the pinned source and syncs its point
       ".kiro/skills",
     ]) {
       expect(readFileSync(join(home, directory, "architecture-style-guide/SKILL.md"), "utf8")).toBe(original);
+      expect(readFileSync(join(home, directory, "writing-clear-text/evaluations.md"), "utf8")).toBe(evaluations);
     }
     expect(runSyncHarnesses({ home, harnesses: HARNESSES, instructionDirs: [], reporter })).toBe(0);
     for (const target of HARNESSES.flatMap((harness) => harness.templateTargets)) {
@@ -93,4 +96,25 @@ test("onboarding asks for owner and system before it directs an agent to write c
   expect(ask).toBeGreaterThanOrEqual(0);
   expect(write).toBeGreaterThan(ask);
   expect(text).toContain("Do not derive either value from the directory or Git remote.");
+});
+
+test("writing-clear-text evaluates meaning and reader effort across common writing tasks", () => {
+  const skill = readFileSync(join(skillsDir, "writing-clear-text", "SKILL.md"), "utf8");
+  const evaluations = readFileSync(join(skillsDir, "writing-clear-text", "evaluations.md"), "utf8");
+  const text = `${skill}\n${evaluations}`;
+
+  for (const task of [
+    "Concise engineering concept",
+    "Business concept",
+    "Research summary",
+    "Status update",
+    "Pleasant nontechnical prose",
+  ])
+    expect(text).toContain(task);
+
+  expect(text).toContain("Factual preservation");
+  expect(text).toContain("Reader effort");
+  expect(text).toContain("Audience and abstraction");
+  expect(text).toContain("not X but Y");
+  expect(skill).toContain("evaluations.md");
 });
