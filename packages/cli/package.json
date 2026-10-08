@@ -37,7 +37,7 @@
     "@wagglebot/mcp-hub": "workspace:*",
     "@wagglebot/local-brain": "workspace:*",
     "skills": "1.5.23",
-    "smol-toml": "1.8.0"
+    "smol-toml": "1.9.0"
   },
   "devDependencies": {
     "yaml": "2.8.3"
