@@ -103,15 +103,16 @@ Use one precise term consistently for each concept.
 
 Use American English, active voice, and simple verb forms.
 
-Use no more than 20 words in an instruction.
+Keep instructions and descriptive sentences as short as their meaning allows.
+Use a longer sentence when it keeps a necessary condition, consequence, or
+relationship clear.
 
-Use no more than 25 words in a descriptive sentence.
-
-Give each sentence one main point.
+Give each sentence one main point when that does not hide necessary connections.
 
 Use imperative verbs for procedures.
 
-Use lists for multiple conditions, actions, or alternatives.
+Use lists when they help a reader scan conditions, actions, or alternatives.
+Do not force threes or turn connected reasoning into fragments.
 
 Use comments to explain intent, constraints, invariants, or non-obvious risks.
 
@@ -124,6 +125,14 @@ Otherwise, state the necessary assumption briefly.
 Before delivery, remove redundant, obvious, speculative, and decorative text.
 
 Do not claim full STE compliance without an Issue 9 vocabulary validator.
+
+Treat reader attention as a design constraint. Lead with the useful point and
+state concrete facts and conditions. Use plain English when it keeps technical
+accuracy. Do not turn useful detail into fragments. Avoid hollow polish,
+rhetorical-question openers, template-like rhythm, and `not X but Y` filler.
+Use a list or diagram only when it helps the reader's task. Use the
+`writing-clear-text` skill for an important rewrite, a one-page explanation,
+or an evaluation of reader-facing prose.
 
 
 ## Memory

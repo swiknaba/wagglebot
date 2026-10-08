@@ -13,9 +13,9 @@
     "regen:test-app": "node scripts/regen-test-app.mjs"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.2.0",
-    "@types/bun": "1.2.21",
-    "@types/node": "24.3.0",
-    "typescript": "5.9.2"
+    "@biomejs/biome": "2.5.15",
+    "@types/bun": "1.4.2",
+    "@types/node": "26.6.4",
+    "typescript": "7.0.2"
   }
 }
