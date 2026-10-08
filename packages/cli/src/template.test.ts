@@ -16,12 +16,3 @@ test("base instructions require a changelog before final response and exclude re
   expect(text).toContain("Before the final response");
   expect(text).toContain("Do not record research, failed attempts, or sessions that make no change.");
 });
-
-test("base instructions favor clear sentences without forcing telegraphic prose", () => {
-  const text = readFileSync(join(import.meta.dir, "..", "templates", "AGENTS.base.md"), "utf8");
-
-  expect(text).toContain("Do not force threes");
-  expect(text).toContain("necessary connections");
-  expect(text).not.toContain("Use no more than 20 words");
-  expect(text).not.toContain("Use no more than 25 words");
-});

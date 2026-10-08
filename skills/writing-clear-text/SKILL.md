@@ -69,17 +69,3 @@ give a specific revision. Do not guess whether AI wrote it. Apply the
 portability test: if a sentence could describe any company or product, replace
 it with a fact, example, mechanism, consequence, or judgment specific to this
 subject.
-
-## Evidence limits
-
-Cognitive-load research and a randomized plain-language trial support reducing
-avoidable reader effort. Research also finds that AI editing can change meaning,
-and that responses to disclosed AI authorship vary by context. This supports
-fact checks and context-sensitive warmth; it does not prove a clinical "AI slop
-fatigue" syndrome.
-
-- [Sweller (1988)](https://doi.org/10.1207/s15516709cog1202_4)
-- [Sayfi et al. (2024)](https://doi.org/10.1016/j.jclinepi.2023.11.009)
-- [Abdulhai et al. (2026)](https://arxiv.org/abs/2603.18161)
-- [Nakano et al. (2026)](https://doi.org/10.1145/3742413.3789076)
-- [Columbia IGP (2026)](https://igp.sipa.columbia.edu/sites/igp/files/2026-06/AI%20Slop%20and%20the%20Information%20Ecosystem_IGP%20Report.pdf)

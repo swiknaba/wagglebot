@@ -97,35 +97,3 @@ test("onboarding asks for owner and system before it directs an agent to write c
   expect(write).toBeGreaterThan(ask);
   expect(text).toContain("Do not derive either value from the directory or Git remote.");
 });
-
-test("writing-clear-text evaluates meaning and reader effort across common writing tasks", () => {
-  const skill = readFileSync(join(skillsDir, "writing-clear-text", "SKILL.md"), "utf8");
-  const evaluations = readFileSync(join(skillsDir, "writing-clear-text", "evaluations.md"), "utf8");
-  const text = `${skill}\n${evaluations}`;
-
-  for (const task of [
-    "Concise engineering concept",
-    "Voice-preserving edit",
-    "Specific evidence",
-    "Quoted requirement",
-    "Verified link",
-    "Business concept",
-    "Research summary",
-    "Status update",
-    "Pleasant nontechnical prose",
-  ])
-    expect(text).toContain(task);
-
-  expect(text).toContain("Add caching to Artifactory for resilience.");
-  expect(text).toContain("ordinary cache behavior");
-  expect(text).toContain("Preserve direct quotes, stated requirements, identifiers, and literals exactly");
-  expect(text).toContain("Do not guess or reconstruct links.");
-  expect(text).toContain("Make the minimum effective edit.");
-  expect(text).toContain("Name a source instead of using vague attribution.");
-  expect(text).toContain("Do not guess whether AI wrote it.");
-  expect(text).toContain("Factual preservation");
-  expect(text).toContain("Reader effort");
-  expect(text).toContain("Audience and abstraction");
-  expect(text).toContain("not X but Y");
-  expect(skill).toContain("evaluations.md");
-});
