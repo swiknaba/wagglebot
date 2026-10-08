@@ -105,6 +105,10 @@ test("writing-clear-text evaluates meaning and reader effort across common writi
 
   for (const task of [
     "Concise engineering concept",
+    "Voice-preserving edit",
+    "Specific evidence",
+    "Quoted requirement",
+    "Verified link",
     "Business concept",
     "Research summary",
     "Status update",
@@ -112,6 +116,13 @@ test("writing-clear-text evaluates meaning and reader effort across common writi
   ])
     expect(text).toContain(task);
 
+  expect(text).toContain("Add caching to Artifactory for resilience.");
+  expect(text).toContain("ordinary cache behavior");
+  expect(text).toContain("Preserve direct quotes, stated requirements, identifiers, and literals exactly");
+  expect(text).toContain("Do not guess or reconstruct links.");
+  expect(text).toContain("Make the minimum effective edit.");
+  expect(text).toContain("Name a source instead of using vague attribution.");
+  expect(text).toContain("Do not guess whether AI wrote it.");
   expect(text).toContain("Factual preservation");
   expect(text).toContain("Reader effort");
   expect(text).toContain("Audience and abstraction");
