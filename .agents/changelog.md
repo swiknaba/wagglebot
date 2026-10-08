@@ -10,3 +10,4 @@
 
 - Added portable reader-focused guidance and the first-party `writing-clear-text` skill, including examples, evaluation cases, and distribution coverage across supported harnesses.
 - Refined the skill around source fidelity, writer voice, and concrete evidence; removed research rationale and brittle instruction-text tests.
+- Aligned workspace Zod pins with the MCP SDK to restore TypeScript 7 compatibility.
