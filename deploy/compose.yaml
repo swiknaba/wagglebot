@@ -1,0 +1,216 @@
+services:
+  postgres:
+    image: pgvector/pgvector:0.8.1-pg17
+    environment:
+      POSTGRES_DB: wagglebot
+      POSTGRES_USER: wagglebot
+      POSTGRES_PASSWORD: ${STACK_DATABASE_PASSWORD:?STACK_DATABASE_PASSWORD must be set}
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - >-
+        install -d -o postgres -g postgres -m 0700 /var/lib/postgresql/tls
+        && install -o postgres -g postgres -m 0644 /run/config/postgres.crt /var/lib/postgresql/tls/postgres.crt
+        && install -o postgres -g postgres -m 0600 /run/config/postgres.key /var/lib/postgresql/tls/postgres.key
+        && exec /usr/local/bin/docker-entrypoint.sh postgres
+        -c ssl=on
+        -c ssl_cert_file=/var/lib/postgresql/tls/postgres.crt
+        -c ssl_key_file=/var/lib/postgresql/tls/postgres.key
+        -c listen_addresses=*
+        -c log_min_error_statement=panic
+        -c log_error_verbosity=terse
+        -c log_parameter_max_length_on_error=0
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - type: bind
+        source: ${STACK_STATE_DIR:?STACK_STATE_DIR must be set}/config/postgres.crt
+        target: /run/config/postgres.crt
+        read_only: true
+      - type: bind
+        source: ${STACK_STATE_DIR:?STACK_STATE_DIR must be set}/config/postgres.key
+        target: /run/config/postgres.key
+        read_only: true
+      - type: bind
+        source: ../services/database/init-vector.sql
+        target: /docker-entrypoint-initdb.d/10-vector.sql
+        read_only: true
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U wagglebot -d wagglebot"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+    restart: unless-stopped
+
+  migrate:
+    build:
+      context: ../services/database
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: postgresql://wagglebot:${STACK_DATABASE_PASSWORD:?STACK_DATABASE_PASSWORD must be set}@postgres:5432/wagglebot?sslmode=verify-full&sslrootcert=%2Fconfig%2Fca.crt
+    volumes:
+      - type: bind
+        source: ${STACK_STATE_DIR:?STACK_STATE_DIR must be set}/config/ca.crt
+        target: /config/ca.crt
+        read_only: true
+    command: ["db:migrate"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  auth:
+    build:
+      context: ..
+      dockerfile: services/auth/Dockerfile
+    environment:
+      AUTH_HOST: 0.0.0.0
+      AUTH_PORT: "8080"
+      AUTH_ISSUER: ${STACK_ISSUER:-https://localhost:8443}
+      AUTH_SIGNING_PRIVATE_KEY_FILE: /config/auth-private.pem
+      AUTH_CATALOG_PATH: /config/company/catalog
+      AUTH_CATALOG_REFRESH_SECONDS: "60"
+      AUTH_KEY_SOURCE: catalog
+    volumes:
+      - type: bind
+        source: ${STACK_STATE_DIR:?STACK_STATE_DIR must be set}/config/company
+        target: /config/company
+        read_only: true
+      - type: bind
+        source: ${STACK_STATE_DIR:?STACK_STATE_DIR must be set}/config/auth-private.pem
+        target: /config/auth-private.pem
+        read_only: true
+    healthcheck:
+      test:
+        - CMD
+        - bun
+        - -e
+        - >-
+          fetch("http://127.0.0.1:8080/readyz").then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    restart: unless-stopped
+
+  registry:
+    build:
+      context: ..
+      dockerfile: services/registry/Dockerfile
+    environment:
+      REGISTRY_HOST: 0.0.0.0
+      REGISTRY_PORT: "3040"
+      REGISTRY_ISSUER: ${STACK_ISSUER:-https://localhost:8443}
+      REGISTRY_AUTH_PUBLIC_KEY_FILE: /config/auth-public.pem
+      REGISTRY_COMPANY_ROOT: /config/company
+      REGISTRY_SOURCE_REVISION: ${STACK_REVISION:?STACK_REVISION must be set}
+      REGISTRY_REFRESH_SECONDS: "900"
+      REGISTRY_MAX_RESPONSE_BYTES: "262144"
+    volumes:
+      - type: bind
+        source: ${STACK_STATE_DIR:?STACK_STATE_DIR must be set}/config/company
+        target: /config/company
+        read_only: true
+      - type: bind
+        source: ${STACK_STATE_DIR:?STACK_STATE_DIR must be set}/config/auth-public.pem
+        target: /config/auth-public.pem
+        read_only: true
+    healthcheck:
+      test:
+        - CMD
+        - bun
+        - -e
+        - >-
+          fetch("http://127.0.0.1:3040/readyz").then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    restart: unless-stopped
+
+  memory:
+    build:
+      context: ..
+      dockerfile: services/memory-worker/Dockerfile
+    environment:
+      MEMORY_DATABASE_URL: postgresql://wagglebot:${STACK_DATABASE_PASSWORD:?STACK_DATABASE_PASSWORD must be set}@postgres:5432/wagglebot?sslmode=verify-full&sslrootcert=%2Fconfig%2Fca.crt
+      MEMORY_DATABASE_CA: /config/ca.crt
+      MEMORY_HOST: 0.0.0.0
+      MEMORY_PORT: "3050"
+      MEMORY_ISSUER: ${STACK_ISSUER:-https://localhost:8443}
+      MEMORY_COMPANY_ROOT: /config/company
+      MEMORY_SESSION_TOKEN_PUBLIC_KEY_FILE: /config/auth-public.pem
+      MEMORY_MODEL_CACHE_DIR: /var/cache/wagglebot-memory
+      MEMORY_GITLEAKS_EXECUTABLE: /usr/local/bin/gitleaks
+      MEMORY_ADMIN_BEARER_TOKEN: ${STACK_ADMIN_TOKEN:?STACK_ADMIN_TOKEN must be set}
+      MEMORY_PUBLICATION_REPOSITORIES_FILE: /config/publication-repositories.json
+    volumes:
+      - model-cache:/var/cache/wagglebot-memory
+      - type: bind
+        source: ${STACK_STATE_DIR:?STACK_STATE_DIR must be set}/config/company
+        target: /config/company
+        read_only: true
+      - type: bind
+        source: ${STACK_STATE_DIR:?STACK_STATE_DIR must be set}/config/auth-public.pem
+        target: /config/auth-public.pem
+        read_only: true
+      - type: bind
+        source: ${STACK_STATE_DIR:?STACK_STATE_DIR must be set}/config/ca.crt
+        target: /config/ca.crt
+        read_only: true
+      - type: bind
+        source: ${STACK_STATE_DIR:?STACK_STATE_DIR must be set}/config/publication-repositories.json
+        target: /config/publication-repositories.json
+        read_only: true
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        - CMD
+        - bun
+        - -e
+        - >-
+          fetch("http://127.0.0.1:3050/readyz").then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 180s
+    restart: unless-stopped
+
+  gateway:
+    image: caddy:2.10.2-alpine
+    ports:
+      - "127.0.0.1:${STACK_PORT:-8443}:8443"
+    volumes:
+      - type: bind
+        source: ./Caddyfile
+        target: /etc/caddy/Caddyfile
+        read_only: true
+      - type: bind
+        source: ${STACK_STATE_DIR:?STACK_STATE_DIR must be set}/config/tls.crt
+        target: /etc/caddy/tls.crt
+        read_only: true
+      - type: bind
+        source: ${STACK_STATE_DIR:?STACK_STATE_DIR must be set}/config/tls.key
+        target: /etc/caddy/tls.key
+        read_only: true
+    depends_on:
+      auth:
+        condition: service_healthy
+      registry:
+        condition: service_healthy
+      memory:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8081/livez"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 5s
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+  model-cache:

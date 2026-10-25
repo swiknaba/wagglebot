@@ -1,4 +1,6 @@
 import { expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { loadRegistry, mergeRegistries } from "./registry";
 
 test("loads and validates a registry", () => {
@@ -6,6 +8,17 @@ test("loads and validates a registry", () => {
   const proxies = loadRegistry(text, "registry.base.yaml");
   expect(proxies).toHaveLength(1);
   expect(proxies[0]?.namespace).toBe("example");
+});
+
+test("company template launches the packaged local context engine with telemetry disabled", () => {
+  const text = readFileSync(join(import.meta.dir, "..", "templates", "init", "company", "registry.yaml"), "utf8");
+  const [entry] = loadRegistry(text, "company/registry.yaml");
+  expect(entry).toMatchObject({
+    namespace: "project-brain",
+    mode: "stdio_cmd",
+    command: "wagglebot-context-engine",
+    env: { CODEGRAPH_TELEMETRY: "0" },
+  });
 });
 
 test("rejects an unpinned stdio_npx package", () => {

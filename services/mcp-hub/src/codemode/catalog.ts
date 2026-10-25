@@ -57,10 +57,14 @@ function hubTool(namespace: string, value: unknown): HubTool | null {
 }
 
 export function buildHubCatalog(states: Map<string, DiscoveryState>): HubTool[] {
-  return [...states]
+  const tools = [...states]
     .flatMap(([namespace, state]) =>
       state.status === "ready" ? state.tools.map((tool) => hubTool(namespace, tool)) : [],
     )
-    .filter((tool): tool is HubTool => tool !== null)
+    .filter((tool): tool is HubTool => tool !== null);
+  const counts = new Map<string, number>();
+  for (const tool of tools) counts.set(tool.qualifiedName, (counts.get(tool.qualifiedName) ?? 0) + 1);
+  return tools
+    .filter((tool) => counts.get(tool.qualifiedName) === 1)
     .sort((left, right) => left.qualifiedName.localeCompare(right.qualifiedName));
 }

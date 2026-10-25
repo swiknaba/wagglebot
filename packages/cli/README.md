@@ -74,6 +74,51 @@ Run `wagglebot --help` for public command help. Compatibility aliases remain
 available for one release but do not appear in primary help. See the
 [migration guide](https://github.com/swiknaba/wagglebot/blob/main/docs/phase-1-command-migration.md) for their mappings.
 
+## Phase 2 operator commands (unreleased)
+
+Configure `MEMORY_WORKER_URL` with the worker's HTTPS origin and load
+`MEMORY_ADMIN_BEARER_TOKEN` from your operator secret environment. Explicit
+loopback HTTP origins are allowed for local development. Credentials are not
+accepted as command arguments. These commands print validated identifiers and
+counts; they do not print source bodies or raw server errors.
+
+```sh
+wagglebot memory admin rescan --operation-key rescan-001
+wagglebot memory admin reindex --operation-key reindex-001
+wagglebot memory admin run-once --operation-key drain-001 --limit 20
+```
+
+Reuse an operation key to retry the same request. A new key starts a new
+operation; use one to drain eligible failed work. `reindex --profile-id` may
+explicitly select the fixed supported embedding profile. Database backup and
+restore use the native Ruby operator tasks described in `deploy/README.md`;
+they are not exposed by these commands or public HTTP endpoints.
+
+From the marked company checkout root (including a company subdirectory),
+publish one explicitly reviewed Markdown source:
+
+```sh
+wagglebot knowledge publish company/knowledge/api.md --repository company/config --revision HEAD --operation-key publish-api-001
+```
+
+The path is relative to that company root and is sent as a repository-relative
+path. `--repository` must match a worker-configured trusted checkout identity.
+The command reads committed source bytes at `--revision` (default `HEAD`),
+preserves the Markdown body in deterministic chunks, and leaves working files
+and Git untouched. For reliable retries, retain the resolved commit printed in
+the successful response and reuse it with the same operation key.
+
+To publish a reviewed deletion, select a commit where the source is absent and
+retain its original scope/owner explicitly:
+
+```sh
+wagglebot knowledge publish company/knowledge/api.md --repository company/config --revision HEAD --operation-key remove-api-001 --remove --scope domain:payments --owner team-payments
+```
+
+The complete empty replacement invalidates the source's previous chunks.
+Publication, admin recovery, model/scanner validation, context and Bridge work
+must still pass the full Phase 2 release gate before release.
+
 ## Safety
 
 Wagglebot stores a repository URL only. Git uses existing SSH or HTTPS

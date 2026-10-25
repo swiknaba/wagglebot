@@ -1,6 +1,8 @@
+import { Database } from "bun:sqlite";
 import { expect, test } from "bun:test";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 
 import { CodeGraphProvider } from "../src/codegraph/provider";
 import { fixtureRepo } from "../src/memory/test-fixture";
@@ -28,6 +30,9 @@ integrationTest("the pinned SDK persists and reopens a local CodeGraph index", a
   expect(process.env.CODEGRAPH_TELEMETRY).toBe("0");
   expect(result.state).toBe("ready");
   expect(result.nodes.length).toBeGreaterThan(0);
+  expect(result.nodes.find((node) => node.name === "entry")?.snippet).toContain(
+    "export const entry = () => service();",
+  );
 });
 
 integrationTest(
@@ -63,3 +68,47 @@ integrationTest(
   },
   10_000,
 );
+
+integrationTest("context retrieval leaves the current graph tables and checkout unchanged", async () => {
+  const repo = fixtureRepo();
+  mkdirSync(join(repo, "src"));
+  const source = join(repo, "src", "entry.ts");
+  writeFileSync(source, "export const rotateSession = () => 'current';\n");
+  const initializer = new CodeGraphProvider();
+  await initializer.initialize(repo);
+  await initializer.close();
+  const databasePath = join(repo, ".codegraph", "codegraph.db");
+
+  const snapshot = () => {
+    const databaseUrl = new URL(pathToFileURL(databasePath).href);
+    databaseUrl.searchParams.set("immutable", "1");
+    const db = new Database(databaseUrl.href, { readonly: true, create: false });
+    try {
+      return ["nodes", "edges", "nodes_fts", "schema_versions"].map((table) => {
+        try {
+          return db.query(`SELECT * FROM ${table} ORDER BY rowid`).all();
+        } catch (error) {
+          throw new Error(`${table}: ${error instanceof Error ? error.message : "snapshot failed"}`);
+        }
+      });
+    } finally {
+      db.close();
+    }
+  };
+  const beforeTables = snapshot();
+  const beforeSource = await Bun.file(source).text();
+  const reader = new CodeGraphProvider();
+  const context = await reader.exploreContext({
+    projectRoot: repo,
+    query: "rotateSession",
+    maxNodes: 20,
+    includeCode: true,
+  });
+  await reader.close();
+  const afterTables = snapshot();
+  const afterSource = await Bun.file(source).text();
+
+  expect(context.nodes.some((node) => node.name === "rotateSession")).toBe(true);
+  expect(afterTables).toEqual(beforeTables);
+  expect(afterSource).toBe(beforeSource);
+});

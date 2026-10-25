@@ -4,7 +4,7 @@ import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { createInterface } from "node:readline/promises";
 import { parseArgs } from "node:util";
-import { createLocalBrain, type LocalBrain } from "@wagglebot/local-brain";
+import type { LocalBrain } from "@wagglebot/local-brain";
 import { runBrainInit } from "./commands/brain-init";
 import { runBrainRemember } from "./commands/brain-remember";
 import { runBrainStatus } from "./commands/brain-status";
@@ -12,7 +12,9 @@ import { runInit } from "./commands/company-init";
 import { runConnect } from "./commands/connect";
 import { runInstallAgents } from "./commands/install-agents";
 import { resolveSkillsBin, runInstallSkills } from "./commands/install-skills";
+import { runKnowledgePublish } from "./commands/knowledge-publish";
 import { runMcpHubApprove } from "./commands/mcp-hub-approve";
+import { runMemoryAdmin } from "./commands/memory-admin";
 import { runProjectInit } from "./commands/project-init";
 import { runProjectUpdate } from "./commands/project-update";
 import { runCompanyProvision } from "./commands/provision-company";
@@ -37,6 +39,7 @@ import { realExec } from "./exec";
 import { HARNESSES, templatesDir } from "./harness";
 import { helpText } from "./help";
 import type { Ask } from "./identity";
+import type { MemoryFetch } from "./memory-http";
 import { resolvePaths } from "./paths";
 import { ensurePinnedRuntime, interactiveRuntimeExec, type RuntimeExec, runPinnedRuntime } from "./pinned-runtime";
 import { findGitRoot } from "./project-root";
@@ -56,6 +59,7 @@ export type CliDeps = {
   skillsBin?: string;
   packageMetadata?: PackageMetadata;
   brain?: LocalBrain;
+  memoryFetch?: MemoryFetch;
 };
 
 const COMPANY_COMMANDS = [
@@ -80,6 +84,8 @@ const KNOWN_COMMANDS = [
   "write-mcp",
   "mcp-hub",
   "brain",
+  "memory",
+  "knowledge",
 ];
 
 const packageMetadata = (): PackageMetadata => {
@@ -161,6 +167,9 @@ export async function main(argv: string[], deps: CliDeps = { write: console.log 
   const cwd = deps.cwd ?? process.cwd();
 
   try {
+    if (command === "knowledge")
+      return runKnowledgePublish({ args: rest, cwd, env, exec, fetch: deps.memoryFetch, write: deps.write });
+    if (command === "memory") return runMemoryAdmin({ args: rest, env, write: deps.write, fetch: deps.memoryFetch });
     if (command === "connect") {
       const { positionals } = parseArgs({ args: rest, allowPositionals: true });
       if (positionals.length < 1 || positionals.length > 2 || !positionals[0]?.trim())
@@ -193,12 +202,12 @@ export async function main(argv: string[], deps: CliDeps = { write: console.log 
     }
 
     if (command === "brain") {
-      const brain = deps.brain ?? createLocalBrain();
       const [subcommand, ...brainArgs] = rest;
       if (subcommand === undefined || subcommand === "--help" || subcommand === "-h") {
         deps.write(helpText(subcommand === undefined ? "brain" : "brain"));
         return 0;
       }
+      const brain = deps.brain ?? (await import("@wagglebot/local-brain")).createLocalBrain();
       if (subcommand === "init") {
         const { positionals } = parseArgs({ args: brainArgs, allowPositionals: true });
         return await runBrainInit({

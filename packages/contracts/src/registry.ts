@@ -44,7 +44,16 @@ const proxyBase = z
     endpoint: z.string().url().max(2048).optional(),
     command: z.string().min(1).max(1024).optional(),
     args: z.array(z.string().max(4096)).max(64).optional(),
-    env: z.record(z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/), expansion).optional(),
+    env: z
+      .record(z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/), z.string().max(4096))
+      .superRefine((entries, ctx) => {
+        for (const [key, value] of Object.entries(entries)) {
+          if (!expansion.safeParse(value).success && !(key === "CODEGRAPH_TELEMETRY" && value === "0")) {
+            ctx.addIssue({ code: "custom", path: [key], message: "must use a named environment expansion" });
+          }
+        }
+      })
+      .optional(),
     auth: z.object({ scheme: AuthSchemeSchema, source: CredentialSourceSchema }).strict().optional(),
   })
   .strict()

@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { ensureLocalMemoryBundle } from "@wagglebot/local-brain";
+import { ensureLocalMemoryBundle } from "@wagglebot/local-brain/memory/lifecycle";
 import { writeFileAtomic } from "../atomic-write";
 import { findProjectRoot } from "../project-root";
 

@@ -228,7 +228,7 @@ export const PublicationRequestSchema = z
     path: RelativePathSchema,
     scope: SharedScopeSchema,
     owner: safeName,
-    chunks: z.array(publicationChunk).min(1).max(256),
+    chunks: z.array(publicationChunk).max(256),
   })
   .strict();
 

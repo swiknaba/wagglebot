@@ -3,9 +3,8 @@
 > **Partially historical.** For the shared-memory milestone, follow
 > [the 2026-09-16 Sequel plan](2026-09-16-sequel-shared-memory-foundation.md)
 > and the current 2026-08-28 shared-layer, service-contract, and Phase 4
-> specifications. The MemPalace/TypeScript-migration/normalized-table wording
-> below is superseded. The local-first boundary and milestone dependencies stay
-> in force.
+> specifications. Historical steps below remain as a record of completed work;
+> active shared-memory requirements use the single-table Sequel design.
 
 > **Local-memory amendment (2026-09-26):** The unshipped single-file memory
 > implementation is a historical checkpoint. Task 1A and the
@@ -18,7 +17,7 @@
 
 **Architecture:** Phase 2 is six testable milestones connected by explicit dependency gates. Local repository intelligence is built first; SSH authentication then supplies shared-service identity; the authenticated registry and local MCP hub provide governed tool access; shared memory stores only system/domain/organization knowledge; the unified context engine fuses bounded local and shared evidence; Context Bridge adds explicit, expiring local chat-to-chat transfer. This document orchestrates the approved subsystem plans and does not replace their file-level TDD steps.
 
-**Tech Stack:** TypeScript 5.9.2, Bun, Zod 4.6.1, Biome 2.2.0, OKF v0.2, YAML 2.8.3, CodeGraph 1.6.0, native Git, OpenSSH SSHSIG, `jose` 6.2.12, PostgreSQL with pgvector, `pg` 8.23.0, a TypeScript/Bun one-shot migration job, MemPalace 3.9.0, `@modelcontextprotocol/sdk` 1.30.0, and gitleaks 8.30.1.
+**Tech Stack:** TypeScript 5.9.2, Bun, Zod 4.6.1, Biome 2.2.0, OKF v0.2, YAML 2.8.3, CodeGraph 1.6.0, native Git, OpenSSH SSHSIG, `jose` 6.2.12, PostgreSQL with pgvector, Ruby 3 with Rake and Sequel migrations, `pg`, CPU ONNX embeddings through `@xenova/transformers` using `all-MiniLM-L6-v2`, `@modelcontextprotocol/sdk` 1.30.0, and gitleaks 8.30.1.
 
 **Spec:** `docs/superpowers/specs/2026-09-11-phase-2-memory-roadmap.md`; public wire contracts are authoritative in `docs/api-reference.md`.
 
@@ -26,13 +25,8 @@
 
 - Treat `docs/api-reference.md` as authoritative for Phase 2 HTTP, MCP, persisted-record, error, idempotency, and versioning contracts.
 - Prefer approved 2026-09-11 and 2026-09-12 designs and plans over older schematic examples. Historical Chroma examples are superseded.
-- PostgreSQL is the canonical shared-memory control store. MemPalace 3.9.0 is a private, replaceable indexing adapter backed by PostgreSQL/pgvector; it is never a public API or record authority.
-- Incorporate the operational controls from Ludwig's 2026-09-13 shared-database
-  update without replacing the newer canonical model: use an advisory-locked
-  one-shot migration job, complete ordered migration checks, explicit rollback,
-  a committed schema-only reference, and scoped backup/restore. Keep the runner
-  in TypeScript/Bun, retain the normalized `memory_*` record/outbox tables, and
-  keep embeddings behind MemPalace.
+- PostgreSQL is the canonical shared-memory store. The isolated Ruby/Sequel migration service owns schema changes; the Bun worker creates CPU embeddings in-process and reads and writes the single `wagglebot_memories` table.
+- Preserve the Sequel plan's operational controls: advisory-locked migrations, complete ordered migration checks, explicit rollback, a committed schema-only reference, and scoped backup/restore. Do not add a MemPalace adapter, indexing outbox, normalized memory tables, or a TypeScript migration runner.
 - Keep code, Git history, CodeGraph data, the `.agents/memory/` OKF bundle, Context Bridge packets, tool credentials, authentication session tokens, and MCP trust approvals on the workstation.
 - Keep component memory only in committed OKF concept files under `.agents/memory/`. Shared storage accepts only system, domain, and organization scopes.
 - Never persist, upload, infer from, or mine chat transcripts. Retrieval never becomes durable memory without an explicit proposal and save or remember operation.
@@ -53,7 +47,7 @@ Wagglebot is a vendor-neutral engineering-agent platform with progressively broa
 
 | Product phase | Outcome | Current state |
 |---|---|---|
-| Phase 1: Provisioning | One company repository provisions skills, subagents, base instructions, project instructions, and MCP configuration into six supported harnesses without running a service. | Complete and released through `v0.2.1`. |
+| Phase 1: Provisioning | One company repository provisions skills, subagents, base instructions, project instructions, and MCP configuration into nine supported harnesses without running a service. | Complete and released through CLI `v0.3.4`. |
 | Phase 2: Memory and context | Local repository intelligence, authenticated shared registry/tool access, governed cross-repository memory, bounded context assembly, and explicit local context transfer. | Approved designs and detailed plans exist; implementation has started. |
 | Phase 3: Collaboration | Presence, persistent messages, channels, handoffs, and lease/fencing-safe task coordination under SSH authentication. | Design only; excluded from the Phase 2 release. |
 | Phase 4: Document ingestion | Reviewed documents enter shared memory through a separate scanned pipeline with optional batch extraction. | Design only; excluded from the Phase 2 release. |
@@ -93,24 +87,94 @@ and remains outside the Phase 2 release.
 
 ## Current Implementation Baseline
 
-Status updated on 2026-09-28 from branch `DEV-002`:
+Status updated on 2026-10-25 on `DEV-002` after the local Phase 2 gate passed:
 
 | Area | Evidence | Status |
 |---|---|---|
-| Phase 1 CLI and provisioning | `packages/cli`, six-harness support, project instruction sync, release tag `v0.2.1` | Built and released |
+| Phase 1 CLI and provisioning | `packages/cli`, nine-harness support, project instruction sync, CLI release `v0.3.4` | Built and released |
 | Shared contract/scanner groundwork | Commit `c37c31f` adds contract and scanner fixtures | Committed groundwork |
 | Phase 2 subsystem designs and detailed plans | Current plans plus historical plans marked superseded | Active work follows the current plan for each subsystem |
-| Shared Memory Foundation Task 1 | Memory/principal schemas, workspace registration, memory-worker package metadata, tests, and lockfile updates | Implemented contract checkpoint |
+| Shared Memory Foundation | Authenticated/scanned writes, reads, publication, recovery, CPU embeddings, and native pgvector integration | Complete; Sol approved |
 | Local Repository Brain and OKF runtime | BM25, path policy, CodeGraph, Git, CLI, low-level MCP tools, OKF bundle/provider, and shared project/brain lifecycle are implemented | Task 1A implementation, documentation, and release gate complete |
-| SSH authentication | `services/auth` and `packages/auth-protocol` verify SSH signatures and issue/verify sessions | Implemented; full-stack verification remains part of the release gate |
+| SSH authentication | `services/auth` and `packages/auth-protocol` verify SSH signatures and issue/verify sessions | Complete; real SSH exchange exercised in Compose |
 | Shared database/admin design updates | Ludwig commit `a81a37f` on this branch | Database foundation active; dashboard deferred until after Phase 3 |
 | Authenticated registry | `services/registry` serves validated authenticated registry snapshots | Implemented |
-| Local MCP hub | Contracts, configuration, credential isolation, trust approval, and registry refresh exist in `services/mcp-hub` | Foundation implemented; transports/discovery/CodeMode remain |
-| Shared memory runtime | Contracts exist; the Sequel migration service and worker runtime begin with the 2026-09-16 plan | In progress |
-| Unified Context Engine | Only the seven low-level local MCP adapters required by Milestone 1 exist; context assembly is not built | Not built |
-| Context Bridge | No vault, facade, or MCP implementation | Not built |
+| Local MCP hub | Credential/trust isolation, four transports, discovery, CodeMode, introspection, and local HTTP runtime | Complete; exercised with remote registry/memory and native context subprocess |
+| Shared memory runtime | HTTP/MCP, reviewed publication, admin recovery, durable replay, wire mapping, and scoped backup/restore | Complete; native/container PostgreSQL and production model/scanner checks pass |
+| Unified Context Engine | Catalog identity, bounded retrieval/ranking, freshness, conflicts, cursors, four MCP tools, and evaluation | Complete; Sol approved and composed gate passed |
+| Context Bridge | Protected packet vault, process coordination, export/import/status/revoke, TTL and capacity limits | Complete; Sol approved, concurrency stress and offline composed gate passed |
 
-The current Shared Memory Task 1 work has passed its focused contract tests and the repository-wide test, check, typecheck, and build commands. It is an isolated contract foundation and may be retained. It does not authorize starting Shared Memory Task 2 before the authentication dependency exists.
+Current continuation follows
+`docs/superpowers/plans/2026-10-06-phase-2-completion.md`. The additive migration
+and explicit wire mapping support `wake`, `reviewAfter` and enum confidence.
+On 2026-10-24, an isolated native PostgreSQL 17/pgvector cluster ran all four
+memory/admin integration tests successfully under `TZ=America/Los_Angeles`.
+The Ruby suite passed 17 tests/107 assertions with no skips, including rollback
+and schema export. The schema reference was regenerated from that cluster.
+This evidence does not verify real CPU embeddings, the pinned gitleaks binary,
+publication SQL integration, scoped backup/restore, or the composed release gate.
+
+The same continuation passed the full Bun suite (910 passed, six skipped,
+zero failed across 916 tests/129 files). Four database skips were separately
+executed successfully above; two optional CodeGraph tests remain unexecuted.
+Workspace check, typecheck and CLI build passed. Admin key reuse across an
+in-flight run and rescan/reindex now conflicts rather than corrupting replay.
+Later the same day, C2 review and missing SQL recovery coverage passed, and the
+C3 publication/admin CLI slice was implemented and reviewed. The latest full
+approved Bun run passed 924 tests with eight skips (six real database tests
+executed separately and two optional CodeGraph tests). All 116 memory-worker
+tests passed with real pgvector enabled and no skips. The CLI preserves committed
+source bytes, company subdirectories and content-free operator responses.
+Latest evidence (2026-10-24): C3 scoped backup/restore passed the full Ruby suite
+(24 runs, 173 assertions, zero skips) with `SNAPSHOT_SCAN_INTEGRATION=1` and the
+official-checksum-verified gitleaks 8.30.1 binary. Real scanning accepted clean
+input and rejected three synthetic secrets, including the GitHub PAT rule;
+fresh-process CPU-model checks each produced finite nonzero 384-dimensional
+vectors. The composed HTTP/PostgreSQL/model/scanner/key/catalog runtime passed
+one test with 14 assertions. The approved Bun run passed 939 tests with eight
+skips before the optional production-scanner integration test was added; the
+default skip total is now nine (six database gates and the production-scanner
+gate were executed separately; two optional CodeGraph tests remain skipped).
+All 117 memory-worker tests passed against real pgvector with no skips. C3
+backup/restore and trusted Git ancestry SQL proof are complete. Task D is
+authorized to begin; Sol approval remains required to close the shared-memory
+milestone. Phase 2 release, context and Bridge gates remain open.
+
+Hub verification checkpoint (2026-10-06): the full Bun suite passed with 789
+tests across 103 files and two optional CodeGraph skips; typecheck and build
+passed. A native startup smoke check returned `/livez` and `/readyz` 200,
+rejected unauthenticated `/mcp` with 401, and closed the runtime repeatedly.
+Transport fixtures cover HTTP, SSE, and `stdio_cmd`; `stdio_npx` uses a fake
+local npx launcher to verify the pinned package and arguments without a package
+download. The Ruby database suite ran 13 tests and 54 assertions with three
+database integration skips. The full Phase 2 release gate remains open.
+
+Latest continuation (2026-10-25): Tasks D (Unified Context Engine) and E
+(Context Bridge) are implemented, with evaluation fixtures, MCP integration,
+and Bridge end-to-end tests. `bun run check`, `bun run typecheck`,
+`bun run build`, and `git diff --check` passed. `bun test` passed 988 tests with 10
+optional skips; the three CodeGraph integration tests passed separately. Real
+PostgreSQL 17.11/pgvector 0.8.6 worker tests passed (11 tests/78 assertions),
+the production memory HTTP/model/scanner/auth/restart smoke passed (14
+assertions), and the Ruby/Sequel suite passed (24 runs/173 assertions, zero
+failures/errors/skips, with both database URLs and the pinned scanner enabled).
+The main branch merge is present in `DEV-002`.
+This intermediate checkpoint is superseded by the final gate below.
+
+Final gate (2026-10-25): the Compose images built and all shared services became
+healthy with verified HTTPS and database TLS. The three-repository/two-system
+scenario passed real SSH auth, registry and native hub/context MCP, scoped
+system/domain/org retrieval, private component-memory isolation, changed-code
+and changed-fact cursors, process restart/reset, wake budgets, reviewed company
+and team publication/replacement/removal, admin jobs, durable replay, outbound
+request/log/database privacy, offline local retrieval, and Bridge isolation.
+Independent Sol reviews approved shared memory, context/Bridge, catalog wiring,
+and the SDK/Git/runtime packaging repairs. The full Bun suite passed 1,020 tests
+with ten optional gates run separately, no failures; check/typecheck/build pass.
+The final production container smoke passed with 14 assertions. Earlier native
+Ruby evidence remains 24 runs/173 assertions with no skips. GitHub CI and
+release workflows are unchanged. Phase 2 implementation and local release
+gates are complete; publishing packages is separate work.
 
 ## Dependency Graph
 
@@ -274,8 +338,8 @@ degradable.
 - [x] Execute Task 5: add a 60-second, three-attempt, one-use challenge store and generic-failure SSHSIG verification.
 - [x] Execute Task 6: issue 900-second EdDSA JWTs and verify issuer, audience, algorithm, expiry, and 30-second clock tolerance.
 - [x] Execute Task 7: expose auth health, challenge, and session HTTP routes with safe errors and unauthenticated rate limits.
-- [ ] Execute Task 8: integrate fixture consumers and prove replay rejection, audience isolation, refresh, and catalog failure behavior end to end.
-- [ ] Verify logs and persisted state contain no nonce, signature, token, key material, request body, catalog contents, or absolute path.
+- [x] Execute Task 8: integrate fixture consumers and prove replay rejection, audience isolation, refresh, and catalog failure behavior end to end.
+- [x] Verify logs and persisted state contain no nonce, signature, token, key material, request body, catalog contents, or absolute path.
 
 **Gate:** A registered engineer signs one challenge through `ssh-agent`, receives a short-lived token for exactly one allowed audience, and shared-service verifiers derive the same principal; replay, wrong key, wrong user, wrong audience, expiry, and refresh failures are covered.
 
@@ -315,12 +379,12 @@ degradable.
 
 - [x] Execute Task 1 of the detailed plan: define strict hub-facing contracts and configuration.
 - [x] Execute Task 2: resolve credentials only on the workstation and require a `0600` trust approval for new or changed privileged registry entries.
-- [ ] Execute Task 3: fetch, validate, and atomically swap complete registry revisions; drain removed namespaces and invalidate their schemas.
-- [ ] Execute Task 4: implement exactly `remote_http`, `remote_sse`, `stdio_npx`, and `stdio_cmd`; strip local hub and authentication credentials before every upstream call.
-- [ ] Execute Task 5: add bounded, concurrent discovery with five-second discovery timeouts and adaptive refresh.
-- [ ] Execute Task 6: expose only CodeMode and introspection tools; never expose raw downstream tool lists.
-- [ ] Execute Task 7: wire Streamable HTTP MCP, local auth, startup/degraded behavior, response caps, and end-to-end transport fixtures.
-- [ ] Prove `execute` is never retried automatically and that hub logs/errors contain no arguments, credentials, endpoint paths, schemas, or upstream response bodies.
+- [x] Execute Task 3: fetch, validate, and atomically swap complete registry revisions; drain removed namespaces and invalidate their schemas.
+- [x] Execute Task 4: implement exactly `remote_http`, `remote_sse`, `stdio_npx`, and `stdio_cmd`; strip local hub and authentication credentials before every upstream call.
+- [x] Execute Task 5: add bounded, concurrent discovery with five-second discovery timeouts and adaptive refresh.
+- [x] Execute Task 6: expose only CodeMode and introspection tools; never expose raw downstream tool lists.
+- [x] Execute Task 7: wire Streamable HTTP MCP, local auth, startup/degraded behavior, response caps, and end-to-end transport fixtures.
+- [x] Prove `execute` is never retried automatically and that hub logs/errors contain no arguments, credentials, endpoint paths, schemas, or upstream response bodies.
 
 **Gate:** One local endpoint safely discovers and executes across all four transport modes, isolates credentials per namespace, requires trust for privileged changes, and remains useful when one remote namespace is unavailable.
 
@@ -342,11 +406,11 @@ degradable.
 
 - [x] Land the isolated migration service and versioned Phase 2 schema
   artifacts from Tasks 1–2; real pgvector verification remains open below.
-- [ ] Execute Tasks 3–4 of the Sequel plan for CPU embeddings, fact storage,
+- [x] Execute Tasks 3–4 of the Sequel plan for CPU embeddings, fact storage,
   and the authenticated service surface.
 - [ ] Execute Task 5 only when the Phase 4 ingestion scope is scheduled; it
   extends the same table and adds the isolated ingestion runner.
-- [ ] Run integration tests against a real PostgreSQL `vector` extension; do
+- [x] Run integration tests against a real PostgreSQL `vector` extension; do
   not substitute an in-memory database for the milestone gate.
 
 **Gate:** Confirmed system facts are visible across repositories in the same system; component memory never enters shared storage; domain/org writes enforce D23 owners; secret fixtures never reach PostgreSQL; migration and embedding metadata checks prevent incompatible startup; and rebuild/recovery preserve canonical truth.
@@ -366,15 +430,15 @@ degradable.
 - Consumes: local-brain providers, authentication memory client, shared-memory search, project identity, task/query, context controls, and content-free cursor state.
 - Produces: deterministic planning, concurrent bounded retrieval, weighted reciprocal-rank fusion, deduplication/conflict reporting, token/item budgets, four `brain_*` MCP tools, and status without prose.
 
-- [ ] Execute Task 1 of the detailed plan: define strict `ContextPacket`, evidence, conflict, degraded-provider, omitted-reason, control, and status contracts.
-- [ ] Execute Task 2: add the private shared-memory client and reuse authentication per-audience token caching without persisting tokens.
-- [ ] Execute Task 3: map wake/search/explain requests deterministically to independent providers.
-- [ ] Execute Task 4: retrieve concurrently with provider-specific and aggregate deadlines; preserve successful evidence when another provider fails.
-- [ ] Execute Task 5: apply reciprocal-rank fusion, authority-aware tie breaking, identity/content deduplication, cursor repeat suppression, and explicit conflict reporting.
-- [ ] Execute Task 6: enforce item, shared-item, byte, and estimated-token budgets before rendering stable Markdown or structured output.
-- [ ] Execute Task 7: build L0-L3 wake behavior and the context facade; keep automatic L0 local-only with zero retrieved items.
-- [ ] Execute Task 8: expose `brain_wake`, `brain_search`, `brain_explain`, and `brain_status` while enforcing one prose representation per response mode.
-- [ ] Execute Task 9: install lifecycle instructions, deterministic/evaluation fixtures, protocol tests, degraded-provider tests, and end-to-end proof.
+- [x] Execute Task 1 of the detailed plan: define strict `ContextPacket`, evidence, conflict, degraded-provider, omitted-reason, control, and status contracts.
+- [x] Execute Task 2: add the private shared-memory client and reuse authentication per-audience token caching without persisting tokens.
+- [x] Execute Task 3: map wake/search/explain requests deterministically to independent providers.
+- [x] Execute Task 4: retrieve concurrently with provider-specific and aggregate deadlines; preserve successful evidence when another provider fails.
+- [x] Execute Task 5: apply reciprocal-rank fusion, authority-aware tie breaking, identity/content deduplication, cursor repeat suppression, and explicit conflict reporting.
+- [x] Execute Task 6: enforce item, shared-item, byte, and estimated-token budgets before rendering stable Markdown or structured output.
+- [x] Execute Task 7: build L0-L3 wake behavior and the context facade; keep automatic L0 local-only with zero retrieved items.
+- [x] Execute Task 8: expose `brain_wake`, `brain_search`, `brain_explain`, and `brain_status` while enforcing one prose representation per response mode.
+- [x] Execute Task 9: install lifecycle instructions, deterministic/evaluation fixtures, protocol tests, degraded-provider tests, and end-to-end proof.
 
 **Gate:** L0 sends at most 150 estimated tokens and makes no shared request; L1 returns at most three wake-eligible shared facts and spends at most 200 tokens on them; L2/search return at most six total and three shared items by default; cursors do not resend unchanged evidence; packets remain useful when graph or shared memory is unavailable; no query or retrieved prose is logged or persisted.
 
@@ -393,13 +457,13 @@ degradable.
 - Consumes: explicit user-approved packet fields, canonical project root identity, evidence references, same-OS-user filesystem ownership, and the secret scanner.
 - Produces: strict Context Bridge contracts, packet normalization, opaque 43-character handles, a protected expiring vault, lifecycle facade, and four local MCP operations.
 
-- [ ] Execute Task 1 of the detailed plan: add strict packet, export/import/status/revoke, metadata, and stable error contracts.
-- [ ] Execute Task 2: normalize bounded packets and bind project scope to a canonical root key; require explicit workstation scope for cross-repository import.
-- [ ] Execute Task 3: implement atomic `0700`/`0600` vault storage, opaque handles, one-hour default/four-hour maximum TTL, ownership checks, import counts, cleanup, and aggregate limits.
-- [ ] Execute Task 4: add export/import/status/revoke lifecycle behavior; keep revoke idempotent without revealing packet existence.
-- [ ] Execute Task 5: expose the four MCP tools and enforce the same single-representation rule as the context engine.
-- [ ] Execute Task 6: prove project mismatch, owner mismatch, expiry, revocation, import cap, process restart, size limits, secret rejection, and transcript absence end to end.
-- [ ] Confirm Wake never discovers or imports bridge packets and imports never mutate durable local or shared memory.
+- [x] Execute Task 1 of the detailed plan: add strict packet, export/import/status/revoke, metadata, and stable error contracts.
+- [x] Execute Task 2: normalize bounded packets and bind project scope to a canonical root key; require explicit workstation scope for cross-repository import.
+- [x] Execute Task 3: implement atomic `0700`/`0600` vault storage, opaque handles, one-hour default/four-hour maximum TTL, ownership checks, import counts, cleanup, and aggregate limits.
+- [x] Execute Task 4: add export/import/status/revoke lifecycle behavior; keep revoke idempotent without revealing packet existence.
+- [x] Execute Task 5: expose the four MCP tools and enforce the same single-representation rule as the context engine.
+- [x] Execute Task 6: prove project mismatch, owner mismatch, expiry, revocation, import cap, process restart, size limits, secret rejection, and transcript absence end to end.
+- [x] Confirm Wake never discovers or imports bridge packets and imports never mutate durable local or shared memory.
 
 **Gate:** A user explicitly exports a bounded packet and imports it in another local chat through an opaque expiring handle; default project binding, same-user ownership, permissions, limits, revocation, and cleanup hold across process restart; no network or authentication call occurs.
 
@@ -419,22 +483,23 @@ degradable.
 - Consumes: all six completed milestones.
 - Produces: one releasable Phase 2 increment whose behavior, deployment, documentation, and public contracts agree.
 
-- [ ] Run every subsystem's focused tests and its documented completion gate.
-- [ ] Start the real local integration stack with PostgreSQL/pgvector, MemPalace, auth, registry, memory worker, MCP hub, and local context engine.
-- [ ] Prove a local-only repository question works while all shared services are offline.
-- [ ] Prove one repository can retrieve a confirmed system fact from another repository without exposing either repository's component memory.
-- [ ] Prove reviewed company/team publication, complete-revision replacement, removal, Git provenance, rescan, reindex, and restore behavior.
-- [ ] Prove concurrent/repeated migrations, complete ordered migration-history
-  checks, explicit rollback, schema-reference reproducibility, and preservation
-  of unrelated database objects and the shared `vector` extension.
-- [ ] Prove authentication identity, exact audience isolation, principal-specific registry composition, local credential isolation, and trust-change approval.
-- [ ] Prove all four hub transports, namespace degradation, CodeMode, and introspection bounds.
-- [ ] Prove L0/L1/L2 context budgets, cursor suppression, conflict handling, provider degradation, and single-representation MCP responses.
-- [ ] Prove Context Bridge export/import/revoke/expiry and same-user/project boundaries without network access.
-- [ ] Scan test output, service logs, telemetry fixtures, database audit rows, and persisted local state for source, memory prose, queries, credentials, DSNs, tokens, private paths, and transcripts; require absence where prohibited.
-- [ ] Run `bun run check`, `bun run typecheck`, `bun test`, `bun run build`, and `git diff --check` from a clean dependency install.
-- [ ] Inspect the final diff and status for unrelated edits, generated files, debug output, stale comments, accidental public-contract changes, or local paths.
-- [ ] Update the README status only after all release gates pass and the services are actually shippable.
+- [x] Run every subsystem's focused tests and its documented completion gate.
+- [x] Start the real local integration stack with PostgreSQL/pgvector, the Sequel migration service, auth, registry, memory worker, the workstation-local MCP hub, and local context engine. Keep the hub in the workstation process boundary rather than a shared Compose service profile.
+- [x] Prove a local-only repository question works while all shared services are offline.
+- [x] Prove one repository can retrieve a confirmed system fact from another repository without exposing either repository's component memory.
+- [x] Prove reviewed company/team publication, complete-revision replacement, removal, Git provenance, rescan, reindex, and restore behavior.
+- [x] Prove concurrent/repeated Sequel migrations, complete ordered
+  migration-history checks, explicit rollback, schema-reference
+  reproducibility, and preservation of unrelated database objects and the
+  shared `vector` extension.
+- [x] Prove authentication identity, exact audience isolation, principal-specific registry composition, local credential isolation, and trust-change approval.
+- [x] Prove all four hub transports, namespace degradation, CodeMode, and introspection bounds.
+- [x] Prove L0/L1/L2 context budgets, cursor suppression, conflict handling, provider degradation, and single-representation MCP responses.
+- [x] Prove Context Bridge export/import/revoke/expiry and same-user/project boundaries without network access.
+- [x] Scan test output, service logs, telemetry fixtures, database audit rows, and persisted local state for source, memory prose, queries, credentials, DSNs, tokens, private paths, and transcripts; require absence where prohibited.
+- [x] Run `bun run check`, `bun run typecheck`, `bun test`, `bun run build`, and `git diff --check` from a clean dependency install.
+- [x] Inspect the final diff and status for unrelated edits, generated files, debug output, stale comments, accidental public-contract changes, or local paths.
+- [x] Update the README status only after all release gates pass and the services are actually shippable.
 
 **Gate:** All twelve release gates in the Phase 2 memory roadmap pass against the real composed stack, all relevant checks are green, public docs match behavior, and no required work remains for the Phase 2 scope.
 

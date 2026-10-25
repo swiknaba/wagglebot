@@ -7,6 +7,8 @@ proxies:
   - namespace: project-brain
     mode: stdio_cmd
     command: wagglebot-context-engine
+    env:
+      CODEGRAPH_TELEMETRY: "0"
 # Example:
 # proxies:
 #   - namespace: example

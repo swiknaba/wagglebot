@@ -23,6 +23,10 @@ export async function resolveCredential(
 export function explicitChildEnv(proxy: ProxyConfig, env: Record<string, string | undefined>): Record<string, string> {
   const output: Record<string, string> = {};
   for (const [key, expansion] of Object.entries(proxy.env ?? {})) {
+    if (key === "CODEGRAPH_TELEMETRY" && expansion === "0") {
+      output[key] = "0";
+      continue;
+    }
     const variable = expansion.slice(2, -1);
     if (!/^[A-Z][A-Z0-9_]{0,127}$/.test(variable)) continue;
     const value = env[variable];

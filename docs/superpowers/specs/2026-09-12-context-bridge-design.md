@@ -112,6 +112,13 @@ directory:
 ```
 
 The directory is created with mode `0700`; packet files use mode `0600`.
+A separate `0700` coordination directory beside the vault contains a `0600`
+SQLite file with hashed packet filenames and import counts only. Packet JSON
+remains the content store. SQLite transactions serialize operations across
+context processes and release their locks on process exit; transient begin
+and commit contention is retried within a bounded deadline without repeating
+the packet operation. The existing owned common state parent may remain `0755`
+when it is not writable by other users.
 The stored filename is derived from a hash of the opaque handle, so the handle
 itself is not present in the directory listing. The vault is a bounded,
 expiring packet cache, not a transcript database. Startup and every operation

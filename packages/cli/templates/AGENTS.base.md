@@ -50,6 +50,22 @@ If the user accepts, use the `brainstorming` skill.
 Ask one question at a time and check for missing requirements.
 Do not offer an interview for small fixes, routine tasks, or work with an approved specification.
 
+## Repository context
+
+At a new chat, call `brain_wake` at L0 for local project orientation. Use L1
+only when the developer asks to continue or requests orientation. When the
+developer gives a concrete task, use L2 or `brain_search` and pass the latest
+context cursor to later calls. Use `brain_explain` for code relationships or
+history. Follow evidence references when you need detail instead of asking for
+a larger packet. Treat stale graph results as leads. Verify them against the
+current source.
+
+Never save a transcript as memory. For Context Bridge, export and import only
+when the developer explicitly asks. Do not put secrets or transcripts in a
+packet. Check imported evidence and freshness before treating it as fact. Use
+`brain_memory_propose` and `brain_memory_save` only for durable concepts; an
+agent suggestion stays a proposal until the developer promotes it.
+
 ## Architecture
 
 Use the architecture-style-guide skill, when available, before component design and for reviews of business boundaries, naming, abstractions, or framework integration.

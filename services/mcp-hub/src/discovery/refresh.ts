@@ -43,6 +43,8 @@ function untilAborted<T>(operation: Promise<T>, signal: AbortSignal): Promise<T>
 
 export class DiscoveryScheduler {
   readonly #inFlight = new Map<string, Promise<void>>();
+  readonly #namespaceControllers = new Map<string, AbortController>();
+  readonly #identities = new Map<string, string>();
   #controller?: AbortController;
   #timer?: ReturnType<typeof setInterval>;
 
@@ -63,16 +65,21 @@ export class DiscoveryScheduler {
     this.#controller = undefined;
     if (this.#timer) clearInterval(this.#timer);
     this.#timer = undefined;
+    for (const controller of this.#namespaceControllers.values()) controller.abort();
     await Promise.allSettled(this.#inFlight.values());
   }
 
-  public async refreshAll(signal: AbortSignal = new AbortController().signal): Promise<void> {
+  public async refreshAll(
+    signal: AbortSignal = this.#controller?.signal ?? new AbortController().signal,
+  ): Promise<void> {
     const proxies = this.options.proxies();
     await this.reconcile(proxies);
     await this.refresh(proxies, signal);
   }
 
-  public async refreshDue(signal: AbortSignal = new AbortController().signal): Promise<void> {
+  public async refreshDue(
+    signal: AbortSignal = this.#controller?.signal ?? new AbortController().signal,
+  ): Promise<void> {
     const proxies = this.options.proxies();
     await this.reconcile(proxies);
     await this.refresh(
@@ -82,10 +89,26 @@ export class DiscoveryScheduler {
   }
 
   private async reconcile(proxies: readonly ProxyConfig[]): Promise<void> {
-    const active = new Set(proxies.map((proxy) => proxy.namespace));
-    const removed = [...this.options.cache.states().keys()].filter((namespace) => !active.has(namespace));
-    for (const namespace of removed) this.options.cache.remove(namespace);
-    await this.options.upstreams.drain(removed);
+    const current = new Map(proxies.map((proxy) => [proxy.namespace, JSON.stringify(proxy)]));
+    const invalidated = [...this.#identities]
+      .filter(([namespace, identity]) => current.get(namespace) !== identity)
+      .map(([namespace]) => namespace);
+    await this.invalidate(invalidated);
+    this.#identities.clear();
+    for (const [namespace, identity] of current) this.#identities.set(namespace, identity);
+  }
+
+  public async invalidate(namespaces: Iterable<string>): Promise<void> {
+    const invalidated = [...new Set(namespaces)];
+    for (const namespace of invalidated) this.#namespaceControllers.get(namespace)?.abort();
+    await Promise.allSettled(
+      invalidated.flatMap((namespace) => {
+        const active = this.#inFlight.get(namespace);
+        return active ? [active] : [];
+      }),
+    );
+    for (const namespace of invalidated) this.options.cache.remove(namespace);
+    await this.options.upstreams.drain(invalidated);
   }
 
   private async refresh(proxies: readonly ProxyConfig[], signal: AbortSignal): Promise<void> {
@@ -94,6 +117,10 @@ export class DiscoveryScheduler {
       while (!signal.aborted) {
         const proxy = proxies[next++];
         if (!proxy) return;
+        while (this.#inFlight.size >= this.options.maxConcurrency && !signal.aborted) {
+          await Promise.race(this.#inFlight.values());
+        }
+        if (signal.aborted) return;
         await this.refreshNamespace(proxy, signal);
       }
     };
@@ -103,7 +130,13 @@ export class DiscoveryScheduler {
   private refreshNamespace(proxy: ProxyConfig, signal: AbortSignal): Promise<void> {
     const running = this.#inFlight.get(proxy.namespace);
     if (running) return running;
-    const refresh = this.doRefreshNamespace(proxy, signal).finally(() => this.#inFlight.delete(proxy.namespace));
+    const controller = new AbortController();
+    const namespaceSignal = AbortSignal.any([signal, controller.signal]);
+    this.#namespaceControllers.set(proxy.namespace, controller);
+    const refresh = this.doRefreshNamespace(proxy, namespaceSignal).finally(() => {
+      this.#inFlight.delete(proxy.namespace);
+      this.#namespaceControllers.delete(proxy.namespace);
+    });
     this.#inFlight.set(proxy.namespace, refresh);
     return refresh;
   }

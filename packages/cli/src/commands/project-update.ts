@@ -1,6 +1,6 @@
 import { existsSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { ensureLocalMemoryBundle } from "@wagglebot/local-brain";
+import { ensureLocalMemoryBundle } from "@wagglebot/local-brain/memory/lifecycle";
 import { writeFileAtomic } from "../atomic-write";
 import type { Harness, ProjectTarget } from "../harness";
 import { HARNESSES, templatesDir } from "../harness";

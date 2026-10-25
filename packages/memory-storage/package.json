@@ -1,0 +1,10 @@
+{
+  "name": "@wagglebot/memory-storage",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": "./src/index.ts",
+  "dependencies": {
+    "@wagglebot/contracts": "workspace:*"
+  }
+}

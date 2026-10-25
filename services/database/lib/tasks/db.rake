@@ -1,8 +1,29 @@
 require "json"
 require "time"
 require_relative "../database"
+require_relative "../snapshot"
 
 namespace :db do
+  desc "Export a scoped, protected JSON snapshot to a new file"
+  task :backup, [:path] do |_task, arguments|
+    begin
+      result = Database::Snapshot.backup!(Database.connection!, arguments[:path])
+      puts "snapshot backup: #{result[:memories]} memories, #{result[:metadata]} metadata, #{result[:migrations]} migrations"
+    rescue StandardError
+      abort "snapshot backup failed"
+    end
+  end
+
+  desc "Restore a validated scoped JSON snapshot; stop all memory workers and drains first"
+  task :restore, [:path] do |_task, arguments|
+    begin
+      result = Database::Snapshot.restore!(Database.connection!, arguments[:path])
+      puts "snapshot restore: #{result[:memories]} memories, #{result[:metadata]} metadata, #{result[:migrations]} migrations"
+    rescue StandardError
+      abort "snapshot restore failed"
+    end
+  end
+
   desc "Create a timestamped reversible migration"
   task :generate, [:description] do |_task, arguments|
     filename = Database.generate_migration!(arguments[:description])

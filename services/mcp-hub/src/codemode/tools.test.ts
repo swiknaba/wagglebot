@@ -129,3 +129,64 @@ test("execute rejects non-object arguments before reaching an upstream", async (
     "hub_invalid_request",
   );
 });
+
+test("ambiguous qualified names are unavailable for both schema lookup and execution", async () => {
+  const cache = new DiscoveryCache({
+    now: () => new Date("2026-09-19T10:00:00.000Z"),
+    retrySeconds: 30,
+    refreshSeconds: 300,
+    ttlSeconds: 30,
+  });
+  cache.succeed("a_b", [{ name: "c", inputSchema: { type: "object" } }]);
+  cache.succeed("a", [{ name: "b_c", inputSchema: { type: "object" } }]);
+  const unused = (): UpstreamClient => {
+    throw new Error("ambiguous tools must not execute");
+  };
+  const mode = new CodeMode({
+    catalog: () => buildHubCatalog(cache.states()),
+    cache,
+    proxies: () => [
+      ProxyConfigSchema.parse({ namespace: "a_b", mode: "remote_http", endpoint: "https://a-b.example/mcp" }),
+      ProxyConfigSchema.parse({ namespace: "a", mode: "remote_http", endpoint: "https://a.example/mcp" }),
+    ],
+    upstreams: new UpstreamManager({ createRemoteClient: unused, createStdioClient: unused, removalGraceMs: 0 }),
+  });
+
+  expect(() => mode.getSchema("a_b_c")).toThrow("hub_tool_unavailable");
+  await expect(mode.execute("a_b_c", {}, new AbortController().signal)).rejects.toThrow("hub_tool_unavailable");
+});
+
+test("rejects an oversized upstream execution result without retrying", async () => {
+  const cache = new DiscoveryCache({
+    now: () => new Date("2026-09-19T10:00:00.000Z"),
+    retrySeconds: 30,
+    refreshSeconds: 300,
+    ttlSeconds: 30,
+  });
+  cache.succeed("github", [{ name: "large_result", inputSchema: { type: "object" } }]);
+  let calls = 0;
+  const client = (): UpstreamClient => ({
+    async initialize() {},
+    async listTools() {
+      return [];
+    },
+    async callTool() {
+      calls += 1;
+      return { content: [{ type: "text", text: "x".repeat(1_100_000) }] };
+    },
+    async close() {},
+  });
+  const mode = new CodeMode({
+    catalog: () => buildHubCatalog(cache.states()),
+    cache,
+    proxies: () => [
+      ProxyConfigSchema.parse({ namespace: "github", mode: "remote_http", endpoint: "https://github.example/mcp" }),
+    ],
+    upstreams: new UpstreamManager({ createRemoteClient: client, createStdioClient: client, removalGraceMs: 0 }),
+  });
+
+  await expect(mode.execute("github_large_result", {}, new AbortController().signal)).rejects.toThrow(
+    "hub_response_too_large",
+  );
+  expect(calls).toBe(1);
+});

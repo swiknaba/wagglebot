@@ -14,7 +14,7 @@ const put = (path: string, text: string) => {
 beforeAll(() => {
   execFileSync(
     process.execPath,
-    ["build", join(import.meta.dir, "index.ts"), "--target=node", "--outdir", join(packageRoot, "dist")],
+    ["build", join(import.meta.dir, "index.ts"), "--target=node", "--splitting", "--outdir", join(packageRoot, "dist")],
     {
       cwd: join(import.meta.dir, ".."),
     },

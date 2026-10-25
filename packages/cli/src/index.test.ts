@@ -28,6 +28,38 @@ const put = (path: string, text: string) => {
 };
 const read = (path: string) => readFileSync(path, "utf8");
 
+test("memory admin routes outside a company checkout and advertises operator help", async () => {
+  const lines: string[] = [];
+  expect(await main(["memory", "--help"], { write: (line) => lines.push(line) })).toBe(0);
+  expect(lines.join("\n")).toContain("memory admin");
+  expect(lines.join("\n")).toContain("MEMORY_WORKER_URL");
+  lines.length = 0;
+  expect(
+    await main(["memory", "admin", "rescan", "--operation-key", "route-scan"], {
+      write: (line) => lines.push(line),
+      env: { MEMORY_WORKER_URL: "https://memory.example.test", MEMORY_ADMIN_BEARER_TOKEN: "test-admin" },
+      memoryFetch: async () =>
+        Response.json({
+          schemaVersion: 1,
+          operationKey: "route-scan",
+          operationId: "scan-id",
+          scanned: 2,
+          invalidated: 0,
+          ruleIds: [],
+        }),
+    }),
+  ).toBe(0);
+  expect(JSON.parse(lines[0] ?? "{}")).toMatchObject({ scanned: 2 });
+});
+
+test("knowledge help advertises explicit committed publication and removal", async () => {
+  const lines: string[] = [];
+  expect(await main(["knowledge", "--help"], { write: (line) => lines.push(line) })).toBe(0);
+  expect(lines.join("\n")).toContain("knowledge publish");
+  expect(lines.join("\n")).toContain("--remove");
+  expect(lines.join("\n")).toContain("committed");
+});
+
 function fixture(company = false) {
   const root = mkdtempSync(join(tmpdir(), "wgl-route-"));
   scratch.push(root);

@@ -1,8 +1,9 @@
 import { expect, test } from "bun:test";
-import { chmodSync, mkdtempSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { ProxyConfig } from "@wagglebot/contracts";
 import { RegistryManager } from "./registry-client";
+import { TrustStore } from "./trust";
 
 const snapshot = JSON.stringify({
   schemaVersion: 1,
@@ -31,7 +32,7 @@ const config = (extra = {}) => ({
   toolMaxConcurrency: 4,
   ...extra,
 });
-const trust = { requireApproval: () => true } as never;
+const trust = { load: async () => undefined, requireApproval: () => true };
 
 test("loads a mode-0600 local registry snapshot", async () => {
   const path = join(mkdtempSync(join("/tmp", "waggle-registry-")), "registry.json");
@@ -67,7 +68,7 @@ test("keeps approved namespaces when another namespace requires approval", async
   });
   const manager = new RegistryManager({
     config: config({ configPath: undefined, configUrl: "https://registry.example/registry" }),
-    trust: { requireApproval: (proxy: ProxyConfig) => proxy.namespace === "approved" } as never,
+    trust: { load: async () => undefined, requireApproval: (proxy: ProxyConfig) => proxy.namespace === "approved" },
     tokens: { get: async () => ({ token: "d26", expiresAt: "" }), invalidate: () => undefined },
     fetch: async () => new Response(registry),
   });
@@ -137,8 +138,8 @@ test("coalesces concurrent refresh requests", async () => {
 
   const first = manager.refresh();
   const second = manager.refresh();
-  await Promise.resolve();
-  release?.(new Response(snapshot));
+  while (!release) await Promise.resolve();
+  release(new Response(snapshot));
 
   expect(await first).toEqual(await second);
   expect(calls).toBe(1);
@@ -249,4 +250,110 @@ test("stop detaches an abort-ignoring refresh before a later start", async () =>
   expect(manager.current()?.revision).toBe(`reg_${"b".repeat(64)}`);
 
   await manager.stop();
+});
+
+test("runs candidate invalidation before exposing a changed namespace snapshot", async () => {
+  const path = join(mkdtempSync(join("/tmp", "waggle-registry-change-")), "registry.json");
+  const proxy = (endpoint: string) => ({ namespace: "same", mode: "remote_http", endpoint });
+  const body = (revision: string, endpoint: string) =>
+    JSON.stringify({
+      schemaVersion: 1,
+      revision: `reg_${revision.repeat(64)}`,
+      sourceRevision: "a".repeat(40),
+      generatedAt: "2026-09-13T00:00:00.000Z",
+      principal: { username: "alice" },
+      proxies: [proxy(endpoint)],
+      toolCatalog: { version: 1, title: "T", platform_context: [], operating_principles: [], families: [] },
+    });
+  writeFileSync(path, body("a", "https://one.example/mcp"));
+  chmodSync(path, 0o600);
+  let manager: RegistryManager;
+  const accepted: string[] = [];
+  manager = new RegistryManager({
+    config: config({ configPath: path }),
+    trust,
+    onSnapshotChange: async (previous, next) => {
+      if (previous) expect(manager.current()?.revision).toBe(previous.revision);
+      accepted.push(next.proxies[0]?.endpoint ?? "");
+    },
+  });
+  await manager.refresh();
+  writeFileSync(path, body("b", "https://two.example/mcp"));
+  chmodSync(path, 0o600);
+  await manager.refresh();
+  expect(accepted).toEqual(["https://one.example/mcp", "https://two.example/mcp"]);
+  expect(manager.current()?.proxies[0]?.endpoint).toBe("https://two.example/mcp");
+});
+
+test("does not advance the remote ETag when candidate invalidation rejects a snapshot", async () => {
+  const initial = JSON.parse(snapshot) as Record<string, unknown>;
+  let currentBody = snapshot;
+  let currentEtag = "old-etag";
+  const seenEtags: Array<string | null> = [];
+  let rejectChanged = true;
+  const manager = new RegistryManager({
+    config: config({ configPath: undefined, configUrl: "https://registry.example/registry" }),
+    trust,
+    tokens: { get: async () => ({ token: "d26", expiresAt: "" }), invalidate: () => undefined },
+    fetch: async (_input, init) => {
+      const sentEtag = new Headers(init?.headers).get("if-none-match");
+      seenEtags.push(sentEtag);
+      if (sentEtag === currentEtag) return new Response(null, { status: 304 });
+      return new Response(currentBody, { headers: { etag: currentEtag } });
+    },
+    onSnapshotChange: (_previous, next) => {
+      if (next.revision !== initial.revision && rejectChanged) {
+        rejectChanged = false;
+        throw new Error("candidate rejected");
+      }
+    },
+  });
+  await manager.refresh();
+  const changed = JSON.parse(snapshot.replace(`reg_${"a".repeat(64)}`, `reg_${"b".repeat(64)}`)) as Record<
+    string,
+    unknown
+  >;
+  currentBody = JSON.stringify(changed);
+  currentEtag = "new-etag";
+  expect((await manager.refresh()).ok).toBe(false);
+  expect((await manager.refresh()).ok).toBe(true);
+  expect(seenEtags).toEqual([null, "old-etag", "old-etag"]);
+  expect(manager.current()?.revision).toBe(`reg_${"b".repeat(64)}`);
+});
+
+test("a namespace approved by another process activates from the next 304 refresh", async () => {
+  const directory = mkdtempSync(join("/tmp", "waggle-registry-approval-"));
+  const trustPath = join(directory, "trust.json");
+  const proxy = {
+    namespace: "approved-later",
+    mode: "remote_http",
+    endpoint: "https://approved-later.example/mcp",
+  } as ProxyConfig;
+  const raw = JSON.stringify({ ...JSON.parse(snapshot), proxies: [proxy] });
+  const trustStore = new TrustStore(trustPath);
+  let fetchCount = 0;
+  const manager = new RegistryManager({
+    config: config({ configPath: undefined, configUrl: "https://registry.example/registry", trustPath }),
+    trust: trustStore,
+    tokens: { get: async () => ({ token: "d26", expiresAt: "" }), invalidate: () => undefined },
+    fetch: async () => {
+      fetchCount += 1;
+      return fetchCount === 1
+        ? new Response(raw, { headers: { etag: "stable-etag" } })
+        : new Response(null, { status: 304 });
+    },
+  });
+  try {
+    expect((await manager.refresh()).ok).toBe(true);
+    expect(manager.current()?.proxies).toEqual([]);
+
+    const separateApprover = new TrustStore(trustPath);
+    await separateApprover.load();
+    await separateApprover.approve(proxy, ["origin"]);
+
+    expect((await manager.refresh()).ok).toBe(true);
+    expect(manager.current()?.proxies.map(({ namespace }) => namespace)).toEqual(["approved-later"]);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
 });

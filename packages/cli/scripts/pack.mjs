@@ -1,24 +1,40 @@
 import { execFileSync } from "node:child_process";
-import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const cliDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const outputDirectory = resolve(process.argv[2] ?? process.cwd());
 
-function copyDependency(name, parent, destination) {
+function copyDependency(name, parent, destination, optional = false, ancestors = new Set()) {
   const require = createRequire(join(parent, "package.json"));
-  const source = dirname(require.resolve(`${name}/package.json`));
+  let packagePath;
+  try {
+    packagePath = require.resolve(`${name}/package.json`);
+  } catch (error) {
+    if (optional && error?.code === "MODULE_NOT_FOUND") return;
+    throw error;
+  }
+  const source = dirname(packagePath);
   const target = join(destination, "node_modules", name);
   cpSync(source, target, {
     recursive: true,
     dereference: true,
-    filter: (path) => !path.split("/").includes("node_modules", source.split("/").length),
+    filter: (path) => {
+      const relativePath = relative(source, path);
+      return relativePath !== "node_modules" && !relativePath.startsWith(`node_modules${sep}`);
+    },
   });
+  const sourcePath = realpathSync(source);
+  if (ancestors.has(sourcePath)) return;
   const pkg = JSON.parse(readFileSync(join(source, "package.json"), "utf8"));
-  for (const dependency of Object.keys(pkg.dependencies ?? {})) copyDependency(dependency, source, target);
+  const nestedAncestors = new Set(ancestors).add(sourcePath);
+  for (const dependency of Object.keys(pkg.dependencies ?? {}))
+    copyDependency(dependency, source, target, false, nestedAncestors);
+  for (const dependency of Object.keys(pkg.optionalDependencies ?? {}))
+    copyDependency(dependency, source, target, true, nestedAncestors);
 }
 
 execFileSync("bun", ["run", "build"], { cwd: cliDir, stdio: "inherit" });

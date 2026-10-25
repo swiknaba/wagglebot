@@ -145,6 +145,32 @@ const SECTIONS: Record<string, Section> = {
     reads: ["MCP_HUB_CONFIG_PATH  (a validated local registry snapshot)"],
     writes: ["~/.wagglebot/mcp-hub/registry.trust.json  (mode 0600 trust records)"],
   },
+  knowledge: {
+    title: "knowledge publish <path> --repository <identity> --operation-key <key>",
+    purpose:
+      "Phase 2: Publishes an explicitly selected reviewed source from a committed company Git revision. Uncommitted source text is never sent.",
+    reads: ["Selected Git revision in the company checkout root", "MEMORY_WORKER_URL and MEMORY_ADMIN_BEARER_TOKEN"],
+    writes: ["Complete shared source revision through the memory HTTP service. No local source or Git changes."],
+    flags: [
+      "--revision <ref>    Commit to publish (default HEAD).",
+      "--remove --scope <system:name|domain:name|org> --owner <owner>   Remove an absent source, retaining its identity.",
+      "--operation-key <key>   Reuse this key and revision to retry the same request.",
+    ],
+  },
+  memory: {
+    title: "memory admin <rescan|reindex|run-once> --operation-key <key>",
+    purpose:
+      "Phase 2 operator recovery through the shared memory HTTP service. Reuse the same operation key to retry a request; use a new key to drain eligible retries.",
+    reads: [
+      "MEMORY_WORKER_URL  (HTTPS origin; explicit loopback HTTP allowed)",
+      "MEMORY_ADMIN_BEARER_TOKEN  (configured operator credential)",
+    ],
+    writes: ["Shared memory service recovery state. No local memory or database files."],
+    flags: [
+      "reindex --profile-id <uuid>  Optional fixed embedding profile identity.",
+      "run-once --limit <1..100>    Maximum claimed records (default 100).",
+    ],
+  },
   init: {
     title: "init [--wagglebot [directory]]",
     purpose:
@@ -216,6 +242,8 @@ const GENERAL = (): string[] => [
   "  mcp-hub            Approve local MCP hub registry entries.",
   "  Phase 2:",
   "  brain              Maintain local component memory and repository evidence.",
+  "  memory admin       Rescan shared memory or queue/drain bounded reindex work.",
+  "  knowledge publish  Publish a reviewed committed source or its explicit removal.",
   "",
   "Options:",
   "  --version          Print the wagglebot version.",

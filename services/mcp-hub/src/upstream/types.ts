@@ -91,22 +91,22 @@ export class UpstreamManager {
     }
   }
 
-  public async drain(namespaces: Iterable<string>): Promise<void> {
+  public async drain(namespaces: Iterable<string>, graceMs = this.#removalGraceMs): Promise<void> {
     const clients = [...namespaces].flatMap((namespace) => {
       const client = this.#stdioClients.get(namespace);
       this.#stdioClients.delete(namespace);
       return client ? [client] : [];
     });
     if (clients.length === 0) return;
-    if (this.#removalGraceMs > 0)
+    if (graceMs > 0)
       await new Promise<void>((resolve) => {
-        setTimeout(resolve, this.#removalGraceMs);
+        setTimeout(resolve, graceMs);
       });
     await Promise.all(clients.map(async (client) => (await client).close()));
   }
 
   public close(): Promise<void> {
-    return this.drain(this.#stdioClients.keys());
+    return this.drain(this.#stdioClients.keys(), 0);
   }
 
   private stdioClient(proxy: ProxyConfig, signal: AbortSignal): Promise<UpstreamClient> {

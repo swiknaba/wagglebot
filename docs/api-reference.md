@@ -312,12 +312,35 @@ The hub runs on the engineer workstation. It requires its local
 registry token to an upstream. It supports exactly four upstream modes:
 `remote_http`, `remote_sse`, `stdio_npx`, and `stdio_cmd`.
 
+Start it locally with `bun run --filter @wagglebot/mcp-hub start`. Bind the hub to
+loopback with `MCP_HUB_HOST=127.0.0.1`. Local registry mode requires a generated
+`MCP_HUB_BEARER_TOKEN` of at least 32 characters and an absolute
+`MCP_HUB_CONFIG_PATH` to a mode-0600 JSON `RegistrySnapshot`; trust defaults to
+`~/.wagglebot/mcp-hub/registry.trust.json` or `MCP_HUB_TRUST_PATH`. Approve
+entries with `wagglebot mcp-hub approve <namespace>` after setting
+`MCP_HUB_CONFIG_PATH`. Remote registry mode uses `MCP_HUB_CONFIG_URL` with the
+registry's HTTPS `/registry` endpoint, plus `MCP_HUB_AUTH_URL` (HTTPS),
+`MCP_HUB_AUTH_USERNAME`, and `MCP_HUB_AUTH_PUBLIC_KEY_FILE` for SSH-agent
+authentication. The hub reloads
+the trust store on each registry refresh, including `304 Not Modified`, so an
+approval written by a separate CLI process takes effect on the next refresh.
+For remote approval, point the CLI at a reviewed local copy of the registry
+snapshot; it contains no auth token.
+A missing stdio executable rejects a changed registry candidate;
+unreachable namespaces remain isolated unless strict startup is enabled. The
+`/livez` and `/readyz` health routes are the only unauthenticated routes.
+
 ### `POST /mcp`
 
 The hub uses MCP Streamable HTTP. The MCP protocol version and request ID live
 in the JSON-RPC envelope; tool inputs below are the `tools/call` arguments.
 Tool schemas are API version 1 even though the MCP-negotiated schema means the
 input does not repeat `schemaVersion`.
+
+Every `/mcp` request uses a fresh stateless Streamable HTTP transport. Request
+and response bodies are capped at 1 MiB. Tool replies use `structuredContent`
+with an empty `content` array; validation and execution failures carry a
+versioned error envelope with a stable `hub_*` code and correlation ID.
 
 ```typescript
 type SearchInput = {
@@ -399,7 +422,8 @@ The exposed tools and their exact argument/result pairs are:
 The client never sees raw downstream tools. Qualified names are
 `<namespace>_<local_name>`, descriptions are capped at 280 characters after
 control/instruction-like markup stripping, and provenance always includes the
-namespace. Tool schemas are capped at 64 KiB. `search` returns at most 20
+namespace. Names whose canonical qualified value collides across namespaces
+are omitted. Tool schemas are capped at 64 KiB. `search` returns at most 20
 results; tool-catalog/usage text is capped at 32 KiB/16 KiB respectively. MCP
 request and response bodies are capped at 1 MiB. Upstream HTTP connect timeout
 is 30 seconds and streaming read timeout is 300 seconds. Discovery runs at most
@@ -573,6 +597,18 @@ memory_invalid`, `400 unknown_scope`, `403 domain_owner_required`, `403
 org_owner_required`, `422 secret_rejected`, `409 lower_confidence_conflict`,
 and `503 memory_unavailable` or `scanner_unavailable`.
 
+Direct record identity is scope, kind and title normalized with Unicode NFC,
+trimmed/collapsed whitespace and lowercase. Accepted title/content are retained;
+the canonical key additionally includes the SHA-256 hash of original content.
+Same-content writes merge maximum confidence and deduplicated provenance.
+Changed content supersedes the active record unless its confidence is lower.
+
+Explicit remember applies its `wake` value (default false) and `reviewAfter`
+(omission clears it), including when reactivating the same historical canonical
+record. Reactivation preserves history and supersedes a current incumbent.
+A matching proposal preserves wake/review metadata and returns an inactive
+historical match unchanged; it cannot reactivate that record.
+
 ### `POST /v1/memories/:id/invalidate`
 
 Explicit `forget`. Request:
@@ -581,8 +617,9 @@ Explicit `forget`. Request:
 { "schemaVersion": 1, "operationKey": "op_...", "reason": "superseded" }
 ```
 
-Invalidation is idempotent, preserves provenance/audit history, and enqueues
-provider deletion. Response:
+Invalidation is idempotent, preserves provenance/audit history, and atomically
+cancels pending reindex work. There is no separate provider deletion queue.
+Response:
 
 ```typescript
 type InvalidateResponse = {
@@ -625,8 +662,13 @@ Queries are 1–2,000 Unicode code points and return 1–20 records. Wake reques
 
 Wake has no query, calls PostgreSQL only, and returns at most three active,
 high-confidence, unexpired `wake: true` records. Search responses include
-canonical IDs, record fields, provenance, freshness, provider status, and
-degradation metadata using `MemorySearchResult`.
+canonical IDs, record fields, provenance and scores using `MemorySearchResult`.
+
+Query ranking uses cosine distance after scope filtering, returns
+`1 / (1 + distance)` scores, applies a fixed minimum score of `0.35` and uses
+record ID to break ties. Wake records have score `1` and are ordered by scope
+specificity, update time and ID; `additionalEligible` counts eligible records
+beyond the returned limit.
 
 Query `scopes`, when present, contain only `SharedScope` values; the worker
 validates every named scope against the catalog. Search is read-only and has no
@@ -697,6 +739,14 @@ publication_invalid`, `401 admin_auth_required`, `401 admin_auth_invalid`,
 `409 operation_key_conflict`, `413 request_too_large`, `422 secret_rejected`,
 and `503 memory_unavailable` or `scanner_unavailable`.
 
+Repository identities select operator-configured local checkouts. The revision
+must exist there, and a newer revision must descend from the stored source
+revision; unknown or unrelated revisions are rejected. Scope owners must match
+the current catalog. Repository, path and scope remain bound to the source
+identity. An empty chunk list is a complete removal retaining that identity;
+it atomically invalidates the last published chunks and cancels their reindex
+claims. Supplied provenance actors are replaced with the verified source owner.
+
 ### Admin endpoints
 
 All require the administrator bearer token, a 1 MiB body cap, and an
@@ -713,6 +763,26 @@ counts and identifiers only, never matched content. `/v1/admin/run-once` is an
 operator-only compatibility/admin queue drain endpoint and is not an agent MCP
 tool.
 
+Reindex accepts only the fixed profile
+`7101cc0e-6a04-503b-8d23-329b99cff42f`. It queues active record IDs and content
+hashes, deduplicates pending work, and preserves in-flight claims. A new-key
+reindex may reset exhausted attempts. Run-once claims at most `limit` records
+(default 100), embeds outside the mutation transaction, and atomically commits
+each vector with its progress only while its five-minute claim lease, fencing
+token, active record/content hash and database profile still match. Work has
+at most three attempts until explicitly requeued.
+
+Run-once persists progress across restart. A concurrent same-key/same-body
+request returns retryable `503 memory_unavailable` until completion; after an
+abandoned lease expires, a retry finalizes unfinished claims as failed and
+requeues eligible work. A new operation key drains retries. The original
+result remains replayable; using that key for a different request or another
+admin operation returns `409 operation_key_conflict`, including while the run
+is in progress. Rescan scans outside the lock, rechecks the complete record
+snapshot under lock, and retries a changed snapshot at most three times.
+Scanner failure leaves records and operation state unchanged. Rejected active
+records are invalidated with their pending claims canceled atomically.
+
 ### Shared-memory MCP tools
 
 | Tool | Input | Result |
@@ -724,7 +794,8 @@ tool.
 | `forget` | `{ id: UUID, operationKey, reason }` | `InvalidateResponse` |
 
 All five tools call the same authenticated service layer as HTTP. Publication,
-rescan, reindex, and restore remain admin HTTP/CLI operations. The tool schemas
+rescan and reindex remain admin HTTP/CLI operations. Backup/restore are native
+Ruby database operator tasks, without public HTTP or MCP endpoints. The tool schemas
 are v1 and strict. Read tools have no idempotency key. Mutation tools preserve
 the HTTP `operationKey` behavior. Known failures use the same stable codes as
 HTTP as MCP tool errors. Search/query put record prose only in
@@ -980,6 +1051,18 @@ metadata/handles. In structured mode, prose appears only in structured content
 and MCP text is a one-line summary. This single-representation rule is part of
 the wire contract.
 
+The default response format is Markdown. Token estimates include both MCP text
+and structured content, using `ceil(Unicode code points / 3)`; the 16 KiB limit
+applies to the complete serialized result. If mandatory identity, metadata,
+warnings or conflict notices cannot fit the effective budget after compact
+formatting and removal of optional items, the request fails with
+`context_invalid` and a fixed content-free message. This can occur with an
+explicit structured L0 request or a caller budget/remaining-context hint too
+small for the mandatory representation. The engine never silently changes an
+explicit format, raises the budget, omits required notices or understates the
+estimate. Automatic default Markdown L0 retains its 100-token target and
+150-token hard maximum; all existing input and packet fields remain unchanged.
+
 ## Context Bridge MCP
 
 Context Bridge is local-only and explicit; it is not Wake and never uses authentication.
@@ -1016,6 +1099,14 @@ maximum four hours, maximum eight imports, 16 KiB packet, 32 live packets, and
 512 KiB aggregate vault size. The vault directory is `0700`, files are `0600`,
 and imported context never mutates durable memory.
 
+Concurrent context processes coordinate through a separate local SQLite file
+under an owner-checked `0700` `.context-coordination-*` directory beside the
+packet vault. Its `0600` file stores only hashed packet filenames and import
+counts; packet JSON remains the content store. A process transaction serializes
+capacity checks, import counts, revocation, and cleanup, with bounded retries
+for transient lock contention. The common owned Wagglebot state parent may
+retain `0755` permissions when it is not writable by other users.
+
 Goal is capped at 300 code points; decision titles at 80 and summaries at 600;
 there are at most ten decisions, ten 240-code-point open questions, and twenty
 evidence references. Export/import bodies and results are capped at 16 KiB.
@@ -1039,7 +1130,7 @@ prose, absolute path, or evidence content.
 | company configuration repository | company/operator | Git | authoritative catalog fragments, `company/registry.yaml`, `teams/<group>/registry.yaml`, root `tool_catalog.yaml`, and reviewed knowledge; no secrets |
 | effective registry snapshot | registry service | process memory | validated principal-specific company/team composition keyed by source revision and username; last-known-good only |
 | `wagglebot_memories` | memory worker | PostgreSQL | canonical fact/document record, provenance, scope, hash, lifecycle fields, and `vector(384)` embedding |
-| `wagglebot_memory_schema_metadata` | memory worker | PostgreSQL | required embedding provider/model/dimension/distance/schema metadata |
+| `wagglebot_memory_schema_metadata` | memory worker | PostgreSQL | required embedding profile/schema metadata and singleton `worker_state` mutation coordination state |
 | `wagglebot_schema_migrations` | database migration service | PostgreSQL | Sequel migration history |
 | `registry.trust.json` | local hub | workstation file, `0600` | approved privileged registry fingerprints |
 | discovery cache | local hub | process memory | downstream schemas; rebuildable, never canonical |
@@ -1047,6 +1138,7 @@ prose, absolute path, or evidence content.
 | `.codegraph/codegraph.db` | CodeGraph/local brain | ignored workstation SQLite | generated current-checkout graph; rebuildable and never uploaded |
 | context cursor | context engine | process memory | IDs/hashes only; four-hour sliding expiry |
 | Context Bridge vault packets | context engine | workstation files, `0700`/`0600` | bounded expiring explicit packets, never transcripts |
+| Context Bridge coordination | context engine | workstation SQLite, protected `0700`/`0600` | hashed packet filenames and import counts only; process mutex, no packet prose or raw handles |
 
 The memory worker is the only public memory boundary. It embeds accepted text
 in-process before a single transactional write; no separate index or provider
@@ -1066,6 +1158,23 @@ cosine distance, and schema version `1`; a mismatch blocks the worker rather
 than silently corrupting retrieval. Phase 4 replaces the single-key constraint
 with `(knowledge_base_id, canonical_key)` and requires a base ID on every
 operation.
+
+The singleton metadata row's `worker_state` contains `operations`, `sources`,
+and `reindex`. Successful operation entries retain a canonical request hash
+and the original response without expiry. Ledger keys encode the internal
+operation namespace, verified identity and operation key as a JSON tuple;
+these namespaces describe operation semantics and do not establish human or
+agent authentication roles. Administrator recovery operations use
+`["operator", "configured-admin", operationKey]`.
+
+Reindex state stores pending `{ id, contentHash, attempts, claim? }` entries,
+with claims `{ token, expiresAt, runKey }`. Its `runs` dictionary retains each
+request hash, operation ID, expiry, claim identifiers/tokens/statuses,
+`{ claimed, completed, failed }` progress and finalization flag. Source state
+tracks reviewed source bindings/revisions and chunk identities. Worker state
+does not contain request prose or embedding vectors. Mutations serialize on
+this row and rewrite its growing JSON ledger; this is a small-service design
+with bounded throughput and growing storage, not an unlimited queue.
 
 ## Publication and revision semantics
 

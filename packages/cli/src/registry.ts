@@ -111,7 +111,10 @@ export function loadRegistry(text: string, fileName: string): ProxyConfig[] {
     const env: Record<string, string> = {};
     if (isRecord(item.env)) {
       for (const [key, value] of Object.entries(item.env)) {
-        if (typeof value !== "string" || !ENV_EXPANSION.test(value))
+        if (
+          typeof value !== "string" ||
+          (!ENV_EXPANSION.test(value) && !(key === "CODEGRAPH_TELEMETRY" && value === "0"))
+        )
           fail(
             fileName,
             ns,

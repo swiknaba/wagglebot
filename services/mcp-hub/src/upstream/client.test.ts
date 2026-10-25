@@ -147,15 +147,36 @@ describe("stdio upstream transport", () => {
   test("uses only the configured child environment", () => {
     const options = buildStdioOptions(stdioProxy("@example/mcp@1.2.3"), {
       LOCAL_TOKEN: "child-secret",
-      PATH: "/parent",
+      PATH: process.env.PATH,
     });
-    expect(options.env).toEqual({ TOKEN: "child-secret" });
-    expect(options.env?.PATH).toBeUndefined();
-    expect(options.command).toBe("npx");
+    expect(options.env).toMatchObject({ TOKEN: "child-secret", HOME: "/tmp", USER: "" });
+    expect(options.env?.PATH).toBeDefined();
+    expect(options.command).toEndWith("/npx");
+  });
+
+  test("does not inherit workstation identity or secrets into stdio processes", () => {
+    const options = buildStdioOptions(stdioProxy(process.execPath, "stdio_cmd"), {
+      HOME: "/private/workstation-home",
+      USER: "workstation-user",
+      MCP_HUB_BEARER_TOKEN: "hub-secret",
+      MCP_HUB_AUTH_USERNAME: "alice",
+      PATH: process.env.PATH,
+      LOCAL_TOKEN: "child-secret",
+    });
+    expect(options.env).toMatchObject({ TOKEN: "child-secret", HOME: "/tmp", USER: "" });
+    expect(options.env).not.toHaveProperty("MCP_HUB_BEARER_TOKEN");
+    expect(options.env).not.toHaveProperty("MCP_HUB_AUTH_USERNAME");
+    expect(options.env?.PATH).not.toContain("/private/workstation");
   });
 
   test("treats a missing configured stdio executable as fatal", async () => {
     await expect(requireExecutable("/definitely/not/a/mcp-server")).rejects.toThrow("stdio executable not found");
+  });
+
+  test("rejects an executable directory as an invalid stdio command", () => {
+    expect(() => buildStdioOptions(stdioProxy("/tmp", "stdio_cmd"), { PATH: process.env.PATH })).toThrow(
+      "stdio executable not found",
+    );
   });
 });
 
@@ -210,5 +231,20 @@ describe("upstream client lifecycle", () => {
     await manager.drain([proxy.namespace]);
 
     expect(events).toEqual(["initialize:stdio-1", "close:stdio-1"]);
+  });
+
+  test("closes stdio clients immediately during full shutdown", async () => {
+    const events: string[] = [];
+    const manager = new UpstreamManager({
+      createRemoteClient: () => recordingClient(events, "remote"),
+      createStdioClient: () => recordingClient(events, "stdio"),
+    });
+    const proxy = stdioProxy("@example/mcp@1.2.3", "stdio_npx");
+    const signal = new AbortController().signal;
+    await manager.withClient(proxy, null, signal, (client) => client.listTools(signal));
+    const started = Date.now();
+    await manager.close();
+    expect(Date.now() - started).toBeLessThan(1000);
+    expect(events).toEqual(["initialize:stdio", "close:stdio"]);
   });
 });

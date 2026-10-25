@@ -9,7 +9,7 @@ class RakeTasksTest < Minitest::Test
   def test_exposes_only_the_documented_database_commands
     task_names = Rake::Task.tasks.map(&:name)
 
-    %w[db:check db:generate db:migrate db:rollback db:schema:dump db:status].each do |task_name|
+    %w[db:backup db:restore db:check db:generate db:migrate db:rollback db:schema:dump db:status].each do |task_name|
       assert_includes task_names, task_name
     end
     refute_includes task_names, "db:create"

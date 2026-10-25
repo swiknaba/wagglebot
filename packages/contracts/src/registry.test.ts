@@ -28,6 +28,11 @@ test("rejects literal credentials and unknown fields", () => {
   expect(ProxyConfigSchema.safeParse({ ...validProxy, unexpected: true }).success).toBe(false);
 });
 
+test("permits only the fixed telemetry-off child environment value", () => {
+  expect(ProxyConfigSchema.safeParse({ ...validProxy, env: { CODEGRAPH_TELEMETRY: "0" } }).success).toBe(true);
+  expect(ProxyConfigSchema.safeParse({ ...validProxy, env: { API_KEY: "0" } }).success).toBe(false);
+});
+
 test("requires a username for basic upstream authentication", () => {
   expect(
     ProxyConfigSchema.safeParse({

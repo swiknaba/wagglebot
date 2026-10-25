@@ -405,6 +405,18 @@ When the caller provides `remainingContextTokens`, the effective maximum is also
 capped at five percent of that value. When it provides neither field, the
 default target applies. The entire serialized response is capped at 16 KiB.
 
+Budget feasibility depends on the selected representation. After deterministic
+compact formatting and removal of optional items, if mandatory identity,
+metadata, warnings or conflict notices still cannot fit the effective token or
+byte limit, return `context_invalid` with a fixed content-free message. Do not
+silently change an explicit response format, increase the budget, omit required
+notices or understate `estimatedTokens`. The default remains Markdown; automatic
+L0 must fit its 100-token default target and 150-token hard maximum. An explicit
+structured L0 request may fail this feasibility check because its full required
+packet is larger. This rule also applies to a caller-supplied budget or
+remaining-context hint too small for the mandatory response. It does not relax
+any input or packet schema.
+
 Independent item limits prevent a collection of tiny records from becoming a
 large prompt:
 

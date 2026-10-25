@@ -17,8 +17,24 @@ test("hub config requires a registry source", () => {
       .success,
   ).toBe(false);
 });
+test("hub discovery concurrency is capped at four", () => {
+  const minimum = {
+    host: "127.0.0.1",
+    port: 9000,
+    bearerToken: "x".repeat(32),
+    configPath: "/config/registry.yaml",
+    trustPath: "/tmp/trust",
+    codeModeEnabled: true,
+  };
+  expect(HubConfigSchema.safeParse({ ...minimum, toolMaxConcurrency: 4 }).success).toBe(true);
+  expect(HubConfigSchema.safeParse({ ...minimum, toolMaxConcurrency: 5 }).success).toBe(false);
+});
 test("CodeMode rejects traversal and discovery state models the scheduler lifecycle", () => {
   expect(CodeModeExecuteInputSchema.safeParse({ tool: "../../secrets", arguments: {} }).success).toBe(false);
+  expect(CodeModeExecuteInputSchema.safeParse({ tool: "github_getIssue", arguments: {} }).success).toBe(true);
+  expect(CodeModeExecuteInputSchema.safeParse({ tool: "demo_tools__Ping", arguments: {} }).success).toBe(true);
+  expect(CodeModeExecuteInputSchema.safeParse({ tool: "team.tools__Ping", arguments: {} }).success).toBe(true);
+  expect(CodeModeExecuteInputSchema.safeParse({ tool: "team.tools_bad/name", arguments: {} }).success).toBe(false);
   expect(
     DiscoveryStateSchema.safeParse({
       status: "unknown",

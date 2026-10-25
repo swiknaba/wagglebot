@@ -19,7 +19,7 @@ export const HubConfigSchema = z
     toolRefreshIntervalSeconds: z.number().int().min(1).max(86_400).default(300),
     toolRetrySeconds: z.number().int().min(1).max(86_400).default(30),
     toolTimeoutSeconds: z.number().int().min(1).max(300).default(5),
-    toolMaxConcurrency: z.number().int().min(1).max(32).default(4),
+    toolMaxConcurrency: z.number().int().min(1).max(4).default(4),
     logFingerprintKey: z.string().min(1).optional(),
   })
   .strict()
@@ -65,7 +65,10 @@ export const HubErrorCodeSchema = z.enum([
 ]);
 export const CodeModeExecuteInputSchema = z
   .object({
-    tool: z.string().regex(/^[a-z0-9][a-z0-9-]*_[a-z0-9][a-z0-9_.-]*$/),
+    tool: z
+      .string()
+      .max(120)
+      .regex(/^[a-z0-9][a-z0-9._-]*_[a-zA-Z0-9_.-]+$/),
     arguments: z.record(z.string(), z.unknown()),
   })
   .strict();

@@ -2,13 +2,14 @@
 
 Wagglebot gives each engineering team one local AI-agent setup.
 
-> **Status.** Phase 1 is complete. It provisions nine local harnesses from a
-> company repository without a Wagglebot service. Phase 2 is in progress: the
-> local Repository Brain foundations, SSH authentication, authenticated
-> registry, and Sequel migration service are implemented. The local-memory
-> layer now uses OKF v0.2 ahead of its supported MCP/context release. The MCP hub
-> has no runnable server yet; the shared-memory worker, unified context engine,
-> and Context Bridge are not built. See the
+> **Status.** Phase 1 is complete and released as CLI v0.3.4. It provisions nine
+> local harnesses from a company repository without a Wagglebot service.
+> Phase 2 is implemented and locally verified; its changes are unreleased.
+> It includes OKF repository memory, CodeGraph and Git evidence, SSH
+> authentication, an authenticated registry, the local MCP hub, governed
+> PostgreSQL/pgvector shared memory, unified context, and Context Bridge.
+> The local Compose gate passes across three repositories and two systems.
+> See the [Compose guide](deploy/phase2.md),
 > [Phase 1 onboarding](docs/phase-1-onboarding.md) and the
 > [implementation sequence](docs/superpowers/plans/2026-09-12-phase-2-implementation-sequence.md).
 
@@ -42,7 +43,7 @@ PowerShell, and cmd are unsupported.
 
 ## Later phases
 
-Phase 2 adds the shared memory layer, D26 authentication, an authenticated
+Phase 2 provides the shared memory layer, D26 authentication, an authenticated
 registry, and the MCP hub. Phase 3 adds collaboration between machines. Phase 4
 adds document ingestion.
 
@@ -53,6 +54,7 @@ remain on the engineer workstation.
 
 | Document | Content |
 |---|---|
+| [Project Brain](docs/project-brain.md) | Local context retrieval, durable memory, shared facts, and explicit Context Bridge. |
 | [Current Phase 1 design](docs/superpowers/specs/2026-09-21-phase-1-polish-design.md) | Approved local provisioning behavior and test contract. |
 | [Original design](docs/superpowers/specs/2026-08-28-wagglebot-design.md) | Goals, decisions, architecture, and phase index. |
 | [Phase 2 shared layer](docs/superpowers/specs/2026-08-28-phase-2-shared-layer.md) | Memory worker, deployment, hub, and authentication. |

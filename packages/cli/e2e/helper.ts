@@ -1,5 +1,5 @@
 import { type ExecFileSyncOptions, execFileSync } from "node:child_process";
-import { mkdirSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -70,15 +70,20 @@ export function ensureBuilt(): void {
 }
 
 // Install a complete local package with its external dependencies. Bun bundles workspace modules into dist.
+const packedFixtures = new Map<string, string>();
 export function installBuiltPackage(cwd: string, env: NodeJS.ProcessEnv, scratch: string): void {
-  const tarball = execFileSync("bun", [join(cliDir, "scripts", "pack.mjs"), scratch], {
-    cwd: cliDir,
-    env,
-    encoding: "utf8",
-  })
-    .trim()
-    .split("\n")
-    .at(-1);
+  let tarball = packedFixtures.get(scratch);
+  if (!tarball || !existsSync(tarball)) {
+    tarball = execFileSync("bun", [join(cliDir, "scripts", "pack.mjs"), scratch], {
+      cwd: cliDir,
+      env,
+      encoding: "utf8",
+    })
+      .trim()
+      .split("\n")
+      .at(-1);
+    if (tarball) packedFixtures.set(scratch, tarball);
+  }
   if (!tarball) throw new Error("Package builder did not return a tarball path");
   execFileSync(
     "npm",

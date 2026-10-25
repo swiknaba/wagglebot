@@ -1,4 +1,4 @@
 {
-  "latest": "20260916130000",
-  "migrations": ["20260916130000_create_memory_schema.rb"]
+  "latest": "20261006120000",
+  "migrations": ["20260916130000_create_memory_schema.rb", "20261006120000_complete_memory_wire_mapping.rb"]
 }

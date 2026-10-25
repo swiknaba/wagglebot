@@ -41,7 +41,15 @@ export class GitProvider {
     assertLimit(input.limit, 100);
     const project = await resolveProjectPath(input.projectRoot);
     const path = input.path === undefined ? undefined : await this.#safePath(project, input.path);
-    const args = ["log", "--follow", `--max-count=${input.limit}`, `--format=${LOG_FORMAT}`, "--name-only", "-z", "--"];
+    const args = [
+      "log",
+      ...(path === undefined ? [] : ["--follow"]),
+      `--max-count=${input.limit}`,
+      `--format=${LOG_FORMAT}`,
+      "--name-only",
+      "-z",
+      "--",
+    ];
     if (path !== undefined) args.push(path);
     const commits = parseLog(await this.runner.run(project.root, args));
     return { commits, limitations: [] };

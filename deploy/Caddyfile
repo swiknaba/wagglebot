@@ -1,0 +1,30 @@
+{
+	admin off
+}
+
+http://127.0.0.1:8081 {
+	respond /livez 200
+}
+
+https://:8443 {
+	tls /etc/caddy/tls.crt /etc/caddy/tls.key
+
+	@auth path /v1/auth/*
+	handle @auth {
+		reverse_proxy auth:8080
+	}
+
+	@registry path /registry
+	handle @registry {
+		reverse_proxy registry:3040
+	}
+
+	@memory path /v1/memory* /v1/memories* /v1/admin/* /v1/publications/* /mcp
+	handle @memory {
+		reverse_proxy memory:3050
+	}
+
+	handle {
+		reverse_proxy memory:3050
+	}
+}
