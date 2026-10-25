@@ -1,0 +1,832 @@
+[
+  {
+    "id": "context-001",
+    "mode": "search",
+    "input": {
+      "query": "How does this request reach the persistence boundary? Synthetic case 1."
+    },
+    "acceptableEvidenceIds": [
+      "local:memory-context-001",
+      "code:symbol-context-001",
+      "git:0000000000000000000000000000000000000001",
+      "shared:00000000-0000-4000-8000-000000000001"
+    ],
+    "exactIdentifierEvidenceIds": [],
+    "requiredSources": ["local_memory", "code", "git", "shared_memory"],
+    "requiredConflict": true
+  },
+  {
+    "id": "context-002",
+    "mode": "search",
+    "input": {
+      "query": "Which rule protects the retry path? Synthetic case 2."
+    },
+    "acceptableEvidenceIds": [
+      "local:memory-context-002",
+      "code:symbol-context-002",
+      "git:0000000000000000000000000000000000000002",
+      "shared:00000000-0000-4000-8000-000000000002"
+    ],
+    "exactIdentifierEvidenceIds": [],
+    "requiredSources": ["local_memory", "code", "git", "shared_memory"],
+    "requiredConflict": false
+  },
+  {
+    "id": "context-003",
+    "mode": "search",
+    "input": {
+      "query": "Where is the current source for the payment transition? Synthetic case 3."
+    },
+    "acceptableEvidenceIds": [
+      "local:memory-context-003",
+      "code:symbol-context-003",
+      "git:0000000000000000000000000000000000000003",
+      "shared:00000000-0000-4000-8000-000000000003"
+    ],
+    "exactIdentifierEvidenceIds": [],
+    "requiredSources": ["local_memory", "code", "git", "shared_memory"],
+    "requiredConflict": false
+  },
+  {
+    "id": "context-004",
+    "mode": "search",
+    "input": {
+      "query": "Why does the handler keep the operation atomic? Synthetic case 4."
+    },
+    "acceptableEvidenceIds": [
+      "local:memory-context-004",
+      "code:symbol-context-004",
+      "git:0000000000000000000000000000000000000004",
+      "shared:00000000-0000-4000-8000-000000000004"
+    ],
+    "exactIdentifierEvidenceIds": [],
+    "requiredSources": ["local_memory", "code", "git", "shared_memory"],
+    "requiredConflict": false
+  },
+  {
+    "id": "context-005",
+    "mode": "explain",
+    "input": {
+      "query": "handle5",
+      "path": "src/context-005.ts",
+      "startLine": 4,
+      "endLine": 8
+    },
+    "acceptableEvidenceIds": [
+      "local:memory-context-005",
+      "code:symbol-context-005",
+      "git:0000000000000000000000000000000000000005",
+      "shared:00000000-0000-4000-8000-000000000005"
+    ],
+    "exactIdentifierEvidenceIds": ["code:symbol-context-005"],
+    "requiredSources": ["local_memory", "code", "git", "shared_memory"],
+    "requiredConflict": false
+  },
+  {
+    "id": "context-006",
+    "mode": "search",
+    "input": {
+      "query": "How does this request reach the persistence boundary? Synthetic case 6."
+    },
+    "acceptableEvidenceIds": [
+      "local:memory-context-006",
+      "code:symbol-context-006",
+      "git:0000000000000000000000000000000000000006",
+      "shared:00000000-0000-4000-8000-000000000006"
+    ],
+    "exactIdentifierEvidenceIds": [],
+    "requiredSources": ["local_memory", "code", "git", "shared_memory"],
+    "requiredConflict": false
+  },
+  {
+    "id": "context-007",
+    "mode": "search",
+    "input": {
+      "query": "Which rule protects the retry path? Synthetic case 7."
+    },
+    "acceptableEvidenceIds": [
+      "local:memory-context-007",
+      "code:symbol-context-007",
+      "git:0000000000000000000000000000000000000007",
+      "shared:00000000-0000-4000-8000-000000000007"
+    ],
+    "exactIdentifierEvidenceIds": [],
+    "requiredSources": ["local_memory", "code", "git", "shared_memory"],
+    "requiredConflict": false
+  },
+  {
+    "id": "context-008",
+    "mode": "search",
+    "input": {
+      "query": "Where is the current source for the payment transition? Synthetic case 8."
+    },
+    "acceptableEvidenceIds": [
+      "local:memory-context-008",
+      "code:symbol-context-008",
+      "git:0000000000000000000000000000000000000008",
+      "shared:00000000-0000-4000-8000-000000000008"
+    ],
+    "exactIdentifierEvidenceIds": [],
+    "requiredSources": ["local_memory", "code", "git", "shared_memory"],
+    "requiredConflict": false
+  },
+  {
+    "id": "context-009",
+    "mode": "search",
+    "input": {
+      "query": "Why does the handler keep the operation atomic? Synthetic case 9."
+    },
+    "acceptableEvidenceIds": [
+      "local:memory-context-009",
+      "code:symbol-context-009",
+      "git:0000000000000000000000000000000000000009",
+      "shared:00000000-0000-4000-8000-000000000009"
+    ],
+    "exactIdentifierEvidenceIds": [],
+    "requiredSources": ["local_memory", "code", "git", "shared_memory"],
+    "requiredConflict": false
+  },
+  {
+    "id": "context-010",
+    "mode": "explain",
+    "input": {
+      "query": "Which interface owns this system decision? Synthetic case 10.",
+      "path": "src/context-010.ts",
+      "startLine": 4,
+      "endLine": 8
+    },
+    "acceptableEvidenceIds": [
+      "local:memory-context-010",
+      "code:symbol-context-010",
+      "git:0000000000000000000000000000000000000010",
+      "shared:00000000-0000-4000-8000-00000000000a"
+    ],
+    "exactIdentifierEvidenceIds": ["code:symbol-context-010"],
+    "requiredSources": ["local_memory", "code", "git", "shared_memory"],
+    "requiredConflict": false
+  },
+  {
+    "id": "context-011",
+    "mode": "search",
+    "input": {
+      "query": "How does this request reach the persistence boundary? Synthetic case 11."
+    },
+    "acceptableEvidenceIds": [
+      "local:memory-context-011",
+      "code:symbol-context-011",
+      "git:0000000000000000000000000000000000000011",
+      "shared:00000000-0000-4000-8000-00000000000b"
+    ],
+    "exactIdentifierEvidenceIds": [],
+    "requiredSources": ["local_memory", "code", "git", "shared_memory"],
+    "requiredConflict": false
+  },
+  {
+    "id": "context-012",
+    "mode": "search",
+    "input": {
+      "query": "Which rule protects the retry path? Synthetic case 12."
+    },
+    "acceptableEvidenceIds": [
+      "local:memory-context-012",
+      "code:symbol-context-012",
+      "git:0000000000000000000000000000000000000012",
+      "shared:00000000-0000-4000-8000-00000000000c"
+    ],
+    "exactIdentifierEvidenceIds": [],
+    "requiredSources": ["local_memory", "code", "git", "shared_memory"],
+    "requiredConflict": false
+  },
+  {
+    "id": "context-013",
+    "mode": "search",
+    "input": {
+      "query": "Where is the current source for the payment transition? Synthetic case 13."
+    },
+    "acceptableEvidenceIds": [
+      "local:memory-context-013",
+      "code:symbol-context-013",
+      "git:0000000000000000000000000000000000000013",
+      "shared:00000000-0000-4000-8000-00000000000d"
+    ],
+    "exactIdentifierEvidenceIds": [],
+    "requiredSources": ["local_memory", "code", "git", "shared_memory"],
+    "requiredConflict": false
+  },
+  {
+    "id": "context-014",
+    "mode": "search",
+    "input": {
+      "query": "Why does the handler keep the operation atomic? Synthetic case 14."
+    },
+    "acceptableEvidenceIds": [
+      "local:memory-context-014",
+      "code:symbol-context-014",
+      "git:0000000000000000000000000000000000000014",
+      "shared:00000000-0000-4000-8000-00000000000e"
+    ],
+    "exactIdentifierEvidenceIds": [],
+    "requiredSources": ["local_memory", "code", "git", "shared_memory"],
+    "requiredConflict": false
+  },
+  {
+    "id": "context-015",
+    "mode": "explain",
+    "input": {
+      "query": "0000000000000000000000000000000000000015",
+      "path": "src/context-015.ts",
+      "startLine": 4,
+      "endLine": 8
+    },
+    "acceptableEvidenceIds": [
+      "local:memory-context-015",
+      "code:symbol-context-015",
+      "git:0000000000000000000000000000000000000015",
+      "shared:00000000-0000-4000-8000-00000000000f"
+    ],
+    "exactIdentifierEvidenceIds": ["git:0000000000000000000000000000000000000015"],
+    "requiredSources": ["local_memory", "code", "git", "shared_memory"],
+    "requiredConflict": false
+  },
+  {
+    "id": "context-016",
+    "mode": "search",
+    "input": {
+      "query": "How does this request reach the persistence boundary? Synthetic case 16."
+    },
+    "acceptableEvidenceIds": [
+      "local:memory-context-016",
+      "code:symbol-context-016",
+      "git:0000000000000000000000000000000000000016",
+      "shared:00000000-0000-4000-8000-000000000010"
+    ],
+    "exactIdentifierEvidenceIds": [],
+    "requiredSources": ["local_memory", "code", "git", "shared_memory"],
+    "requiredConflict": false
+  },
+  {
+    "id": "context-017",
+    "mode": "search",
+    "input": {
+      "query": "Which rule protects the retry path? Synthetic case 17."
+    },
+    "acceptableEvidenceIds": [
+      "local:memory-context-017",
+      "code:symbol-context-017",
+      "git:0000000000000000000000000000000000000017",
+      "shared:00000000-0000-4000-8000-000000000011"
+    ],
+    "exactIdentifierEvidenceIds": [],
+    "requiredSources": ["local_memory", "code", "git", "shared_memory"],
+    "requiredConflict": false
+  },
+  {
+    "id": "context-018",
+    "mode": "search",
+    "input": {
+      "query": "Where is the current source for the payment transition? Synthetic case 18."
+    },
+    "acceptableEvidenceIds": [
+      "local:memory-context-018",
+      "code:symbol-context-018",
+      "git:0000000000000000000000000000000000000018",
+      "shared:00000000-0000-4000-8000-000000000012"
+    ],
+    "exactIdentifierEvidenceIds": [],
+    "requiredSources": ["local_memory", "code", "git", "shared_memory"],
+    "requiredConflict": false
+  },
+  {
+    "id": "context-019",
+    "mode": "search",
+    "input": {
+      "query": "Why does the handler keep the operation atomic? Synthetic case 19."
+    },
+    "acceptableEvidenceIds": [
+      "local:memory-context-019",
+      "code:symbol-context-019",
+      "git:0000000000000000000000000000000000000019",
+      "shared:00000000-0000-4000-8000-000000000013"
+    ],
+    "exactIdentifierEvidenceIds": [],
+    "requiredSources": ["local_memory", "code", "git", "shared_memory"],
+    "requiredConflict": false
+  },
+  {
+    "id": "context-020",
+    "mode": "explain",
+    "input": {
+      "query": "Which interface owns this system decision? Synthetic case 20.",
+      "path": "src/context-020.ts",
+      "startLine": 4,
+      "endLine": 8
+    },
+    "acceptableEvidenceIds": [
+      "local:memory-context-020",
+      "code:symbol-context-020",
+      "git:0000000000000000000000000000000000000020",
+      "shared:00000000-0000-4000-8000-000000000014"
+    ],
+    "exactIdentifierEvidenceIds": [],
+    "requiredSources": ["local_memory", "code", "git", "shared_memory"],
+    "requiredConflict": false
+  },
+  {
+    "id": "context-021",
+    "mode": "search",
+    "input": {
+      "query": "How does this request reach the persistence boundary? Synthetic case 21."
+    },
+    "acceptableEvidenceIds": [
+      "local:memory-context-021",
+      "code:symbol-context-021",
+      "git:0000000000000000000000000000000000000021",
+      "shared:00000000-0000-4000-8000-000000000015"
+    ],
+    "exactIdentifierEvidenceIds": [],
+    "requiredSources": ["local_memory", "code", "git", "shared_memory"],
+    "requiredConflict": false
+  },
+  {
+    "id": "context-022",
+    "mode": "search",
+    "input": {
+      "query": "Which rule protects the retry path? Synthetic case 22."
+    },
+    "acceptableEvidenceIds": [
+      "local:memory-context-022",
+      "code:symbol-context-022",
+      "git:0000000000000000000000000000000000000022",
+      "shared:00000000-0000-4000-8000-000000000016"
+    ],
+    "exactIdentifierEvidenceIds": [],
+    "requiredSources": ["local_memory", "code", "git", "shared_memory"],
+    "requiredConflict": false
+  },
+  {
+    "id": "context-023",
+    "mode": "search",
+    "input": {
+      "query": "Where is the current source for the payment transition? Synthetic case 23."
+    },
+    "acceptableEvidenceIds": [
+      "local:memory-context-023",
+      "code:symbol-context-023",
+      "git:0000000000000000000000000000000000000023",
+      "shared:00000000-0000-4000-8000-000000000017"
+    ],
+    "exactIdentifierEvidenceIds": [],
+    "requiredSources": ["local_memory", "code", "git", "shared_memory"],
+    "requiredConflict": false
+  },
+  {
+    "id": "context-024",
+    "mode": "search",
+    "input": {
+      "query": "Why does the handler keep the operation atomic? Synthetic case 24."
+    },
+    "acceptableEvidenceIds": [
+      "local:memory-context-024",
+      "code:symbol-context-024",
+      "git:0000000000000000000000000000000000000024",
+      "shared:00000000-0000-4000-8000-000000000018"
+    ],
+    "exactIdentifierEvidenceIds": [],
+    "requiredSources": ["local_memory", "code", "git", "shared_memory"],
+    "requiredConflict": false
+  },
+  {
+    "id": "context-025",
+    "mode": "explain",
+    "input": {
+      "query": "Which interface owns this system decision? Synthetic case 25.",
+      "path": "src/context-025.ts",
+      "startLine": 4,
+      "endLine": 8
+    },
+    "acceptableEvidenceIds": [
+      "local:memory-context-025",
+      "code:symbol-context-025",
+      "git:0000000000000000000000000000000000000025",
+      "shared:00000000-0000-4000-8000-000000000019"
+    ],
+    "exactIdentifierEvidenceIds": [],
+    "requiredSources": ["local_memory", "code", "git", "shared_memory"],
+    "requiredConflict": false
+  },
+  {
+    "id": "context-026",
+    "mode": "search",
+    "input": {
+      "query": "How does this request reach the persistence boundary? Synthetic case 26."
+    },
+    "acceptableEvidenceIds": [
+      "local:memory-context-026",
+      "code:symbol-context-026",
+      "git:0000000000000000000000000000000000000026",
+      "shared:00000000-0000-4000-8000-00000000001a"
+    ],
+    "exactIdentifierEvidenceIds": [],
+    "requiredSources": ["local_memory", "code", "git", "shared_memory"],
+    "requiredConflict": false
+  },
+  {
+    "id": "context-027",
+    "mode": "search",
+    "input": {
+      "query": "Which rule protects the retry path? Synthetic case 27."
+    },
+    "acceptableEvidenceIds": [
+      "local:memory-context-027",
+      "code:symbol-context-027",
+      "git:0000000000000000000000000000000000000027",
+      "shared:00000000-0000-4000-8000-00000000001b"
+    ],
+    "exactIdentifierEvidenceIds": [],
+    "requiredSources": ["local_memory", "code", "git", "shared_memory"],
+    "requiredConflict": false
+  },
+  {
+    "id": "context-028",
+    "mode": "search",
+    "input": {
+      "query": "Where is the current source for the payment transition? Synthetic case 28."
+    },
+    "acceptableEvidenceIds": [
+      "local:memory-context-028",
+      "code:symbol-context-028",
+      "git:0000000000000000000000000000000000000028",
+      "shared:00000000-0000-4000-8000-00000000001c"
+    ],
+    "exactIdentifierEvidenceIds": [],
+    "requiredSources": ["local_memory", "code", "git", "shared_memory"],
+    "requiredConflict": false
+  },
+  {
+    "id": "context-029",
+    "mode": "search",
+    "input": {
+      "query": "Why does the handler keep the operation atomic? Synthetic case 29."
+    },
+    "acceptableEvidenceIds": [
+      "local:memory-context-029",
+      "code:symbol-context-029",
+      "git:0000000000000000000000000000000000000029",
+      "shared:00000000-0000-4000-8000-00000000001d"
+    ],
+    "exactIdentifierEvidenceIds": [],
+    "requiredSources": ["local_memory", "code", "git", "shared_memory"],
+    "requiredConflict": false
+  },
+  {
+    "id": "context-030",
+    "mode": "explain",
+    "input": {
+      "query": "Which interface owns this system decision? Synthetic case 30.",
+      "path": "src/context-030.ts",
+      "startLine": 4,
+      "endLine": 8
+    },
+    "acceptableEvidenceIds": [
+      "local:memory-context-030",
+      "code:symbol-context-030",
+      "git:0000000000000000000000000000000000000030",
+      "shared:00000000-0000-4000-8000-00000000001e"
+    ],
+    "exactIdentifierEvidenceIds": [],
+    "requiredSources": ["local_memory", "code", "git", "shared_memory"],
+    "requiredConflict": false
+  },
+  {
+    "id": "context-031",
+    "mode": "search",
+    "input": {
+      "query": "How does this request reach the persistence boundary? Synthetic case 31."
+    },
+    "acceptableEvidenceIds": [
+      "local:memory-context-031",
+      "code:symbol-context-031",
+      "git:0000000000000000000000000000000000000031",
+      "shared:00000000-0000-4000-8000-00000000001f"
+    ],
+    "exactIdentifierEvidenceIds": [],
+    "requiredSources": ["local_memory", "code", "git", "shared_memory"],
+    "requiredConflict": false
+  },
+  {
+    "id": "context-032",
+    "mode": "search",
+    "input": {
+      "query": "Which rule protects the retry path? Synthetic case 32."
+    },
+    "acceptableEvidenceIds": [
+      "local:memory-context-032",
+      "code:symbol-context-032",
+      "git:0000000000000000000000000000000000000032",
+      "shared:00000000-0000-4000-8000-000000000020"
+    ],
+    "exactIdentifierEvidenceIds": [],
+    "requiredSources": ["local_memory", "code", "git", "shared_memory"],
+    "requiredConflict": false
+  },
+  {
+    "id": "context-033",
+    "mode": "search",
+    "input": {
+      "query": "Where is the current source for the payment transition? Synthetic case 33."
+    },
+    "acceptableEvidenceIds": [
+      "local:memory-context-033",
+      "code:symbol-context-033",
+      "git:0000000000000000000000000000000000000033",
+      "shared:00000000-0000-4000-8000-000000000021"
+    ],
+    "exactIdentifierEvidenceIds": [],
+    "requiredSources": ["local_memory", "code", "git", "shared_memory"],
+    "requiredConflict": false
+  },
+  {
+    "id": "context-034",
+    "mode": "search",
+    "input": {
+      "query": "Why does the handler keep the operation atomic? Synthetic case 34."
+    },
+    "acceptableEvidenceIds": [
+      "local:memory-context-034",
+      "code:symbol-context-034",
+      "git:0000000000000000000000000000000000000034",
+      "shared:00000000-0000-4000-8000-000000000022"
+    ],
+    "exactIdentifierEvidenceIds": [],
+    "requiredSources": ["local_memory", "code", "git", "shared_memory"],
+    "requiredConflict": false
+  },
+  {
+    "id": "context-035",
+    "mode": "explain",
+    "input": {
+      "query": "Which interface owns this system decision? Synthetic case 35.",
+      "path": "src/context-035.ts",
+      "startLine": 4,
+      "endLine": 8
+    },
+    "acceptableEvidenceIds": [
+      "local:memory-context-035",
+      "code:symbol-context-035",
+      "git:0000000000000000000000000000000000000035",
+      "shared:00000000-0000-4000-8000-000000000023"
+    ],
+    "exactIdentifierEvidenceIds": [],
+    "requiredSources": ["local_memory", "code", "git", "shared_memory"],
+    "requiredConflict": false
+  },
+  {
+    "id": "context-036",
+    "mode": "search",
+    "input": {
+      "query": "How does this request reach the persistence boundary? Synthetic case 36."
+    },
+    "acceptableEvidenceIds": [
+      "local:memory-context-036",
+      "code:symbol-context-036",
+      "git:0000000000000000000000000000000000000036",
+      "shared:00000000-0000-4000-8000-000000000024"
+    ],
+    "exactIdentifierEvidenceIds": [],
+    "requiredSources": ["local_memory", "code", "git", "shared_memory"],
+    "requiredConflict": false
+  },
+  {
+    "id": "context-037",
+    "mode": "search",
+    "input": {
+      "query": "Which rule protects the retry path? Synthetic case 37."
+    },
+    "acceptableEvidenceIds": [
+      "local:memory-context-037",
+      "code:symbol-context-037",
+      "git:0000000000000000000000000000000000000037",
+      "shared:00000000-0000-4000-8000-000000000025"
+    ],
+    "exactIdentifierEvidenceIds": [],
+    "requiredSources": ["local_memory", "code", "git", "shared_memory"],
+    "requiredConflict": false
+  },
+  {
+    "id": "context-038",
+    "mode": "search",
+    "input": {
+      "query": "Where is the current source for the payment transition? Synthetic case 38."
+    },
+    "acceptableEvidenceIds": [
+      "local:memory-context-038",
+      "code:symbol-context-038",
+      "git:0000000000000000000000000000000000000038",
+      "shared:00000000-0000-4000-8000-000000000026"
+    ],
+    "exactIdentifierEvidenceIds": [],
+    "requiredSources": ["local_memory", "code", "git", "shared_memory"],
+    "requiredConflict": false
+  },
+  {
+    "id": "context-039",
+    "mode": "search",
+    "input": {
+      "query": "Why does the handler keep the operation atomic? Synthetic case 39."
+    },
+    "acceptableEvidenceIds": [
+      "local:memory-context-039",
+      "code:symbol-context-039",
+      "git:0000000000000000000000000000000000000039",
+      "shared:00000000-0000-4000-8000-000000000027"
+    ],
+    "exactIdentifierEvidenceIds": [],
+    "requiredSources": ["local_memory", "code", "git", "shared_memory"],
+    "requiredConflict": false
+  },
+  {
+    "id": "context-040",
+    "mode": "explain",
+    "input": {
+      "query": "Which interface owns this system decision? Synthetic case 40.",
+      "path": "src/context-040.ts",
+      "startLine": 4,
+      "endLine": 8
+    },
+    "acceptableEvidenceIds": [
+      "local:memory-context-040",
+      "code:symbol-context-040",
+      "git:0000000000000000000000000000000000000040",
+      "shared:00000000-0000-4000-8000-000000000028"
+    ],
+    "exactIdentifierEvidenceIds": [],
+    "requiredSources": ["local_memory", "code", "git", "shared_memory"],
+    "requiredConflict": false
+  },
+  {
+    "id": "context-041",
+    "mode": "search",
+    "input": {
+      "query": "How does this request reach the persistence boundary? Synthetic case 41."
+    },
+    "acceptableEvidenceIds": [
+      "local:memory-context-041",
+      "code:symbol-context-041",
+      "git:0000000000000000000000000000000000000041",
+      "shared:00000000-0000-4000-8000-000000000029"
+    ],
+    "exactIdentifierEvidenceIds": [],
+    "requiredSources": ["local_memory", "code", "git", "shared_memory"],
+    "requiredConflict": false
+  },
+  {
+    "id": "context-042",
+    "mode": "search",
+    "input": {
+      "query": "Which rule protects the retry path? Synthetic case 42."
+    },
+    "acceptableEvidenceIds": [
+      "local:memory-context-042",
+      "code:symbol-context-042",
+      "git:0000000000000000000000000000000000000042",
+      "shared:00000000-0000-4000-8000-00000000002a"
+    ],
+    "exactIdentifierEvidenceIds": [],
+    "requiredSources": ["local_memory", "code", "git", "shared_memory"],
+    "requiredConflict": false
+  },
+  {
+    "id": "context-043",
+    "mode": "search",
+    "input": {
+      "query": "Where is the current source for the payment transition? Synthetic case 43."
+    },
+    "acceptableEvidenceIds": [
+      "local:memory-context-043",
+      "code:symbol-context-043",
+      "git:0000000000000000000000000000000000000043",
+      "shared:00000000-0000-4000-8000-00000000002b"
+    ],
+    "exactIdentifierEvidenceIds": [],
+    "requiredSources": ["local_memory", "code", "git", "shared_memory"],
+    "requiredConflict": false
+  },
+  {
+    "id": "context-044",
+    "mode": "search",
+    "input": {
+      "query": "Why does the handler keep the operation atomic? Synthetic case 44."
+    },
+    "acceptableEvidenceIds": [
+      "local:memory-context-044",
+      "code:symbol-context-044",
+      "git:0000000000000000000000000000000000000044",
+      "shared:00000000-0000-4000-8000-00000000002c"
+    ],
+    "exactIdentifierEvidenceIds": [],
+    "requiredSources": ["local_memory", "code", "git", "shared_memory"],
+    "requiredConflict": false
+  },
+  {
+    "id": "context-045",
+    "mode": "explain",
+    "input": {
+      "query": "Which interface owns this system decision? Synthetic case 45.",
+      "path": "src/context-045.ts",
+      "startLine": 4,
+      "endLine": 8
+    },
+    "acceptableEvidenceIds": [
+      "local:memory-context-045",
+      "code:symbol-context-045",
+      "git:0000000000000000000000000000000000000045",
+      "shared:00000000-0000-4000-8000-00000000002d"
+    ],
+    "exactIdentifierEvidenceIds": [],
+    "requiredSources": ["local_memory", "code", "git", "shared_memory"],
+    "requiredConflict": false
+  },
+  {
+    "id": "context-046",
+    "mode": "search",
+    "input": {
+      "query": "How does this request reach the persistence boundary? Synthetic case 46."
+    },
+    "acceptableEvidenceIds": [
+      "local:memory-context-046",
+      "code:symbol-context-046",
+      "git:0000000000000000000000000000000000000046",
+      "shared:00000000-0000-4000-8000-00000000002e"
+    ],
+    "exactIdentifierEvidenceIds": [],
+    "requiredSources": ["local_memory", "code", "git", "shared_memory"],
+    "requiredConflict": false
+  },
+  {
+    "id": "context-047",
+    "mode": "search",
+    "input": {
+      "query": "Which rule protects the retry path? Synthetic case 47."
+    },
+    "acceptableEvidenceIds": [
+      "local:memory-context-047",
+      "code:symbol-context-047",
+      "git:0000000000000000000000000000000000000047",
+      "shared:00000000-0000-4000-8000-00000000002f"
+    ],
+    "exactIdentifierEvidenceIds": [],
+    "requiredSources": ["local_memory", "code", "git", "shared_memory"],
+    "requiredConflict": false
+  },
+  {
+    "id": "context-048",
+    "mode": "search",
+    "input": {
+      "query": "Where is the current source for the payment transition? Synthetic case 48."
+    },
+    "acceptableEvidenceIds": [
+      "local:memory-context-048",
+      "code:symbol-context-048",
+      "git:0000000000000000000000000000000000000048",
+      "shared:00000000-0000-4000-8000-000000000030"
+    ],
+    "exactIdentifierEvidenceIds": [],
+    "requiredSources": ["local_memory", "code", "git", "shared_memory"],
+    "requiredConflict": false
+  },
+  {
+    "id": "context-049",
+    "mode": "search",
+    "input": {
+      "query": "Why does the handler keep the operation atomic? Synthetic case 49."
+    },
+    "acceptableEvidenceIds": [
+      "local:memory-context-049",
+      "code:symbol-context-049",
+      "git:0000000000000000000000000000000000000049",
+      "shared:00000000-0000-4000-8000-000000000031"
+    ],
+    "exactIdentifierEvidenceIds": [],
+    "requiredSources": ["local_memory", "code", "git", "shared_memory"],
+    "requiredConflict": false
+  },
+  {
+    "id": "context-050",
+    "mode": "explain",
+    "input": {
+      "query": "Which interface owns this system decision? Synthetic case 50.",
+      "path": "src/context-050.ts",
+      "startLine": 4,
+      "endLine": 8
+    },
+    "acceptableEvidenceIds": [
+      "local:memory-context-050",
+      "code:symbol-context-050",
+      "git:0000000000000000000000000000000000000050",
+      "shared:00000000-0000-4000-8000-000000000032"
+    ],
+    "exactIdentifierEvidenceIds": [],
+    "requiredSources": ["local_memory", "code", "git", "shared_memory"],
+    "requiredConflict": false
+  }
+]

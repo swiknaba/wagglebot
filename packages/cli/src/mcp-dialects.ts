@@ -16,7 +16,7 @@ const headersFor = (scheme: AuthScheme, source: CredentialSource): Record<string
   if (value === undefined) return undefined;
   if (scheme.kind === "bearer") return { Authorization: `Bearer ${value}` };
   if (scheme.kind === "header") return { [scheme.name]: `${scheme.prefix ?? ""}${value}` };
-  if (scheme.kind === "basic") return { Authorization: `Basic ${value}` };
+  if (scheme.kind === "basic") return undefined;
   return undefined;
 };
 
@@ -73,6 +73,11 @@ export function needsExpansion(p: ProxyConfig): boolean {
 
 // Kept for the callers that render only the Claude Code shape. Equals renderEntry("claude", p).entry.
 export function proxyToClaudeEntry(p: ProxyConfig): Record<string, unknown> {
+  if ((p.mode === "remote_http" || p.mode === "remote_sse") && p.auth?.scheme.kind === "basic") {
+    throw new Error(
+      "static harness configuration cannot encode Basic authentication from a password environment placeholder",
+    );
+  }
   if (p.mode === "remote_http" || p.mode === "remote_sse") {
     const headers = p.auth === undefined ? undefined : headersFor(p.auth.scheme, p.auth.source);
     return {
@@ -248,6 +253,12 @@ function additionalEntry(dialect: "cursor" | "devin" | "windsurf" | "kiro", p: P
 }
 
 export function renderEntry(dialect: McpDialect, p: ProxyConfig): Rendered {
+  if ((p.mode === "remote_http" || p.mode === "remote_sse") && p.auth?.scheme.kind === "basic") {
+    return {
+      ok: false,
+      reason: "static harness configuration cannot encode Basic authentication from a password environment placeholder",
+    };
+  }
   if (dialect === "cursor" || dialect === "devin" || dialect === "windsurf" || dialect === "kiro")
     return additionalEntry(dialect, p);
   if (dialect === "codex") return codexEntry(p);

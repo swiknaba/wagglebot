@@ -2,6 +2,13 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+> **Memory amendment:** Task 6's lifecycle behavior remains shipped, but its
+> single `.agents/memory.md` representation is superseded by the
+> [OKF Local Component Memory Design](../specs/2026-09-26-okf-local-memory-design.md)
+> and its dedicated implementation plan. Project `init` and `update` keep
+> scaffolding committed memory and teaching agents to edit it, now as one OKF
+> concept per file.
+
 **Goal:** Ship the approved Phase 1 workflow: one connected company setup, nine local harnesses, simple project commands, committed memory and changelog files, and offline automated verification.
 
 **Architecture:** Keep project publishing independent from company provisioning. Resolve company configuration from a marked working tree or a validated local cache. Use a small bootstrap layer to refresh the cache and run the exact pinned Wagglebot package. Feed one resolved company context into shared provisioning stages. Extend the current harness table so each adapter declares its instruction, skill, agent, hook, and MCP targets.
@@ -20,8 +27,10 @@
 - Treat `--overwrite-local` as destructive authorization for the five supported categories only.
 - In overwrite mode, do not create a backup. Preserve unrelated IDE settings.
 - Never write a credential value. Write a documented variable reference, or skip that MCP entry.
-- Keep project memory and changelog files in Git. Never add them to `.gitignore`.
-- Keep the existing Phase 2 `brain` code independent. Do not add it to Phase 1 project initialization.
+- Keep the project memory bundle and changelog file in Git. Never add them to `.gitignore`.
+- Keep Phase 2 CodeGraph, retrieval, and `brain` commands independent from
+  Phase 1 project initialization. The shared filesystem-only OKF lifecycle is
+  the one exception required by the superseding memory design.
 - Keep native Windows out of scope. Linux tests cover WSL filesystem behavior.
 - Apply ASD-STE100 guidance to new prose, help text, comments, and documentation.
 - Run focused tests after each task. Run the complete verification set before completion.
@@ -483,6 +492,11 @@ git commit -m "Support nine harness capability adapters"
 ---
 
 ## Task 6: Implement project `init` and project `update`
+
+> **Superseded representation:** This task records the v0.3.0 implementation.
+> Its automatic scaffolding, preservation, and agent-ownership behavior is
+> retained. The current implementation must use `.agents/memory/` through the
+> shared OKF lifecycle; do not restore the file paths or template below.
 
 **Files:**
 

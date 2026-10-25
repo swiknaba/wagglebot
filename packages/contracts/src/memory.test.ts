@@ -167,6 +167,7 @@ test("publications cap chunks at 256 and validate wake metadata", () => {
       chunks: [{ ...publicationChunk(0), wake: true, reviewAfter: "2027-03-01" }],
     }).success,
   ).toBe(true);
+  expect(PublicationRequestSchema.safeParse({ ...input, chunks: [] }).success).toBe(true);
 });
 
 test("memory writes are final after synchronous embedding", () => {

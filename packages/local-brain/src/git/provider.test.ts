@@ -43,6 +43,19 @@ test("returns bounded local history without sending a query to Git", async () =>
   expect(why.evidence).toHaveLength(2);
 });
 
+test("returns repository-wide history when no path is requested", async () => {
+  const repo = fixtureRepo();
+  mkdirSync(join(repo, "src"));
+  writeFileSync(join(repo, "src", "token.ts"), "export const rotate = () => 'first';\n");
+  commit(repo, "add token rotation");
+  writeFileSync(join(repo, "README.md"), "Repository history fixture.\n");
+  commit(repo, "document repository");
+
+  const history = await new GitProvider().history({ projectRoot: repo, limit: 10 });
+
+  expect(history.commits.map(({ subject }) => subject)).toEqual(["document repository", "add token rotation"]);
+});
+
 test("ranks blamed lines above keyword-only history and returns bounded diff evidence", async () => {
   const repo = fixtureRepo();
   mkdirSync(join(repo, "src"));

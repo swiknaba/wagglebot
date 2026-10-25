@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { resolveCredential } from "./credentials";
+import { explicitChildEnv, resolveCredential } from "./credentials";
 
 test("resolves only named environment and file credentials", async () => {
   expect(
@@ -24,4 +24,18 @@ test("resolves only named environment and file credentials", async () => {
       { registryOrigin: "remote", env: {}, readFile: async () => "" },
     ),
   ).toBeNull();
+});
+
+test("passes the fixed telemetry-off setting to an upstream child", () => {
+  expect(
+    explicitChildEnv(
+      {
+        namespace: "project-brain",
+        mode: "stdio_cmd",
+        command: "wagglebot-context-engine",
+        env: { CODEGRAPH_TELEMETRY: "0" },
+      },
+      {},
+    ),
+  ).toEqual({ CODEGRAPH_TELEMETRY: "0" });
 });

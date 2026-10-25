@@ -1,27 +1,7 @@
-import type { LocalMemoryProposalInput, LocalMemorySaveResult } from "@wagglebot/local-brain";
+import type { LocalBrain, LocalMemoryProposalInput } from "@wagglebot/local-brain";
 
 type RememberBrain = {
-  memory: {
-    propose(input: LocalMemoryProposalInput): Promise<
-      Awaited<ReturnType<RememberBrain["memory"]["save"]>> extends never
-        ? never
-        : {
-            proposalId: string;
-            baseContentHash: string;
-            section: LocalMemoryProposalInput["section"];
-            title: string;
-            summary: string;
-            evidence: LocalMemoryProposalInput["evidence"];
-            action: "add" | "replace" | "no_change" | "needs_resolution";
-            patch: string;
-            warnings: string[];
-          }
-    >;
-    save(input: {
-      projectRoot: string;
-      proposal: Awaited<ReturnType<RememberBrain["memory"]["propose"]>>;
-    }): Promise<LocalMemorySaveResult>;
-  };
+  memory: Pick<LocalBrain["memory"], "propose" | "save">;
 };
 
 export async function runBrainRemember(input: {
@@ -49,7 +29,8 @@ export async function runBrainRemember(input: {
     if (proposal.action === "needs_resolution") return 1;
     if (!input.save) return 0;
     const result = await input.brain.memory.save({ projectRoot: input.projectPath, proposal });
-    input.write(`Saved ${result.path}; new content hash ${result.newContentHash}`);
+    input.write(`Saved concept ${result.path}; new bundle hash ${result.newBundleHash}`);
+    for (const warning of result.warnings) input.write(`Warning: ${warning}`);
     return 0;
   } catch (error) {
     input.write(`brain remember: ${error instanceof Error ? error.message : "memory operation failed"}`);

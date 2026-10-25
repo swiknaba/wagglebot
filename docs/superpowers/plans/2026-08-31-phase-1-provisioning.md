@@ -1,5 +1,11 @@
 # Phase 1 — Provisioning CLI Implementation Plan
 
+> **Historical plan.** This completed plan records the original D29
+> single-file instructions. The current component-memory contract is the
+> [OKF local-memory design](../specs/2026-09-26-okf-local-memory-design.md) and
+> Task 1A in the
+> [Phase 2 implementation sequence](2026-09-12-phase-2-implementation-sequence.md).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Build the repository boilerplate and the complete Phase 1 `wagglebot` CLI: `update`, `init`, `install-skills`, `install-agents`, `sync-agents`, and the MCP config writer.

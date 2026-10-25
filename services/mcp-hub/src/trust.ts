@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
-import { chmod, mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { constants } from "node:fs";
+import { chmod, type FileHandle, mkdir, open, rename, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { type ProxyConfig, type TrustRecord, TrustRecordSchema } from "@wagglebot/contracts";
 
@@ -7,14 +8,23 @@ export class TrustStore {
   private records = new Map<string, TrustRecord>();
   public constructor(private readonly path: string) {}
   public async load(): Promise<void> {
+    let file: FileHandle | undefined;
     try {
-      const parsed = JSON.parse(await readFile(this.path, "utf8")) as unknown;
+      file = await open(this.path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+      const stat = await file.stat();
+      if (!stat.isFile() || (stat.mode & 0o077) !== 0) throw new Error("unsafe trust store");
+      const parsed = JSON.parse(await file.readFile("utf8")) as unknown;
       if (!Array.isArray(parsed)) throw new Error("trust records must be a list");
       const records = parsed.map((value) => TrustRecordSchema.parse(value));
       this.records = new Map(records.map((record) => [record.namespace, record]));
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+        this.records.clear();
+        return;
+      }
       throw new Error("invalid trust store");
+    } finally {
+      await file?.close();
     }
   }
   public requireApproval(proxy: ProxyConfig): boolean {

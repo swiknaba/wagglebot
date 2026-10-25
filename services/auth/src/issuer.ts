@@ -1,12 +1,12 @@
 import { readFile } from "node:fs/promises";
+import { canonicalChallengeBytes } from "@wagglebot/auth-protocol";
 import {
+  type AuthAudience,
   AuthChallengeRequestSchema,
   type AuthChallengeResponse,
   AuthSessionRequestSchema,
   type AuthSessionResponse,
-  type D26Audience,
 } from "@wagglebot/contracts";
-import { canonicalChallengeBytes } from "@wagglebot/d26-auth";
 import { importPKCS8, SignJWT } from "jose";
 import type { PublicKeyResolver } from "./catalog-keys";
 import type { InMemoryChallengeStore } from "./challenge-store";
@@ -55,7 +55,7 @@ export class AuthIssuer {
 
   async issueChallenge(input: {
     username: string;
-    audience: D26Audience;
+    audience: AuthAudience;
     signal: AbortSignal;
   }): Promise<AuthChallengeResponse> {
     const parsed = AuthChallengeRequestSchema.safeParse({
@@ -120,7 +120,7 @@ export class AuthIssuer {
     }
   }
 
-  private consumeRateLimit(username: string, audience: D26Audience): void {
+  private consumeRateLimit(username: string, audience: AuthAudience): void {
     const now = this.clock().getTime();
     for (const [key, value] of this.rateLimits) {
       if (value.expiresAtMs <= now) this.rateLimits.delete(key);

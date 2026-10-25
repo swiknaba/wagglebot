@@ -14,13 +14,25 @@ const context = {
   codeBlocks: [{ nodeId: "entry", code: "export const entry = () => service();" }],
 };
 
-const fakeHandle = (): CodeGraphHandle & { unwatchCalls: number; closeCalls: number } => ({
+const fakeHandle = (): CodeGraphHandle & {
+  unwatchCalls: number;
+  closeCalls: number;
+  syncCalls: number;
+  watchCalls: number;
+} => ({
   unwatchCalls: 0,
   closeCalls: 0,
+  syncCalls: 0,
+  watchCalls: 0,
   indexAll: async () => undefined,
-  sync: async () => undefined,
+  async sync() {
+    this.syncCalls += 1;
+  },
   buildContext: async () => context,
-  watch: () => true,
+  watch() {
+    this.watchCalls += 1;
+    return true;
+  },
   unwatch() {
     this.unwatchCalls += 1;
   },
@@ -66,6 +78,78 @@ test("a normal query opens an existing index and never reinitializes it", async 
   expect(api.initCalls).toEqual([]);
   expect(result.nodes).toHaveLength(2);
   expect(result.edges).toEqual([{ from: "entry", to: "service", kind: "calls" }]);
+  expect(result.nodes[0]?.snippet).toContain("export const entry");
+});
+
+test("maps SDK location-based code blocks to one matching graph node", async () => {
+  const api = fakeApi();
+  const originalOpen = api.open.bind(api);
+  api.open = async (root, options) => {
+    const handle = await originalOpen(root, options);
+    handle.buildContext = async () => ({
+      subgraph: {
+        nodes: [{ id: "entry", kind: "function", name: "entry", filePath: "src/entry.ts", startLine: 1, endLine: 3 }],
+        edges: [],
+      },
+      codeBlocks: [
+        {
+          filePath: "./src\\entry.ts",
+          startLine: 1,
+          endLine: 3,
+          content: "export const entry = () => service();",
+          nodeName: "entry",
+          nodeKind: "function",
+        },
+      ],
+    });
+    return handle;
+  };
+  const repo = fixtureRepo();
+
+  const result = await new CodeGraphProvider({ api }).explore({
+    projectRoot: repo,
+    query: "entry",
+    maxNodes: 20,
+    includeCode: true,
+  });
+
+  expect(result.nodes[0]?.snippet).toBe("export const entry = () => service();");
+});
+
+test("does not attach an SDK code block when multiple graph nodes match its location", async () => {
+  const api = fakeApi();
+  const originalOpen = api.open.bind(api);
+  api.open = async (root, options) => {
+    const handle = await originalOpen(root, options);
+    handle.buildContext = async () => ({
+      subgraph: {
+        nodes: [
+          { id: "entry", kind: "function", name: "entry", filePath: "src/entry.ts", startLine: 1, endLine: 3 },
+          { id: "wrapper", kind: "function", name: "wrapper", filePath: "src/entry.ts", startLine: 1, endLine: 3 },
+        ],
+        edges: [],
+      },
+      codeBlocks: [
+        {
+          filePath: "src/entry.ts",
+          startLine: 1,
+          endLine: 3,
+          content: "ambiguous code",
+        },
+      ],
+    });
+    return handle;
+  };
+  const repo = fixtureRepo();
+
+  const result = await new CodeGraphProvider({ api }).explore({
+    projectRoot: repo,
+    query: "entry",
+    maxNodes: 20,
+    includeCode: true,
+  });
+
+  expect(result.nodes.every((node) => node.snippet === undefined)).toBe(true);
 });
 
 test("initialize builds once, watches, and LRU eviction closes the oldest project", async () => {
@@ -98,4 +182,23 @@ test("pending files mark results stale without exposing an absolute path", async
   expect(result.state).toBe("stale");
   expect(result.pendingFiles).toEqual(["src/service.ts"]);
   expect(JSON.stringify(result)).not.toContain(repo);
+});
+
+test("context retrieval opens without synchronization or a watcher", async () => {
+  const api = fakeApi();
+  const options: Array<{ synchronize?: boolean; watch?: boolean; signal?: AbortSignal } | undefined> = [];
+  const originalOpen = api.open.bind(api);
+  api.open = async (root, openOptions) => {
+    options.push(openOptions);
+    return originalOpen(root, openOptions);
+  };
+  const provider = new CodeGraphProvider({ api });
+  const repo = fixtureRepo();
+
+  const result = await provider.exploreContext({ projectRoot: repo, query: "entry", maxNodes: 10, includeCode: true });
+  const handle = api.handles.get(api.openCalls[0] ?? "");
+  expect(options[0]).toMatchObject({ synchronize: false, watch: false });
+  expect(handle?.syncCalls).toBe(0);
+  expect(handle?.watchCalls).toBe(0);
+  expect(result.nodes[0]?.snippet).toContain("entry");
 });

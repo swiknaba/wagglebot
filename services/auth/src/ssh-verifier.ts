@@ -1,7 +1,7 @@
 import { chmod, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { D26_SIGNATURE_NAMESPACE } from "@wagglebot/d26-auth";
+import { AUTH_SIGNATURE_NAMESPACE } from "@wagglebot/auth-protocol";
 
 const DEFAULT_TIMEOUT_MS = 5_000;
 
@@ -58,7 +58,7 @@ export class OpenSshSignatureVerifier implements SshSignatureVerifier {
           "-I",
           input.username,
           "-n",
-          D26_SIGNATURE_NAMESPACE,
+          AUTH_SIGNATURE_NAMESPACE,
           "-s",
           signaturePath,
         ],

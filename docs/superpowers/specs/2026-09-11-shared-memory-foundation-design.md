@@ -49,7 +49,7 @@ canonical record store, or direct agent endpoint.
 
 ## Non-Goals
 
-- Component memory. It stays in `.agents/memory.md` under D29.
+- Component memory. It stays in the `.agents/memory/` OKF bundle under D29.
 - Uploading code, CodeGraph data, Git diffs, or repository working trees.
 - Mining transcripts, agent conversations, or an entire checkout.
 - Confluence or arbitrary document ingestion. That remains Phase 4.
@@ -75,7 +75,7 @@ flowchart LR
 
 Only the memory worker is network-addressable to Wagglebot clients. MemPalace
 runs on an internal container network and accepts calls only from the worker.
-PostgreSQL is also private. The worker verifies the D26 session token or the
+PostgreSQL is also private. The worker verifies the authentication session token or the
 administrator publication principal before it reads or mutates memory.
 
 All Wagglebot-owned runtime and database-management code is TypeScript on Bun.
@@ -353,7 +353,7 @@ knowledge-graph, and direct mutation surfaces are inaccessible to clients.
 
 ```text
 propose_memory
-  → verify D26 principal
+  → verify authenticated principal
   → validate finished-fact schema
   → require system confirmation evidence for system scope
   → scan credentials
@@ -363,8 +363,9 @@ propose_memory
   → outbox worker indexes through MemPalace
 ```
 
-The worker rejects a component proposal with an instruction to update
-`.agents/memory.md`. It rejects domain or organization proposals from agents.
+The worker rejects a component proposal with an instruction to add or update an
+OKF concept under `.agents/memory/`. It rejects domain or organization
+proposals from agents.
 
 ### Explicit human memory
 
@@ -518,7 +519,7 @@ operations. They are not agent tools.
 
 ## Authentication and Authorization
 
-- A D26 short-lived session token identifies the engineer. The worker verifies
+- A short-lived authentication session token identifies the engineer. The worker verifies
   audience, issuer, signature, expiry, and username.
 - The worker reloads catalog membership on a bounded refresh interval and fails
   closed for writes if the catalog is unavailable or invalid.

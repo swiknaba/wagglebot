@@ -46,12 +46,3 @@ test("rejects missing, malformed, and unknown configuration", () => {
     /REGISTRY_MAX_RESPONSE_BYTES/,
   );
 });
-
-test("rejects the removed D26 public-key setting", () => {
-  expect(() =>
-    loadRegistryConfig({
-      ...valid,
-      REGISTRY_D26_PUBLIC_KEY_FILE: "/run/secrets/registry-d26-public-key.pem",
-    }),
-  ).toThrow("REGISTRY_D26_PUBLIC_KEY_FILE");
-});

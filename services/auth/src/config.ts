@@ -39,8 +39,6 @@ const environmentSchema = z
   });
 
 export function loadAuthConfig(env: Record<string, string | undefined> = process.env): AuthConfig {
-  const legacyName = Object.keys(env).find((name) => name.startsWith("D26_AUTH_"));
-  if (legacyName) throw new Error(`${legacyName}: use the AUTH_ prefix instead`);
   const parsed = environmentSchema.safeParse(env);
   if (!parsed.success) {
     const issue = parsed.error.issues[0];

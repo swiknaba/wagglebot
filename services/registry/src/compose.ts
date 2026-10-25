@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import {
-  type D26Principal,
+  type AuthPrincipal,
   type ProxyConfig,
   type RegistrySnapshot,
   RegistrySnapshotSchema,
@@ -19,7 +19,7 @@ function canonical(value: unknown): string {
 }
 
 export function composeRegistry(
-  principal: Pick<D26Principal, "username">,
+  principal: Pick<AuthPrincipal, "username">,
   source: ValidatedSourceSnapshot,
 ): RegistrySnapshot {
   if (!source.catalog.users.has(principal.username)) throw new Error("principal is not registered");

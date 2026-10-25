@@ -1,4 +1,6 @@
 import { expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { loadRegistry, mergeRegistries } from "./registry";
 
 test("loads and validates a registry", () => {
@@ -6,6 +8,17 @@ test("loads and validates a registry", () => {
   const proxies = loadRegistry(text, "registry.base.yaml");
   expect(proxies).toHaveLength(1);
   expect(proxies[0]?.namespace).toBe("example");
+});
+
+test("company template launches the packaged local context engine with telemetry disabled", () => {
+  const text = readFileSync(join(import.meta.dir, "..", "templates", "init", "company", "registry.yaml"), "utf8");
+  const [entry] = loadRegistry(text, "company/registry.yaml");
+  expect(entry).toMatchObject({
+    namespace: "project-brain",
+    mode: "stdio_cmd",
+    command: "wagglebot-context-engine",
+    env: { CODEGRAPH_TELEMETRY: "0" },
+  });
 });
 
 test("rejects an unpinned stdio_npx package", () => {
@@ -99,12 +112,10 @@ test("an endpoint that is not a string is a hard error", () => {
   expect(() => loadRegistry(text, "r.yaml")).toThrow(/endpoint must be a string/);
 });
 
-test("a basic scheme rejects a username field, and an env source needs a var", () => {
+test("a basic scheme requires a username, and an env source needs a var", () => {
   const basic =
     "proxies:\n  - namespace: a\n    mode: remote_http\n    endpoint: https://x/mcp\n    auth: { scheme: { kind: basic, username: bee }, source: { from: env, var: T } }\n";
-  expect(() => loadRegistry(basic, "r.yaml")).toThrow(
-    'auth.scheme.username is not used — put the base64 value of "username:password" in the variable that auth.source.var names',
-  );
+  expect(loadRegistry(basic, "r.yaml")[0]?.auth?.scheme).toEqual({ kind: "basic", username: "bee" });
   const source =
     "proxies:\n  - namespace: a\n    mode: remote_http\n    endpoint: https://x/mcp\n    auth: { scheme: { kind: bearer }, source: { from: env } }\n";
   expect(() => loadRegistry(source, "r.yaml")).toThrow(/source\.var is required/);
@@ -113,10 +124,10 @@ test("a basic scheme rejects a username field, and an env source needs a var", (
   expect(() => loadRegistry(file, "r.yaml")).toThrow(/source\.path is required/);
 });
 
-test("a basic scheme without a username loads", () => {
+test("a basic scheme without a username is rejected", () => {
   const text =
     "proxies:\n  - namespace: a\n    mode: remote_http\n    endpoint: https://x/mcp\n    auth: { scheme: { kind: basic }, source: { from: env, var: T } }\n";
-  expect(loadRegistry(text, "r.yaml")[0]?.auth?.scheme.kind).toBe("basic");
+  expect(() => loadRegistry(text, "r.yaml")).toThrow('auth.scheme.username is required for kind "basic"');
 });
 
 test("a remote mode rejects an env auth scheme", () => {

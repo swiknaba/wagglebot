@@ -4,9 +4,9 @@
 
 **Goal:** Build the workstation-local MCP aggregation hub that loads a trusted registry, isolates each upstream credential, proxies four MCP transports, exposes CodeMode and introspection tools, and remains usable when individual upstreams are unavailable.
 
-**Architecture:** `services/mcp-hub` is a local HTTP MCP server. It authenticates the harness with a local hub bearer token, obtains the principal-specific registry from a local file or the D26-authenticated shared registry, validates trust before swapping configuration, resolves credentials only on the workstation, and manages one upstream client per namespace. The agent sees only `search`, `get_schema`, `execute`, and four introspection tools; raw downstream tool lists never reach the agent.
+**Architecture:** `services/mcp-hub` is a local HTTP MCP server. It authenticates the harness with a local hub bearer token, obtains the principal-specific registry from a local file or the SSH-authenticated shared registry, validates trust before swapping configuration, resolves credentials only on the workstation, and manages one upstream client per namespace. The agent sees only `search`, `get_schema`, `execute`, and four introspection tools; raw downstream tool lists never reach the agent.
 
-**Tech Stack:** TypeScript, Bun, `@modelcontextprotocol/sdk` 1.30.0, Zod 4, `@wagglebot/contracts`, `@wagglebot/d26-auth`, native `fetch`, `Bun.spawn`, filesystem APIs, HMAC-SHA256, Bun tests, Biome, and the existing CLI command/config patterns.
+**Tech Stack:** TypeScript, Bun, `@modelcontextprotocol/sdk` 1.30.0, Zod 4, `@wagglebot/contracts`, `@wagglebot/auth-protocol`, native `fetch`, `Bun.spawn`, filesystem APIs, HMAC-SHA256, Bun tests, Biome, and the existing CLI command/config patterns.
 
 **Spec:** §C2 of `docs/superpowers/specs/2026-08-28-service-contracts.md`, the Phase 2 hub requirements in `docs/superpowers/specs/2026-08-28-phase-2-shared-layer.md`, and D1, D7, D9, D10, D13, D26, D32, and D34 in `docs/superpowers/specs/2026-08-28-wagglebot-design.md`.
 
@@ -16,7 +16,7 @@
 - The HTTP hub requires `MCP_HUB_BEARER_TOKEN`; it is a local caller-to-hub credential and is never sent downstream. `/livez` and `/readyz` are the only unauthenticated endpoints.
 - The hub supports exactly `remote_http`, `remote_sse`, `stdio_npx`, and `stdio_cmd`. No unconditional proxy and no vendor-specific default may be added.
 - The registry carries credential references, never values. Resolve `env` and `file` sources locally; reject `literal` when the registry came from `MCP_HUB_CONFIG_URL`.
-- Strip every inbound `Authorization` header before an upstream call, then inject only the configured per-upstream credential. Never forward the hub bearer or D26 registry token.
+- Strip every inbound `Authorization` header before an upstream call, then inject only the configured per-upstream credential. Never forward the hub bearer or authentication registry token.
 - Remote registry URLs must be HTTPS, pinned to the configured origin, and rejected on cross-origin redirects. Private endpoint targets require explicit local approval.
 - New/changed commands, packages, credential names, endpoint origins, `stdio_*` entries, and private targets require local approval in `registry.trust.json`. Validate the complete candidate before swapping it into service.
 - A missing upstream credential skips that namespace and does not abort startup. A missing stdio executable aborts startup. An unreachable remote is registered as degraded and retried unless `MCP_HUB_STARTUP_STRICT=1`.
@@ -288,7 +288,7 @@ git commit -m "feat(hub): isolate credentials and require registry trust approva
 
 **Interfaces:**
 
-- Consumes: local file or D26-authenticated remote registry, trust store,
+- Consumes: local file or SSH-authenticated remote registry, trust store,
   registry contracts.
 - Produces: `RegistryManager.current()`, `.refresh()`, `.start()`, `.stop()`,
   and a validated snapshot with source metadata.
@@ -298,7 +298,7 @@ git commit -m "feat(hub): isolate credentials and require registry trust approva
 Test:
 
 - local path is loaded and validated;
-- remote fetch uses a D26 `wagglebot-registry` token and no hub/upstream token;
+- remote fetch uses an authentication `wagglebot-registry` token and no hub/upstream token;
 - `Authorization` is present only on the registry request;
 - cross-origin redirects are rejected and never receive credentials;
 - unchanged `ETag` keeps the current snapshot;
@@ -323,7 +323,7 @@ export type RegistryManager = {
 
 For a remote source, pin the origin from the configured URL, use a bounded
 30-second fetch, accept only JSON matching `RegistrySnapshotSchema`, enforce a
-256 KiB response cap, and pass the D26 token only to the registry endpoint.
+256 KiB response cap, and pass the authentication token only to the registry endpoint.
 For a local source, require file mode `0600` or stricter when it contains
 registry data and validate before use. Build a candidate manager state, run
 trust checks and credential resolution, then swap the complete state in one
@@ -615,7 +615,7 @@ stdio/remote clients, and close the MCP server exactly once.
 Use fake HTTP/SSE servers and a real temporary stdio fixture. Prove:
 
 1. Four transport modes work with the correct per-upstream credential.
-2. The hub bearer and D26 registry token never reach an upstream.
+2. The hub bearer and authentication registry token never reach an upstream.
 3. Missing credentials skip only one namespace.
 4. Remote failure keeps last-good schemas; missing stdio binary fails startup.
 5. A changed remote registry entry waits for local approval.
@@ -631,7 +631,7 @@ Run: `bun test services/mcp-hub/integration/hub-e2e.test.ts`
 - [ ] **Step 4: Add deployment/API docs and run gates**
 
 Add the local-profile hub service, explicit `.env.credentials` handling,
-loopback binding, health checks, read-only registry/catalog mounts, and D26
+loopback binding, health checks, read-only registry/catalog mounts, and authentication
 registry-client configuration to `deploy/docker-compose.memory.yml`. Document
 trust approval, credential sources, refresh, CodeMode, and shutdown behavior in
 `deploy/README.md`. Add every MCP tool schema and hub error/limit contract to
@@ -659,7 +659,7 @@ git commit -m "feat(hub): deliver secure local MCP aggregation"
 ## Completion Checklist
 
 - [ ] Four upstream transports work with isolated local credentials.
-- [ ] The hub never forwards inbound hub/D26 credentials downstream.
+- [ ] The hub never forwards inbound hub/authentication credentials downstream.
 - [ ] Registry origin, redirects, private targets, commands, packages, and
       credential names obey local approval policy.
 - [ ] Last-good discovery survives remote failure; startup asymmetry is exact.

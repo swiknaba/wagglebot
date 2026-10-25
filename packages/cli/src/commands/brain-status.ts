@@ -14,7 +14,12 @@ export async function runBrainStatus(input: {
       input.write(JSON.stringify({ schemaVersion: 1, status }));
       return 0;
     }
-    input.write(`Component memory  ${status.memory.state}  .agents/memory.md`);
+    input.write(
+      `Component memory  ${status.memory.state}  ${status.memory.path}  ${status.memory.conceptCount ?? 0} concepts`,
+    );
+    input.write(
+      `Memory bundle     ${status.memory.bundleHash ?? "unavailable"}  indexes ${status.memory.indexState ?? "unavailable"}  ${status.memory.totalBytes ?? 0} bytes`,
+    );
     input.write(
       `Code graph         ${status.codeGraph.state}  ${status.codeGraph.pendingFiles.length === 0 ? "no pending files" : `${status.codeGraph.pendingFiles.length} pending files`}`,
     );

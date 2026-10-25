@@ -62,15 +62,6 @@ test("requires the pinned GitHub keys host for the GitHub key source", () => {
   ).toBe("github.example.test");
 });
 
-test("rejects the removed D26 environment names", () => {
-  expect(() =>
-    loadAuthConfig({
-      ...validEnvironment,
-      D26_AUTH_HOST: "127.0.0.1",
-    }),
-  ).toThrow("D26_AUTH_HOST");
-});
-
 test("does not start without a readable Ed25519 signing key", async () => {
   await expect(loadIssuerSigningKey("/path/that/does/not/exist.pem")).rejects.toThrow("auth signing key unavailable");
 });

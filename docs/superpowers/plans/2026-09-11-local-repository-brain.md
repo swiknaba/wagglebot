@@ -1,5 +1,43 @@
 # Local Repository Brain Implementation Plan
 
+> **Partially historical:** Tasks 3, 7, and 8 were implemented against an
+> unshipped single `.agents/memory.md` file. Do not reuse those path or wire
+> contracts. The [OKF local-memory design](../specs/2026-09-26-okf-local-memory-design.md)
+> and Task 1A in the
+> [Phase 2 implementation sequence](2026-09-12-phase-2-implementation-sequence.md)
+> replace the component-memory portions. The BM25, path-policy, CodeGraph, Git,
+> and provider-composition tasks remain valid historical implementation
+> evidence.
+
+## Current OKF Contract (Task 1A)
+
+The [OKF local-memory design](../specs/2026-09-26-okf-local-memory-design.md)
+is authoritative for component memory. The only supported location is the
+`.agents/memory/` OKF v0.2 bundle: one Markdown file per concept, a required
+non-empty `type`, and deterministic root/category indexes. The separate
+`.agents/changelog.md` is preserved and is not part of the bundle.
+
+The current `LocalMemoryBundle` represents the concepts, reserved indexes and
+logs, aggregate `bundleHash`, size, and index state. Search returns exact
+concept paths and line ranges with `bundleHash`; proposals carry
+`baseBundleHash` and the target concept path. Project `init`, `update`, the
+`sync-project` alias, and `brain init` share `ensureLocalMemoryBundle`.
+`brain remember` previews by default and writes only with `--save`. Direct
+concept edits are validated and their indexes repaired by `wagglebot update`.
+The legacy `.agents/memory.md` is rejected without migration or a dual-read
+path, and memory commands never stage or commit user files.
+
+**Current gate:** Preserve concepts and the separate changelog across the
+shared lifecycle; deterministically repair indexes; return exact search
+provenance; enforce proposal/save `baseBundleHash`, secret scanning, and
+atomicity; reject the legacy path before project outputs change; and pass the
+focused and complete repository gates in Task 1A of the Phase 2 sequence.
+
+> **Historical implementation plan:** The original goal, architecture, task
+> steps, and file map below record the pre-OKF implementation plan. They remain
+> useful implementation history; Task 1A and the current contract above govern
+> the shipped memory representation.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add human-readable component memory with explicit proposal/promotion, a persistent local CodeGraph index, Git evidence retrieval, and low-level MCP operations without sending repository data to shared services.
@@ -12,7 +50,8 @@
 
 ## Global Constraints
 
-- Keep `.agents/memory.md` as the only durable component-memory file.
+- The completed Task 3 used `.agents/memory.md`; Task 1A must remove that
+  unshipped format and use only the `.agents/memory/` OKF bundle.
 - Keep proposals ephemeral. Do not create a proposal cache, session file, or
   transcript store.
 - Accept only a finished title, summary, section, and evidence from the caller;
@@ -20,7 +59,7 @@
 - A developer's explicit remember/save instruction authorizes proposal and
   save. An agent-originated suggestion must stop after proposal until the
   developer explicitly promotes it.
-- Scan before proposal and save, require the proposal's base content hash, and
+- Scan before proposal and save, require the proposal's `baseBundleHash`, and
   write atomically without staging or committing.
 - Keep `.codegraph/` generated and ignored. Never commit, upload, or copy its database.
 - Do not create `.agent/`, generated wake Markdown, a local vector database, diaries, handoffs, or transcript storage.
@@ -40,6 +79,9 @@
 ---
 
 ## File Map
+
+> **Historical file map:** This was the original single-file implementation
+> layout. Use the Task 1A plan and OKF design for current memory paths.
 
 ```text
 packages/local-brain/
@@ -838,6 +880,10 @@ git commit -m "feat(brain): expose local memory code and Git over MCP"
 ---
 
 ## Plan Completion Gate
+
+> **Historical single-file gate:** These checks describe the original memory
+> representation and have been superseded by the current OKF contract above
+> and Task 1A in the Phase 2 implementation sequence.
 
 Before starting the Unified Context Engine plan:
 

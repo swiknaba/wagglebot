@@ -44,7 +44,10 @@ CREATE TABLE public.wagglebot_memories (
     content_hash text NOT NULL,
     provenance_count integer DEFAULT 0 NOT NULL,
     created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+    updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    wake boolean DEFAULT false NOT NULL,
+    review_after date,
+    supersedes text
 );
 
 
@@ -58,7 +61,8 @@ CREATE TABLE public.wagglebot_memory_schema_metadata (
     dimension integer NOT NULL,
     distance text NOT NULL,
     schema_version integer NOT NULL,
-    created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+    created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    worker_state jsonb DEFAULT '{"reindex": {"pending": []}, "sources": {}, "operations": {}}'::jsonb NOT NULL
 );
 
 

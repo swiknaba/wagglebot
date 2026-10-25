@@ -5,12 +5,12 @@ RUN apk add --no-cache openssh-client \
 WORKDIR /app
 COPY package.json bun.lock ./
 COPY packages/contracts/package.json packages/contracts/package.json
-COPY packages/d26-auth/package.json packages/d26-auth/package.json
+COPY packages/auth-protocol/package.json packages/auth-protocol/package.json
 COPY packages/company-config/package.json packages/company-config/package.json
 COPY services/registry/package.json services/registry/package.json
 RUN bun install --production --frozen-lockfile
 COPY packages/contracts packages/contracts
-COPY packages/d26-auth packages/d26-auth
+COPY packages/auth-protocol packages/auth-protocol
 COPY packages/company-config packages/company-config
 COPY services/registry services/registry
 RUN chown -R wagglebot:wagglebot /app

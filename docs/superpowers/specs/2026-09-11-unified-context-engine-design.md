@@ -69,7 +69,7 @@ local hub launches it as a pinned `stdio_cmd` upstream and exposes it through
 the hub's existing CodeMode transform. One process serves all local harnesses
 and owns the embedded CodeGraph handles.
 
-The engine uses the D26 local authentication client when it calls the shared
+The engine uses the local authentication client when it calls the shared
 worker. It does not accept or forward an agent's inbound authorization header.
 Upstream credentials remain on the workstation under D9/D10.
 
@@ -211,7 +211,7 @@ Every item has at least one navigable evidence reference:
 
 ```typescript
 type EvidenceRef =
-  | { kind: "local_memory"; path: ".agents/memory.md"; startLine: number; endLine: number; contentHash: string }
+  | { kind: "local_memory"; path: `.agents/memory/${string}.md`; startLine: number; endLine: number; contentHash: string }
   | { kind: "code"; path: string; startLine: number; endLine: number; symbol?: string; graphState: string }
   | { kind: "git"; commit: string; path?: string; startLine?: number; endLine?: number }
   | { kind: "shared_memory"; memoryId: string; repository?: string; path?: string; commitSha?: string; heading?: string };
@@ -220,7 +220,7 @@ type EvidenceRef =
 The formatter renders compact handles:
 
 ```text
-local-memory://.agents/memory.md#L32
+local-memory://.agents/memory/warnings/retry-writes.md#L12
 code://src/auth/token-service.ts#L81
 git://3e11fc9?path=src/auth/token-service.ts
 memory://018f5f5e-...
@@ -405,6 +405,18 @@ When the caller provides `remainingContextTokens`, the effective maximum is also
 capped at five percent of that value. When it provides neither field, the
 default target applies. The entire serialized response is capped at 16 KiB.
 
+Budget feasibility depends on the selected representation. After deterministic
+compact formatting and removal of optional items, if mandatory identity,
+metadata, warnings or conflict notices still cannot fit the effective token or
+byte limit, return `context_invalid` with a fixed content-free message. Do not
+silently change an explicit response format, increase the budget, omit required
+notices or understate `estimatedTokens`. The default remains Markdown; automatic
+L0 must fit its 100-token default target and 150-token hard maximum. An explicit
+structured L0 request may fail this feasibility check because its full required
+packet is larger. This rule also applies to a caller-supplied budget or
+remaining-context hint too small for the mandatory response. It does not relax
+any input or packet schema.
+
 Independent item limits prevent a collection of tiny records from becoming a
 large prompt:
 
@@ -515,7 +527,7 @@ type SharedMemoryClient = {
 };
 ```
 
-It obtains a D26 session token through the shared authentication client, caches
+It obtains an authentication session token through the shared authentication client, caches
 it until one minute before expiry, and retries once after an authentication
 failure. It validates response schema before candidates enter ranking.
 

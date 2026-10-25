@@ -16,3 +16,18 @@ test("base instructions require a changelog before final response and exclude re
   expect(text).toContain("Before the final response");
   expect(text).toContain("Do not record research, failed attempts, or sessions that make no change.");
 });
+
+test("base instructions define progressive context and explicit bridge use", () => {
+  const text = readFileSync(join(import.meta.dir, "..", "templates", "AGENTS.base.md"), "utf8");
+  for (const phrase of [
+    "new chat",
+    "L0",
+    "Use L1\nonly",
+    "context cursor",
+    "current source",
+    "`brain_memory_propose`",
+    "developer explicitly asks",
+    "Never save a transcript",
+  ])
+    expect(text).toContain(phrase);
+});

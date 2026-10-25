@@ -1,12 +1,12 @@
 import { timingSafeEqual } from "node:crypto";
-import type { AuthChallengeResponse, D26Audience } from "@wagglebot/contracts";
-import { D26_SIGNATURE_NAMESPACE } from "@wagglebot/d26-auth";
+import { AUTH_SIGNATURE_NAMESPACE } from "@wagglebot/auth-protocol";
+import type { AuthAudience, AuthChallengeResponse } from "@wagglebot/contracts";
 
 type StoredChallenge = {
   challengeId: string;
   nonceHash: string;
   username: string;
-  audience: D26Audience;
+  audience: AuthAudience;
   expiresAtMs: number;
   attempts: number;
 };
@@ -28,7 +28,7 @@ export class InMemoryChallengeStore {
     this.randomBytes = options.randomBytes ?? ((length) => crypto.getRandomValues(new Uint8Array(length)));
   }
 
-  async issue(input: { username: string; audience: D26Audience }): Promise<AuthChallengeResponse> {
+  async issue(input: { username: string; audience: AuthAudience }): Promise<AuthChallengeResponse> {
     const nonce = base64Url(this.randomBytes(32));
     const challengeId = `ch_${base64Url(this.randomBytes(21))}`;
     const expiresAtMs = this.clock().getTime() + CHALLENGE_TTL_MS;
@@ -43,7 +43,7 @@ export class InMemoryChallengeStore {
       nonce,
       username: input.username,
       audience: input.audience,
-      signatureNamespace: D26_SIGNATURE_NAMESPACE,
+      signatureNamespace: AUTH_SIGNATURE_NAMESPACE,
       expiresAt: new Date(expiresAtMs).toISOString(),
     };
   }
@@ -68,7 +68,7 @@ export class InMemoryChallengeStore {
         nonce: input.nonce,
         username: challenge.username,
         audience: challenge.audience,
-        signatureNamespace: D26_SIGNATURE_NAMESPACE,
+        signatureNamespace: AUTH_SIGNATURE_NAMESPACE,
         expiresAt: new Date(challenge.expiresAtMs).toISOString(),
       };
     });

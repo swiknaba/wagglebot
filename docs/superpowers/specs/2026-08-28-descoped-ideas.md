@@ -130,9 +130,9 @@ vector store.
 
 ### The replacement
 
-Component memory is a Markdown file in the repository,
-`.agents/memory.md` (D29). The shared store keeps the three scopes
-that cross a boundary.
+Component memory is a committed OKF v0.2 bundle in the repository,
+`.agents/memory/`, with one Markdown file per concept (D29). The shared store
+keeps the three scopes that cross a boundary.
 
 ## Source Code Graphs for AI Navigation
 

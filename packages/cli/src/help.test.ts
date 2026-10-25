@@ -66,7 +66,13 @@ test("public help describes project and cached workflows without internal runtim
       expect(text).not.toContain(hidden);
     expect(text).toContain("--wagglebot");
   }
-  expect(helpText("init")).toContain(".agents/memory.md");
+  for (const command of ["init", "update", "brain"]) {
+    const text = helpText(command);
+    expect(text).toContain(".agents/memory/");
+    expect(text).toContain("one concept per file");
+    expect(text).not.toContain(".agents/memory.md");
+  }
+  expect(helpText("brain")).toContain(".agents/memory/index.md");
   expect(helpText("update")).toContain("working tree");
   expect(helpText("update")).toContain("--overwrite-local");
   expect(helpText()).toContain("Phase 2");
@@ -102,8 +108,9 @@ test("unknown command help falls back to the general text", () => {
 
 test("brain help describes local memory and status", () => {
   const text = helpText("brain");
-  expect(text).toContain(".agents/memory.md");
-  expect(text).toContain("brain remember");
+  expect(text).toContain(".agents/memory/index.md");
+  expect(text).toContain("relevant linked concepts");
+  expect(text).toContain("remember [path]");
   expect(text).toContain("--json");
 });
 
@@ -164,4 +171,50 @@ test("administrator documentation initializes a Git repository before update", (
   expect(readDocumentation("packages", "cli", "README.md")).toContain(
     "https://github.com/swiknaba/wagglebot/blob/main/docs/phase-1-onboarding.md",
   );
+});
+
+test("project lifecycle documentation explains the committed OKF memory workflow", () => {
+  for (const path of [["README.md"], ["packages", "cli", "README.md"], ["docs", "phase-1-onboarding.md"]]) {
+    const text = readDocumentation(...path);
+    const normalized = text.toLowerCase().replace(/\s+/gu, " ");
+    for (const scaffoldPath of [".agents/memory/index.md", ".agents/memory/component.md", ".agents/changelog.md"])
+      expect(normalized).toContain(scaffoldPath);
+    expect(normalized).toMatch(/one concept per (?:markdown )?file/);
+    expect(normalized).toContain("wagglebot update");
+
+    const memoryWorkflow = text
+      .split(/\n\s*\n/u)
+      .map((paragraph) => paragraph.toLowerCase().replace(/\s+/gu, " "))
+      .filter((paragraph) => paragraph.includes(".agents/memory/"))
+      .join(" ");
+    expect(memoryWorkflow).toMatch(/\bcommit concepts (?:and|plus) (?:derived )?indexes for git review\b/u);
+
+    for (const paragraph of text.split(/\n\s*\n/u)) {
+      if (!/\.agents\/memory\.md/iu.test(paragraph)) continue;
+      const statement = paragraph.toLowerCase().replace(/\s+/gu, " ");
+      expect(statement).toMatch(/\breject(?:s|ed)?\b/);
+      expect(statement).not.toMatch(/\b(?:supported|authoritative)\b/);
+    }
+  }
+});
+
+test("API reference matches the local brain proposal and status types", () => {
+  const api = readDocumentation("docs", "api-reference.md").replace(/\s+/gu, " ");
+  const proposalStart = api.indexOf("type LocalMemoryProposal = {");
+  const proposalEnd = api.indexOf("type GitWhyResult = {");
+  const proposal = api.slice(proposalStart, proposalEnd);
+  expect(proposal).toContain("content: string;");
+  expect(proposal).toContain("replace?: { path: LocalMemoryPath; contentHash: string };");
+  expect(proposal).toContain("indexChanges: LocalMemoryIndexChange[];");
+  expect(proposal).not.toContain("concept: string;");
+  expect(api).toContain("type LocalMemoryIndexChange = { path: LocalMemoryPath; content: string };");
+
+  const statusStart = api.indexOf("type LocalBrainStatus = {");
+  const statusEnd = api.indexOf("codeGraph:", statusStart);
+  const memoryStatus = api.slice(statusStart, statusEnd);
+  expect(memoryStatus).toContain('path: ".agents/memory";');
+  expect(memoryStatus).toContain("conceptCount?: number;");
+  expect(memoryStatus).toContain("totalBytes?: number;");
+  expect(memoryStatus).toContain('indexState?: "current" | "stale" | "missing";');
+  expect(memoryStatus).not.toMatch(/\bindexes\s*:/u);
 });

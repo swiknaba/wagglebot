@@ -3,15 +3,15 @@ import {
   AuthChallengeRequestSchema,
   AuthChallengeResponseSchema,
   AuthErrorCodeSchema,
+  AuthSessionClaimsSchema,
   AuthSessionRequestSchema,
   AuthSessionResponseSchema,
-  D26SessionClaimsSchema,
 } from "./auth";
 
 const validChallengeId = "ch_1234567890123456789012345678";
 const validJti = "jti_1234567890123456789012345678";
 
-describe("D26 authentication contracts", () => {
+describe("authentication contracts", () => {
   test("accepts valid challenge requests and rejects unknown keys", () => {
     expect(
       AuthChallengeRequestSchema.parse({
@@ -106,10 +106,10 @@ describe("D26 authentication contracts", () => {
       exp: 1900,
       jti: validJti,
     };
-    expect(D26SessionClaimsSchema.parse(claims)).toEqual(claims);
-    expect(() => D26SessionClaimsSchema.parse({ ...claims, exp: 1000 })).toThrow();
-    expect(() => D26SessionClaimsSchema.parse({ ...claims, exp: 1901 })).toThrow();
-    expect(() => D26SessionClaimsSchema.parse({ ...claims, alg: "HS256" })).toThrow();
+    expect(AuthSessionClaimsSchema.parse(claims)).toEqual(claims);
+    expect(() => AuthSessionClaimsSchema.parse({ ...claims, exp: 1000 })).toThrow();
+    expect(() => AuthSessionClaimsSchema.parse({ ...claims, exp: 1901 })).toThrow();
+    expect(() => AuthSessionClaimsSchema.parse({ ...claims, alg: "HS256" })).toThrow();
   });
 
   test("enumerates stable authentication error codes", () => {

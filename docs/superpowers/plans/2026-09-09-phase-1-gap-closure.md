@@ -1,5 +1,11 @@
 # Phase 1 Gap Closure Implementation Plan (wagglebot 0.2.0)
 
+> **Historical plan.** This completed plan records the original D29
+> single-file instructions. The current component-memory contract is the
+> [OKF local-memory design](../specs/2026-09-26-okf-local-memory-design.md) and
+> Task 1A in the
+> [Phase 2 implementation sequence](2026-09-12-phase-2-implementation-sequence.md).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Close every bug, partial item, and missing item that the 2026-09-09 gap analysis found between the Phase 1 spec and `packages/cli`, then release 0.2.0.

@@ -20,7 +20,9 @@
 - The Phase 2 schema has exactly `wagglebot_memories`, `wagglebot_memory_schema_metadata`, and `wagglebot_schema_migrations`; no MemPalace, outbox, or normalized memory tables.
 - The worker embeds with `@xenova/transformers`, model `all-MiniLM-L6-v2`, dimension `384`, cosine distance, on CPU. Metadata mismatch aborts worker startup.
 - Parameterize all SQL. Do not log DSNs, memory text, queries, credentials, provenance content, or embeddings.
-- Component memory remains `.agents/memory.md`; it must not enter shared storage. Phase 4 requires `knowledge_base_id` for all reads and writes.
+- Component memory remains an OKF bundle under `.agents/memory/`; it must not
+  enter shared storage. Phase 4 requires `knowledge_base_id` for all reads and
+  writes.
 
 ---
 
@@ -98,7 +100,7 @@ deploy/
 - [ ] Write failing tests for component-scope rejection, secret-scan rejection before SQL execution, canonical-key idempotency, supersession, invalidation, and scope filtering before result limit.
 - [ ] Implement fact-only writes to the single table, preserving JSON provenance, lifecycle columns, and operation-key semantics without introducing side tables.
 - [ ] Implement cosine search and wake search using only the table; prove inactive and below-threshold records are absent.
-- [ ] Expose the C3 HTTP and MCP operations through the existing D26 principal verification, with bounded request/response schemas and safe error envelopes.
+- [ ] Expose the C3 HTTP and MCP operations through the existing authentication principal verification, with bounded request/response schemas and safe error envelopes.
 - [ ] Run focused service tests, complete workspace check/typecheck/build, and PostgreSQL integration tests.
 - [ ] Commit as `feat(memory): serve shared facts from PostgreSQL`.
 

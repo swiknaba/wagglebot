@@ -15,6 +15,6 @@
     }
   },
   "files": {
-    "includes": ["packages/**", "services/**", "*.json", "!**/dist"]
+    "includes": ["packages/**", "services/**", "deploy/**", "*.json", "!**/dist"]
   }
 }

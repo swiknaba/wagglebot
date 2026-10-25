@@ -2,9 +2,15 @@
 
 Wagglebot gives each engineering team one local AI-agent setup.
 
-> **Status.** Phase 1 is complete. It provisions nine local harnesses from a
-> company repository without a Wagglebot service. Phase 2 is in progress. See
-> the [Phase 1 onboarding](docs/phase-1-onboarding.md) and the
+> **Status.** Phase 1 is complete and released as CLI v0.3.4. It provisions nine
+> local harnesses from a company repository without a Wagglebot service.
+> Phase 2 is implemented and locally verified; its changes are unreleased.
+> It includes OKF repository memory, CodeGraph and Git evidence, SSH
+> authentication, an authenticated registry, the local MCP hub, governed
+> PostgreSQL/pgvector shared memory, unified context, and Context Bridge.
+> The local Compose gate passes across three repositories and two systems.
+> See the [Compose guide](deploy/phase2.md),
+> [Phase 1 onboarding](docs/phase-1-onboarding.md) and the
 > [implementation sequence](docs/superpowers/plans/2026-09-12-phase-2-implementation-sequence.md).
 
 ## Phase 1
@@ -12,6 +18,12 @@ Wagglebot gives each engineering team one local AI-agent setup.
 Phase 1 installs curated skills, custom agents, global instructions, compatible
 hooks, shell credential loading, and MCP configurations. It also publishes
 project instructions and creates committed project memory and changelog files.
+
+Project `init` and `update` scaffold `.agents/memory/index.md`,
+`.agents/memory/component.md`, and `.agents/changelog.md`. Keep one concept per
+Markdown file under `.agents/memory/`; read the root index, edit
+concepts directly, then run `wagglebot update` to refresh derived indexes.
+Commit concepts and indexes for Git review.
 
 An engineer does not keep a visible company clone. `wagglebot connect` records
 the company URL. `wagglebot update --wagglebot` refreshes the private cache and
@@ -31,7 +43,7 @@ PowerShell, and cmd are unsupported.
 
 ## Later phases
 
-Phase 2 adds the shared memory layer, D26 authentication, an authenticated
+Phase 2 provides the shared memory layer, D26 authentication, an authenticated
 registry, and the MCP hub. Phase 3 adds collaboration between machines. Phase 4
 adds document ingestion.
 
@@ -42,6 +54,7 @@ remain on the engineer workstation.
 
 | Document | Content |
 |---|---|
+| [Project Brain](docs/project-brain.md) | Local context retrieval, durable memory, shared facts, and explicit Context Bridge. |
 | [Current Phase 1 design](docs/superpowers/specs/2026-09-21-phase-1-polish-design.md) | Approved local provisioning behavior and test contract. |
 | [Original design](docs/superpowers/specs/2026-08-28-wagglebot-design.md) | Goals, decisions, architecture, and phase index. |
 | [Phase 2 shared layer](docs/superpowers/specs/2026-08-28-phase-2-shared-layer.md) | Memory worker, deployment, hub, and authentication. |
@@ -54,6 +67,10 @@ remain on the engineer workstation.
 `test-app/` is the complete company fixture and drift gate. CI runs two offline
 company updates and verifies every compatible output. No test starts a harness,
 service, or LLM.
+
+The CodeGraph SDK integration tests require the platform-specific optional
+CodeGraph bundle. They are excluded from the portable test suite; run
+`bun run test:codegraph-integration` on a machine with that bundle installed.
 
 Regenerate the fixture after scaffold or package changes:
 

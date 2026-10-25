@@ -15,7 +15,8 @@
   "bugs": "https://github.com/swiknaba/wagglebot/issues",
   "author": "Lud <lud@reinmiedl.com> (https://github.com/swiknaba)",
   "bin": {
-    "wagglebot": "bin/wagglebot.js"
+    "wagglebot": "bin/wagglebot.js",
+    "wagglebot-context-engine": "bin/wagglebot-context-engine.js"
   },
   "files": [
     "bin/",
@@ -27,13 +28,15 @@
     "node": ">=22.20.0"
   },
   "scripts": {
-    "build": "bun build src/index.ts --target=node --outdir dist",
+    "build": "bun build src/index.ts --target=node --splitting --outdir dist && bun build ../../services/context-engine/src/index.ts --target=bun --outfile dist/context-engine.js",
     "pack": "bun scripts/pack.mjs",
     "test": "bun test"
   },
   "dependencies": {
+    "@colbymchenry/codegraph": "1.6.0",
     "@wagglebot/company-config": "workspace:*",
     "@wagglebot/contracts": "workspace:*",
+    "@wagglebot/knowledge": "workspace:*",
     "@wagglebot/mcp-hub": "workspace:*",
     "@wagglebot/local-brain": "workspace:*",
     "skills": "1.5.23",
