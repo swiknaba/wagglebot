@@ -215,10 +215,13 @@ export function createHubApp(options: HubAppOptions) {
 
         const mcpServer = new McpServer(
           { name: "wagglebot-mcp-hub", version: "0.0.0" },
-          { capabilities: { tools: {} } },
+          { capabilities: { tools: {} }, maxToolInputElements: 10_000 },
         );
         mcp = mcpServer;
-        const transport = new WebStandardStreamableHTTPServerTransport({ enableJsonResponse: true });
+        const transport = new WebStandardStreamableHTTPServerTransport({
+          enableJsonResponse: true,
+          maxRequestBodySize: maxBodyBytes,
+        });
         const register = <T extends z.ZodObject<z.ZodRawShape>>(
           name: string,
           schema: T,

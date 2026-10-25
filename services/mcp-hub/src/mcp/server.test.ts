@@ -123,6 +123,41 @@ test("normalizes MCP input validation failures without echoing input details", a
   }
 });
 
+test("rejects excessive tool input elements within the HTTP body limit before upstream execution", async () => {
+  let executions = 0;
+  const server = app({
+    codeMode: {
+      execute: async () => {
+        executions += 1;
+        return { schemaVersion: 1, result: {} };
+      },
+    } as never,
+  });
+  const transport = new StreamableHTTPClientTransport(new URL("http://hub/mcp"), {
+    requestInit: { headers: { authorization: `Bearer ${token}` } },
+    fetch: (input, init) => server.fetch(new Request(input, init)),
+  });
+  const client = new Client({ name: "hub-input-limit-test", version: "1.0.0" });
+  await client.connect(transport);
+  try {
+    const result = await client.callTool({
+      name: "execute",
+      arguments: { tool: "demo_ping", arguments: { values: Array(10_001).fill(0) } },
+    });
+    expect(result.isError).toBe(true);
+    expect(executions).toBe(0);
+    const valid = await client.callTool({
+      name: "execute",
+      arguments: { tool: "demo_ping", arguments: { values: [1, 2, 3] } },
+    });
+    expect(valid.isError).not.toBe(true);
+    expect(executions).toBe(1);
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
 test("rejects request bodies over 1 MiB without partial content", async () => {
   const server = app({
     codeMode: {

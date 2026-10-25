@@ -13,6 +13,10 @@
     "build": "bun run --cwd packages/cli build",
     "regen:test-app": "node scripts/regen-test-app.mjs"
   },
+  "overrides": {
+    "protobufjs": "7.6.6",
+    "sharp": "0.35.5"
+  },
   "devDependencies": {
     "@biomejs/biome": "2.5.15",
     "@types/bun": "1.4.2",
